@@ -94,6 +94,18 @@ Dynamic uncertainty adjustment recalibrates the **uncertainty range** periodical
 - **Dynamic Uncertainty Adjustment**: Periodically recalculates the uncertainty range based on the **interquartile range (IQR)** of recent scores, widening or narrowing as needed.
 - **Diverse Sampling of Confident Answers**: Introduces a small probability (`diverse_sample_rate`) of sampling feedback for confident answers, maintaining a broad assessment range. This sampling is controlled by `diverse_sample_rate`, which represents the probability of selecting a confident answer for feedback. Using `random.random() < diverse_sample_rate` adds **randomness** to ensure that **not all** confident answers are selected, balancing feedback coverage. By occasionally reviewing confident answers, the function collects feedback across a **wider range** of scores, which helps monitor and validate the model’s confident responses.
 
+report format:
+
+```
+Total Feedback Needed: 12
+Dynamic Uncertainty Range: 0.85 - 0.90
+Final Adjusted RAGAS Threshold: 0.98
+```
+
+iteration line graph:
+
+![iteration-graph](sys_qa_adjust_ragas_threshold_iteration.png)
+
 ## G-Eval Integration: in the example criteria of Coherence, Consistency, Fluency, and Relevance
 
 | **Metric**         | **Description**                                                                                                                                                                   | **Alignment with G-Eval Criteria**                                                                                                            |
