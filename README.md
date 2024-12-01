@@ -135,8 +135,7 @@ Dynamic uncertainty adjustment recalibrates the **uncertainty range** periodical
 ###### Fig1 (by RAGAS doc)
 
 ![metric-category](metric-category.png)
-[RAGAS doc](https://docs.ragas.io/en/latest/concepts/metrics/overview/)
-
+- [RAGAS doc](https://docs.ragas.io/en/latest/concepts/metrics/overview/)
 - [IBM](https://github.com/ibm-ecosystem-engineering/SuperKnowa/tree/main?tab=readme-ov-file)
 - [G-Eval](https://arxiv.org/abs/2303.16634?ref=blog.langchain.dev)
 - [Adaptive Dynamic Threshold Stategy](https://medium.com/@FMZQuant/adaptive-dynamic-threshold-strategy-based-on-time-series-data-df0f93b01d60)
