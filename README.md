@@ -1,5 +1,10 @@
-# domain-specific-llm-eval
-Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback.
+# Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
+
+![base-metric](base-metric.png)
+
+![contextual-keyword-gate](contextual-keyword-gate.png)
+
+![dynamic-metric](dynamic-metric.png)
 
 To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)**
 
@@ -9,21 +14,26 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 ![auto-eval-framework](auto-eval-framework.png)
 
-This project aims to deal with the real domain-specific LLM agents' response evaluation problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Ref. Fig1) like RAGAS Metrics. I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance.
+This project aims to deal with the real domain-specific LLM agents' response evaluation problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Ref. Fig1) like RAGAS Metrics. There are 2 main designs to address the specific bottleneck:
 
-My metric structure goes as follows:
+1. LLM-based metrics tend to neglect keyword correctness which means even if the score is high enough, the response is still unbearable.
+2. Multi-turn metrics like RAGAS though tend to use pre-sys prompts for LLM agents for multiple rounds of evaluation, which do not allow dynamic adjustments through human feedback.
 
-![base-metric](base-metric.png)
+I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance. 
 
-![contextual-keyword-gate](contextual-keyword-gate.png)
+The goal is to:
 
-![dynamic-metric](dynamic-metric.png)
+1. Independent gates for keyword & reference-based metrics, which do not allow key information loss.
+2. Contextual keyword gate decoupled "keyword extraction evaluation" & "response keyword coverage".
+3. Dynamically adjust the gates using human feedback both ensure a stable iteration.
 
 # Design
 
 ## Contextual Keyword Gate
 
 Instead of requiring strict keyword matches, this approach checks if keywords are meaningfully incorporated within the answer. To assess keyword relevance within the context of an answer, we can leverage a language model, such as a pre-trained transformer (e.g., BERT or GPT), to measure the similarity between keywords and answer contexts. This approach adds a layer of semantic understanding to keyword presence.
+
+![contextual-keyword-gate](contextual-keyword-gate.png)
 
 report format:
 
@@ -45,11 +55,16 @@ Mean Pass Rate: 58.00%
 Human feedback is used to fine-tune the gate, ensuring it reflects subjective quality judgments accurately. 
 Adding a **human feedback loop** can help adjust the thresholds dynamically. This feedback could be collected from a test group, who manually evaluate a subset of answers. Their feedback can then update the threshold, e.g., using an exponential moving average (EMA) or another statistical method.
 
+![human-feedback-integration](hf-integration.png)
+
 - **Threshold Adjustment with EMA**: This uses a feedback-driven moving average to adjust the RAGAS threshold over time. A high alpha increases sensitivity to feedback, while a low alpha makes adjustments slower and steadier.
 
 ## Smoothing for Threshold Sensitivity
 
 To reduce fluctuations in the threshold, we’ll use a **rolling average** or **median filtering** to smooth the threshold adjustments. The goal is to apply a steady adjustment based on recent feedback data, which reduces the influence of outliers.
+
+![threshold-sensitivity-smoothing](threshold-sensitivity-smoothing.png)
+
 
 - **Threshold Smoothing**: The function calculates the median of the last `window_size` threshold values to dampen sharp changes.
 - **Rolling Median**: The median is generally less sensitive to outliers than the average, which helps stabilize the threshold when feedback is inconsistent.
@@ -58,6 +73,9 @@ To reduce fluctuations in the threshold, we’ll use a **rolling average** or **
 
 Active learning targets cases where the model is uncertain, which is often where human feedback can be most valuable.
 
+![active-learning](active-learning.png)
+
+
 - **Set a confidence threshold**: Define a range of RAGAS scores that represents uncertainty.
 - **Flag uncertain cases**: Only request human feedback on answers that fall within this uncertainty range.
 
@@ -65,9 +83,13 @@ Active learning targets cases where the model is uncertain, which is often where
 
 Adaptive smoothing adjusts the window size based on feedback consistency. Exponential smoothing allows faster response to recent changes by giving more weight to newer feedback while gradually reducing the influence of older feedback.
 
+![aadaptive-exponential-smoothing](adaptive-exponential-smoothing.png)
+
 ## Dynamic Uncertainty Adjustment with Diverse Feedback Sampling
 
 Dynamic uncertainty adjustment recalibrates the **uncertainty range** periodically based on **recent performance**, while diverse feedback sampling **randomly** selects some **confident answers** for **feedback** to maintain a balanced evaluation. In a nutshell, these 2 dynamic rules provide a **dynamically active learning gate** by all *uncertainty* ragas score & some *certain* ragas score.
+
+![dynamic-uncertainty-with-diverse-feedback-sampling](dynamic-uncertainty-with-diverse-feedback-sampling.png)
 
 - **Dynamic Uncertainty Adjustment**: Periodically recalculates the uncertainty range based on the **interquartile range (IQR)** of recent scores, widening or narrowing as needed.
 - **Diverse Sampling of Confident Answers**: Introduces a small probability (`diverse_sample_rate`) of sampling feedback for confident answers, maintaining a broad assessment range. This sampling is controlled by `diverse_sample_rate`, which represents the probability of selecting a confident answer for feedback. Using `random.random() < diverse_sample_rate` adds **randomness** to ensure that **not all** confident answers are selected, balancing feedback coverage. By occasionally reviewing confident answers, the function collects feedback across a **wider range** of scores, which helps monitor and validate the model’s confident responses.
