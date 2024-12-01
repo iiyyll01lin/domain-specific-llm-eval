@@ -7,7 +7,7 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 ![auto-eval-framework](auto-eval-framework.png)
 
-This project aims to deal with the real domain-specific LLM agents' response problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Fig1). I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance.
+This project aims to deal with the real domain-specific LLM agents' response evaluation problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Fig1). I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance.
 
 My metric structure goes as follows:
 
