@@ -3,7 +3,7 @@ Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
 
 # Intro
 
-This metric is part of the auto-eval framework Romantic-Rush:
+This metric is part of my auto-eval framework Romantic-Rush:
 
 ![auto-eval-framework](auto-eval-framework.png)
 
