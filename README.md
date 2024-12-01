@@ -1,7 +1,7 @@
 # domain-specific-llm-eval
 Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback.
 
-To know more about my projects: ([Jason YY Lin](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4))
+To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)**
 
 # Intro
 
