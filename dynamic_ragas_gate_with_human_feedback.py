@@ -174,7 +174,14 @@ for step, ragas_score in enumerate(df_res["ragas_score"]):
     all_ragas_scores.append(ragas_score)
 
     # if uncertainty is high enough, we need human feedback, aka active learning gate
-    if needs_human_feedback_dynamic(ragas_score, all_ragas_scores, step):
+    if needs_human_feedback_dynamic(
+        ragas_score,
+        all_ragas_scores,
+        step,
+        human_feedback_uncertainty_min_bound,
+        human_feedback_uncertainty_max_bound,
+        human_feedback_uncertainty_bound_buffer,
+    ):
         feedback_needed_count += 1
         human_feedback = human_feedback_for_ragas()
         feedback_history.append(human_feedback)
