@@ -83,7 +83,10 @@ Active learning targets cases where the model is uncertain, which is often where
 
 Adaptive smoothing adjusts the window size based on feedback consistency. Exponential smoothing allows faster response to recent changes by giving more weight to newer feedback while gradually reducing the influence of older feedback.
 
-![aadaptive-exponential-smoothing](adaptive-exponential-smoothing.png)
+![adaptive-exponential-smoothing](adaptive-exponential-smoothing.png)
+
+![Adaptive Window Size and Feedback Variance Over Iterations](Adaptive%20Window%20Size%20and%20Feedback%20Variance%20Over%20Iterations.png)
+
 
 ## Dynamic Uncertainty Adjustment with Diverse Feedback Sampling
 
@@ -93,6 +96,8 @@ Dynamic uncertainty adjustment recalibrates the **uncertainty range** periodical
 
 - **Dynamic Uncertainty Adjustment**: Periodically recalculates the uncertainty range based on the **interquartile range (IQR)** of recent scores, widening or narrowing as needed.
 - **Diverse Sampling of Confident Answers**: Introduces a small probability (`diverse_sample_rate`) of sampling feedback for confident answers, maintaining a broad assessment range. This sampling is controlled by `diverse_sample_rate`, which represents the probability of selecting a confident answer for feedback. Using `random.random() < diverse_sample_rate` adds **randomness** to ensure that **not all** confident answers are selected, balancing feedback coverage. By occasionally reviewing confident answers, the function collects feedback across a **wider range** of scores, which helps monitor and validate the model’s confident responses.
+
+![RAGAS Scores, Uncertainty Range, and Human Feedback Necessity](RAGAS%20Scores,%20Uncertainty%20Range,%20and%20Human%20Feedback%20Necessity.png)
 
 report format:
 
