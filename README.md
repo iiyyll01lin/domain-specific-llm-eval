@@ -52,7 +52,7 @@ Mean Pass Rate: 58.00%
 
 ![Performance Comparison of Binary and Contextual Keyword Matching at Different Error Rates](Performance%20Comparison%20of%20Binary%20and%20Contextual%20Keyword%20Matching%20at%20Different%20Error%20Rates.png)
 
-![Keyword Gate Performance Comparison at Different Keyword Error Rates](Keyword%20Gate%20Performance%20Comparison%20at%20Different%20Keyword%20Error%20Rates.png)
+![Binary vs Contextual Keyword Matching Performance](Binary%20vs%20Contextual%20Keyword%20Matching%20Performance.png)
 
 ## Human Feedback Integration
 
