@@ -1,14 +1,15 @@
 """
-Advanced Synthetic Dataset Generator using RAGAS, KeyBERT, and other suggested tools
-This implements the sophisticated approach I originally recommended.
+RAGAS-based Synthetic Dataset Generator
+Uses RAGAS library with local or OpenAI models based on configuration
 """
 
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Dict
 import warnings
 warnings.filterwarnings('ignore')
 
+# RAGAS and related imports
 try:
     from ragas import evaluate
     from ragas.metrics import context_precision, context_recall, faithfulness, answer_relevancy
@@ -32,15 +33,46 @@ except ImportError:
     print("⚠️  YAKE not installed. Install with: pip install yake")
     YAKE_AVAILABLE = False
 
-class AdvancedSyntheticDatasetGenerator:
-    def __init__(self):
-        # Initialize keyword extractors if available
-        self.kw_model = KeyBERT() if KEYBERT_AVAILABLE else None
-        self.yake_extractor = yake.KeywordExtractor(
-            lan="en", n=3, dedupLim=0.7, top=10
-        ) if YAKE_AVAILABLE else None
+# For local LLM support
+try:
+    from langchain_community.llms import HuggingFacePipeline
+    from transformers import pipeline
+    import torch
+    LOCAL_LLM_AVAILABLE = True
+except ImportError:
+    print("⚠️  Local LLM support not available. Install with: pip install transformers torch langchain-community")
+    LOCAL_LLM_AVAILABLE = False
+
+class RAGASSyntheticDatasetGenerator:
+    def __init__(self, config: Dict):
+        """Initialize with configuration"""
+        self.config = config
         
-        # Domain-specific document corpus for context generation
+        # Initialize keyword extractors
+        if KEYBERT_AVAILABLE and config.get('local', {}).get('keybert', {}).get('enabled', True):
+            self.kw_model = KeyBERT()
+        else:
+            self.kw_model = None
+            
+        if YAKE_AVAILABLE and config.get('local', {}).get('yake', {}).get('enabled', True):
+            yake_config = config.get('local', {}).get('yake', {})
+            self.yake_extractor = yake.KeywordExtractor(
+                lan=yake_config.get('language', 'en'),
+                n=yake_config.get('n', 3),
+                dedupLim=yake_config.get('dedupLim', 0.7),
+                top=yake_config.get('top', 10)
+            )
+        else:
+            self.yake_extractor = None
+        
+        # Initialize LLM for RAGAS if needed
+        self.local_llm = self._setup_local_llm() if (
+            RAGAS_AVAILABLE and 
+            config.get('ragas', {}).get('use_local_llm', True) and
+            LOCAL_LLM_AVAILABLE
+        ) else None
+        
+        # Domain-specific document corpus
         self.documents = [
             "Type 2 diabetes is a chronic condition affecting glucose metabolism. Insulin resistance and beta-cell dysfunction are key pathophysiological mechanisms.",
             "Hypertension diagnosis requires multiple blood pressure measurements. Systolic >140 mmHg or diastolic >90 mmHg indicates hypertension.",
@@ -50,8 +82,51 @@ class AdvancedSyntheticDatasetGenerator:
             "Machine learning algorithms learn patterns from data without explicit programming. Supervised, unsupervised, and reinforcement learning are main paradigms.",
             "Cloud computing provides scalable computing resources through virtualization and distributed systems across multiple data centers.",
             "Cybersecurity protects digital assets through threat detection, access controls, encryption, and incident response protocols.",
-            "Blockchain technology uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction records.",            "API integration enables software interoperability through standardized communication protocols and data exchange formats."
+            "Blockchain technology uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction records.",
+            "API integration enables software interoperability through standardized communication protocols and data exchange formats."
         ]
+
+    def _setup_local_llm(self):
+        """Setup local LLM for RAGAS evaluation"""
+        if not LOCAL_LLM_AVAILABLE:
+            return None
+            
+        try:
+            local_llm_config = self.config.get('ragas', {}).get('local_llm', {})
+            model_name = local_llm_config.get('model_name', 'microsoft/DialoGPT-small')
+            max_length = local_llm_config.get('max_length', 512)
+            device = local_llm_config.get('device', 'auto')
+            
+            if self.config.get('logging', {}).get('show_progress', True):
+                print(f"🤖 Setting up local LLM: {model_name}")
+            
+            # Determine device
+            if device == 'auto':
+                device_map = "auto" if torch.cuda.is_available() else None
+            else:
+                device_map = device if device != 'cpu' else None
+            
+            # Create HuggingFace pipeline
+            hf_pipeline = pipeline(
+                "text-generation",
+                model=model_name,
+                tokenizer=model_name,
+                max_length=max_length,
+                device_map=device_map,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+            )
+            
+            # Wrap for LangChain/RAGAS
+            llm = HuggingFacePipeline(pipeline=hf_pipeline)
+            
+            if self.config.get('logging', {}).get('show_progress', True):
+                print("✅ Local LLM setup successful")
+            
+            return llm
+            
+        except Exception as e:
+            print(f"⚠️  Failed to setup local LLM: {e}")
+            return None
 
     def extract_keywords_keybert(self, text: str, n_keywords: int = 5) -> List[str]:
         """Extract keywords using KeyBERT"""
@@ -59,13 +134,14 @@ class AdvancedSyntheticDatasetGenerator:
             return ["keyword1", "keyword2", "keyword3"]  # Fallback
         
         try:
+            keybert_config = self.config.get('local', {}).get('keybert', {})
             keywords = self.kw_model.extract_keywords(
                 text, 
-                keyphrase_ngram_range=(1, 2), 
-                stop_words='english'
+                keyphrase_ngram_range=tuple(keybert_config.get('keyphrase_ngram_range', [1, 2])),
+                stop_words=keybert_config.get('stop_words', 'english')
             )
-            # Take only the first n_keywords
-            return [kw[0] for kw in keywords[:n_keywords]]
+            max_keywords = keybert_config.get('max_keywords', 5)
+            return [kw[0] for kw in keywords[:max_keywords]]
         except Exception as e:
             print(f"⚠️  KeyBERT extraction failed: {e}")
             # Fallback to simple keyword extraction
@@ -79,7 +155,8 @@ class AdvancedSyntheticDatasetGenerator:
         
         try:
             keywords = self.yake_extractor.extract_keywords(text)
-            return [kw[1] for kw in keywords[:5]]
+            max_keywords = self.config.get('local', {}).get('yake', {}).get('max_keywords', 5)
+            return [kw[1] for kw in keywords[:max_keywords]]
         except Exception as e:
             print(f"⚠️  YAKE extraction failed: {e}")
             # Fallback to simple keyword extraction
@@ -88,20 +165,12 @@ class AdvancedSyntheticDatasetGenerator:
 
     def generate_qa_pairs_from_documents(self, num_pairs: int = 10) -> List[Dict]:
         """Generate QA pairs from document corpus"""
-        # This simulates what TestsetGenerator would do
-        # In production, you'd use: TestsetGenerator.with_openai()
-        
         qa_pairs = []
         question_templates = [
-            "What is {}?",
-            "How is {} diagnosed?", 
-            "What causes {}?",
-            "What are the symptoms of {}?",
-            "How is {} treated?",
-            "What are the risk factors for {}?",
-            "How does {} work?",
-            "What is the mechanism of {}?",
-            "How do you manage {}?",
+            "What is {}?", "How is {} diagnosed?", "What causes {}?",
+            "What are the symptoms of {}?", "How is {} treated?",
+            "What are the risk factors for {}?", "How does {} work?",
+            "What is the mechanism of {}?", "How do you manage {}?",
             "What are complications of {}?"
         ]
         
@@ -110,16 +179,21 @@ class AdvancedSyntheticDatasetGenerator:
             "machine learning", "cloud computing", "cybersecurity", "blockchain", "API integration"
         ]
         
+        # Get quality distribution from config
+        quality_dist = self.config.get('dataset', {}).get('answer_quality_distribution', {})
+        high_prob = quality_dist.get('high', 0.4)
+        medium_prob = quality_dist.get('medium', 0.4)
+        low_prob = quality_dist.get('low', 0.2)
+        
         for i in range(num_pairs):
             topic = topics[i % len(topics)]
             question = question_templates[i % len(question_templates)].format(topic)
             context = self.documents[i % len(self.documents)]
             
-            # Generate ground truth (simplified)
             ground_truth = f"This relates to {topic} and involves multiple factors including clinical presentation, diagnostic criteria, and treatment protocols."
             
             # Generate LLM answer with varying quality
-            answer_quality = np.random.choice(['high', 'medium', 'low'], p=[0.4, 0.4, 0.2])
+            answer_quality = np.random.choice(['high', 'medium', 'low'], p=[high_prob, medium_prob, low_prob])
             
             if answer_quality == 'high':
                 answer = f"Regarding {topic}, the key aspects include {context[:100]}... This involves comprehensive evaluation and evidence-based approaches."
@@ -129,21 +203,23 @@ class AdvancedSyntheticDatasetGenerator:
                 answer = f"This is about {topic}. There are various aspects to consider."
             
             qa_pairs.append({
-                'question': question,
-                'contexts': context,
-                'answer': answer,
-                'ground_truth': ground_truth
+                'question': question, 'contexts': context,
+                'answer': answer, 'ground_truth': ground_truth
             })
         
         return qa_pairs
 
     def calculate_ragas_metrics_real(self, qa_data: List[Dict]) -> pd.DataFrame:
-        """Calculate real RAGAS metrics using the RAGAS library"""
+        """Calculate real RAGAS metrics using RAGAS library"""
         if not RAGAS_AVAILABLE:
-            print("🔄 RAGAS not available, using simulated metrics...")
+            if self.config.get('logging', {}).get('show_progress', True):
+                print("🔄 RAGAS not available, using simulated metrics...")
             return self.simulate_ragas_metrics(qa_data)
         
         try:
+            if self.config.get('logging', {}).get('show_progress', True):
+                print("📊 Calculating RAGAS metrics...")
+            
             # Convert to RAGAS format
             dataset_dict = {
                 'question': [item['question'] for item in qa_data],
@@ -154,11 +230,22 @@ class AdvancedSyntheticDatasetGenerator:
             
             dataset = Dataset.from_dict(dataset_dict)
             
+            # Configure metrics to use local LLM if available
+            metrics = [context_precision, context_recall, faithfulness, answer_relevancy]
+            
+            if self.local_llm:
+                if self.config.get('logging', {}).get('show_progress', True):
+                    print("🤖 Using local LLM for RAGAS evaluation...")
+                # Configure RAGAS metrics to use local LLM
+                for metric in metrics:
+                    if hasattr(metric, 'llm'):
+                        metric.llm = self.local_llm
+            else:
+                if self.config.get('logging', {}).get('show_progress', True):
+                    print("🌐 Using default RAGAS configuration...")
+            
             # Evaluate with RAGAS
-            result = evaluate(
-                dataset,
-                metrics=[context_precision, context_recall, faithfulness, answer_relevancy]
-            )
+            result = evaluate(dataset, metrics=metrics)
             
             return result.to_pandas()
             
@@ -168,11 +255,16 @@ class AdvancedSyntheticDatasetGenerator:
 
     def simulate_ragas_metrics(self, qa_data: List[Dict]) -> pd.DataFrame:
         """Fallback: simulate RAGAS metrics"""
+        if self.config.get('logging', {}).get('show_progress', True):
+            print("🎲 Using simulated RAGAS metrics...")
+            
         metrics_data = []
         for item in qa_data:
             # Simulate correlated metrics based on answer quality
             base_quality = 0.6 + 0.3 * (len(item['answer']) / max(100, len(item['answer'])))
             noise = 0.1
+            
+            fallback_config = self.config.get('fallback', {}).get('score_ranges', {})
             
             metrics = {
                 'context_precision': max(0.0, min(1.0, base_quality + np.random.uniform(-noise, noise))),
@@ -184,22 +276,24 @@ class AdvancedSyntheticDatasetGenerator:
         
         return pd.DataFrame(metrics_data)
 
-    def generate_advanced_dataset(self, num_samples: int = 10) -> pd.DataFrame:
-        """Generate dataset using advanced methods I suggested"""
+    def generate_ragas_dataset(self, num_samples: int = 10) -> pd.DataFrame:
+        """Generate dataset using RAGAS methods"""
+        if self.config.get('logging', {}).get('show_progress', True):
+            print("🔬 Generating dataset using RAGAS methods...")
         
-        print("🚀 Generating advanced synthetic dataset...")
-        
-        # Step 1: Generate QA pairs (simulating TestsetGenerator)
-        print("📝 Generating QA pairs from document corpus...")
+        # Step 1: Generate QA pairs
+        if self.config.get('logging', {}).get('show_progress', True):
+            print("📝 Generating QA pairs from document corpus...")
         qa_data = self.generate_qa_pairs_from_documents(num_samples)
         
-        # Step 2: Extract keywords using KeyBERT/YAKE
-        print("🔍 Extracting keywords using advanced methods...")
+        # Step 2: Extract keywords
+        if self.config.get('logging', {}).get('show_progress', True):
+            print("🔍 Extracting keywords using advanced methods...")
         for item in qa_data:
-            if KEYBERT_AVAILABLE:
+            if KEYBERT_AVAILABLE and self.kw_model:
                 keywords = self.extract_keywords_keybert(item['answer'])
                 item['kw'] = str(keywords)
-            elif YAKE_AVAILABLE:
+            elif YAKE_AVAILABLE and self.yake_extractor:
                 keywords = self.extract_keywords_yake(item['answer'])
                 item['kw'] = str(keywords)
             else:
@@ -208,15 +302,17 @@ class AdvancedSyntheticDatasetGenerator:
                 keywords = [w for w in words if len(w) > 4][:5]
                 item['kw'] = str(keywords)
         
-        # Step 3: Calculate real RAGAS metrics
-        print("📊 Calculating RAGAS metrics...")
+        # Step 3: Calculate RAGAS metrics
         ragas_df = self.calculate_ragas_metrics_real(qa_data)
         
         # Step 4: Combine everything
-        print("🔧 Combining data into final format...")
+        if self.config.get('logging', {}).get('show_progress', True):
+            print("🔧 Combining data into final format...")
         final_data = []
         
         for i, item in enumerate(qa_data):
+            kw_score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('kw_metric', [0.5, 0.9])
+            
             row = {
                 'question': item['question'],
                 'contexts': item['contexts'],
@@ -227,62 +323,9 @@ class AdvancedSyntheticDatasetGenerator:
                 'faithfulness': round(ragas_df.iloc[i]['faithfulness'], 3),
                 'answer_relevancy': round(ragas_df.iloc[i]['answer_relevancy'], 3),
                 'kw': item['kw'],
-                'kw_metric': round(np.random.uniform(0.5, 0.9), 3),
+                'kw_metric': round(np.random.uniform(kw_score_range[0], kw_score_range[1]), 3),
                 'weighted_average_score': round(ragas_df.iloc[i][['context_precision', 'context_recall', 'faithfulness', 'answer_relevancy']].mean(), 3)
             }
             final_data.append(row)
         
         return pd.DataFrame(final_data)
-
-def main():
-    """Generate advanced synthetic dataset using suggested tools"""
-    print("🔬 Advanced Synthetic Dataset Generator")
-    print("=" * 50)
-    
-    # Check dependencies
-    missing_deps = []
-    if not RAGAS_AVAILABLE:
-        missing_deps.append("ragas")
-    if not KEYBERT_AVAILABLE:
-        missing_deps.append("keybert") 
-    if not YAKE_AVAILABLE:
-        missing_deps.append("yake")
-    
-    if missing_deps:
-        print(f"📦 Missing dependencies: {', '.join(missing_deps)}")
-        print("💡 Install with: pip install " + " ".join(missing_deps))
-        print("🔄 Will use fallback methods...\n")
-    
-    generator = AdvancedSyntheticDatasetGenerator()
-    
-    # Generate dataset
-    dataset = generator.generate_advanced_dataset(10)
-    
-    # Save
-    output_file = "testset-gen-advanced.xlsx"
-    # output_file = "SystemQAListallQuestion_eval_step4_final_report 1.xlsx"
-    dataset.to_excel(output_file, index=False)
-    
-    print(f"✅ Advanced dataset saved as: {output_file}")
-    print(f"📊 Generated {len(dataset)} samples using suggested methods")
-    
-    # Show what methods were actually used
-    methods_used = []
-    if RAGAS_AVAILABLE:
-        methods_used.append("✅ Real RAGAS metrics")
-    else:
-        methods_used.append("🔄 Simulated RAGAS metrics")
-        
-    if KEYBERT_AVAILABLE:
-        methods_used.append("✅ KeyBERT keyword extraction")
-    elif YAKE_AVAILABLE:
-        methods_used.append("✅ YAKE keyword extraction")
-    else:
-        methods_used.append("🔄 Simple keyword extraction")
-    
-    print("\n🛠️  Methods Used:")
-    for method in methods_used:
-        print(f"   {method}")
-
-if __name__ == "__main__":
-    main()
