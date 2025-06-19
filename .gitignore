@@ -85,6 +85,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# But keep templates
+!.env.template
+!.env.example
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -112,8 +116,16 @@ dmypy.json
 **/*.secret
 **/*.key
 **/config/secrets*
+
+# Environment files
 .env
 .env.*
+
+# But keep templates
+!.env.template
+!.env.example
+!**/*.template
+!**/*.example
 
 # Logs and outputs
 logs/
