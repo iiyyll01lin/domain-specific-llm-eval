@@ -1,0 +1,11 @@
+Artificial Intelligence and Machine Learning
+        
+        Artificial intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think and learn like humans. Machine learning is a subset of AI that focuses on the ability of machines to receive data and learn for themselves without being explicitly programmed.
+        
+        Key components of machine learning include:
+        - Supervised learning: Learning with labeled training data
+        - Unsupervised learning: Finding patterns in data without labels  
+        - Reinforcement learning: Learning through rewards and punishments
+        - Neural networks: Computing systems inspired by biological neural networks
+        
+        Applications of AI and ML include natural language processing, computer vision, robotics, and autonomous vehicles.

@@ -1,0 +1,37 @@
+# Docker Compose Override for Advanced Development Features
+# Use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Note: docker-compose.yml now defaults to development mode, this adds extra dev features
+
+version: '3.8'
+
+services:
+  rag-eval-pipeline:
+    # Development mode is now default in main docker-compose.yml
+    # This file adds extra development features
+    
+    # Additional development volumes (documentation, etc.)
+    volumes:
+      - ./docs:/app/docs:rw                   # Documentation editing
+      - ./scripts:/app/scripts:rw            # Development scripts
+      - ../ragas:/app/ragas:rw                # Local RAGAS for development
+    
+    # Additional development environment variables
+    environment:
+      - FLASK_ENV=development                 # If using Flask
+      - DJANGO_DEBUG=True                     # If using Django
+      - DEVELOPMENT_MODE=true                 # Custom flag
+      - AUTO_RELOAD=true                      # Enable auto-reload features
+      - RAGAS_DEV_MODE=true                   # Enable RAGAS development features
+      - PYTHONPATH=/app/src:/app/ragas/src    # Add local RAGAS to Python path
+    # Override command for advanced development features
+    command: ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml", "--log-level", "DEBUG", "--watch", "--reload"]
+    
+    # Extended resource limits for heavy development
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'

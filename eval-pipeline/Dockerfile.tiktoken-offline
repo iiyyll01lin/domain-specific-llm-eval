@@ -1,0 +1,48 @@
+# Dockerfile addition for offline tiktoken
+# Add this to your Dockerfile BEFORE the final application setup
+
+# === OFFLINE TIKTOKEN SETUP ===
+FROM dependencies as tiktoken-setup
+
+# Create tiktoken cache directory  
+RUN mkdir -p /app/.cache/tiktoken
+
+# Download tiktoken encoding files directly (with internet during build)
+RUN python3 << 'EOF'
+import os
+import urllib.request
+from pathlib import Path
+
+# Set cache directory
+cache_dir = Path("/app/.cache/tiktoken")
+cache_dir.mkdir(parents=True, exist_ok=True)
+
+# Encoding files to download
+encodings = {
+    "o200k_base": "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken",
+    "cl100k_base": "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken", 
+    "p50k_base": "https://openaipublic.blob.core.windows.net/encodings/p50k_base.tiktoken",
+    "r50k_base": "https://openaipublic.blob.core.windows.net/encodings/r50k_base.tiktoken"
+}
+
+for name, url in encodings.items():
+    try:
+        print(f"Downloading {name}...")
+        urllib.request.urlretrieve(url, cache_dir / f"{name}.tiktoken")
+        print(f"✅ Downloaded {name}")
+    except Exception as e:
+        print(f"❌ Failed to download {name}: {e}")
+
+print("✅ Tiktoken offline cache created")
+EOF
+
+# Set environment variables for offline operation
+ENV TIKTOKEN_CACHE_DIR=/app/.cache/tiktoken
+ENV TIKTOKEN_CACHE_ONLY=1
+ENV TIKTOKEN_DISABLE_DOWNLOAD=1
+
+# === END TIKTOKEN SETUP ===
+
+# Continue with your normal Dockerfile...
+FROM tiktoken-setup as application
+# ... rest of your Dockerfile

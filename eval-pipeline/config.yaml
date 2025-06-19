@@ -1,0 +1,137 @@
+# Sample Configuration for Custom Document Processing
+# This example shows how to configure the system to use your own PDF, DOCX, and other documents
+
+# Choose your processing mode
+mode: 'local'  # 'local', 'ragas', or 'simple'
+
+# CUSTOM DATA SETTINGS - ENABLE THIS TO USE YOUR OWN DOCUMENTS
+custom_data:
+  enabled: true  # SET TO TRUE TO USE YOUR DOCUMENTS
+  
+  # Specify where your documents are located
+  data_sources:
+    # PDF files - add paths to your PDF documents
+    pdf_files:
+      - 'documents/my_research_paper.pdf'
+      - 'documents/technical_manual.pdf'
+      - 'data/company_report.pdf'
+    
+    # Text files
+    text_files:
+      - 'documents/notes.txt'
+      - 'data/knowledge_base.txt'
+    
+    # Word documents
+    word_files:
+      - 'documents/specification.docx'
+      - 'reports/analysis.docx'
+    
+    # Directories containing multiple documents
+    directories:
+      - 'documents/'
+      - 'documents/research_papers/'
+      - 'data/manuals/'
+      - 'knowledge_base/'
+    
+    # Structured data files (CSV/Excel with document content)
+    structured_files:
+      - file: 'data/qa_dataset.csv'
+        document_column: 'document_content'
+        topic_column: 'domain'
+      - file: 'data/knowledge_articles.xlsx'
+        document_column: 'article_text'
+        topic_column: 'category'
+  
+  # Document processing settings
+  processing:
+    # Text chunking for large documents
+    chunk_size: 1000        # Characters per chunk
+    chunk_overlap: 200      # Overlap between chunks (helps maintain context)
+    min_chunk_size: 100     # Minimum chunk size to keep
+    
+    # Text cleaning options
+    remove_headers_footers: true      # Remove common header/footer patterns
+    remove_page_numbers: true         # Remove page numbers
+    remove_extra_whitespace: true     # Clean up extra spaces/newlines
+    
+    # Language filtering (optional)
+    filter_by_language: true          # Only keep documents in target language
+    target_language: 'en'            # Target language code
+    min_confidence: 0.8              # Minimum confidence for language detection
+  
+  # Automatic topic extraction from your documents
+  topic_extraction:
+    enabled: true
+    method: 'keybert'                # 'keybert', 'yake', 'tfidf', or 'manual'
+    max_topics_per_document: 3       # Maximum topics to extract per document
+    
+    # If using manual method, specify topics here
+    manual_topics:
+      - 'machine learning'
+      - 'data processing'
+      - 'technical specifications'
+      # - 'business processes'
+  
+  # Question templates customized for your domain
+  question_templates:
+    - "What does the document say about {}?"
+    - "How is {} explained in the source material?"
+    - "What are the key aspects of {} mentioned in the document?"
+    - "According to the document, what is {}?"
+    - "Can you summarize the information about {} from the text?"
+    - "What details are provided about {} in the document?"
+    - "How does the document define or describe {}?"
+    - "What characteristics of {} are mentioned?"
+
+# LOCAL MODE SETTINGS
+local:
+  sentence_model: 'all-MiniLM-L6-v2'  # Fast model, use 'all-mpnet-base-v2' for better quality
+  
+  keybert:
+    enabled: true
+    keyphrase_ngram_range: [1, 2]
+    stop_words: 'english'
+    max_keywords: 5
+  
+  yake:
+    enabled: true
+    language: 'en'
+    n: 3
+    dedupLim: 0.7
+    top: 10
+    max_keywords: 5
+
+# RAGAS MODE SETTINGS (if you want to use RAGAS instead)
+ragas:
+  use_local_llm: true  # Use local models instead of OpenAI
+  
+  local_llm:
+    model_name: 'microsoft/DialoGPT-small'
+    max_length: 512
+    device: 'auto'
+
+# DATASET GENERATION SETTINGS
+dataset:
+  num_samples: 20                    # How many Q&A pairs to generate
+  output_file: 'my_custom_testset.xlsx'  # Output filename
+  
+  # Quality distribution for generated answers
+  answer_quality_distribution:
+    high: 0.5      # 50% high quality answers
+    medium: 0.3    # 30% medium quality
+    low: 0.2       # 20% low quality
+
+# LOGGING
+logging:
+  level: 'DEBUG'
+  # level: 'INFO'
+  show_progress: true
+
+# EXAMPLE USAGE:
+# 1. Update the file paths above to point to your actual documents
+# 2. Set custom_data.enabled to true
+# 3. Run: python generate_dataset_configurable.py
+# 4. The system will load your documents, extract topics, and generate Q&A pairs
+# 5. Use the output with your evaluation pipeline:
+#    - python contextual_keyword_gate.py  
+#    - python dynamic_ragas_gate_with_human_feedback.py

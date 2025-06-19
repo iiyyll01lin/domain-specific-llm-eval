@@ -1,0 +1,104 @@
+Index: 0, Answer Segments: ['the document', 'concept', 'type 2 diabetes', 'a chronic condition', 'glucose metabolism', 'insulin resistance', 'beta-cell dysfunction', 'key pathophysiological mechanisms', 'this detailed explanation', 'all key aspects', 'the source material', '2', 'according to the document , concept is comprehensively explained as : type 2 diabetes is a chronic condition affecting glucose metabolism .', 'as : type 2 diabetes is a chronic condition affecting glucose metabolism', 'insulin resistance and beta - cell dysfunction are key pathophysiological mechanisms ....', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['type diabetes', 'diabetes', 'diabetes chronic', 'insulin resistance', 'affecting glucose']
+Total Contextual Score for index 0: 0.83
+Mandatory Keyword Score for index 0: 0.63
+Optional Keyword Score for index 0: 0.20
+Contextual Keyword Gate Pass for index 0: True
+Index: 1, Answer Segments: ['method', 'the document', 'some information', 'various aspects', 'regarding method , the document provides some information .', 'there are various aspects to consider .'], Mandatory Keywords: ['method document', 'regarding method', 'method', 'document provides', 'document']
+Total Contextual Score for index 1: 0.87
+Mandatory Keyword Score for index 1: 0.67
+Optional Keyword Score for index 1: 0.20
+Contextual Keyword Gate Pass for index 1: True
+Index: 2, Answer Segments: ['the document', 'approach', 'pneumonia', 'lung inflammation', 'bacterial, viral, or fungal pathogens', 'streptococcus pneumoniae', 'the mo... additional considerations', 'the context', 'that approach involves pneumonia', 'the document mentions that approach involves pneumonia involves lung inflammation caused by bacterial , viral , or fungal pathogens .', 'streptococcus pneumoniae is the mo ... additional considerations may apply based on the context .', 'the mo ... additional considerations may apply based on the context .'], Mandatory Keywords: ['pneumonia involves', 'involves pneumonia', 'streptococcus pneumoniae', 'pneumonia', 'pneumoniae']
+Total Contextual Score for index 2: 0.95
+Mandatory Keyword Score for index 2: 0.75
+Optional Keyword Score for index 2: 0.20
+Contextual Keyword Gate Pass for index 2: True
+Index: 3, Answer Segments: ['the document', 'that technique', 'cardiovascular disease risk factors', 'modifiable elements', 'smoking', 'diet', 'exercise', 'non-modifiable factors', 'additional considerations', 'the context', 'the document mentions that technique involves cardiovascular disease risk factors include modifiable elements like smoking , diet , exercise , and non - modifiable factors ... additional considerations may apply based on the context .', 'that technique involves cardiovascular disease risk factors include modifiable elements like smoking , diet , exercise , and non - modifiable factors', 'cardiovascular disease risk factors include modifiable elements like smoking , diet , exercise , and non - modifiable factors', 'additional considerations may apply based on the context'], Mandatory Keywords: ['involves cardiovascular', 'risk factors', 'cardiovascular disease', 'cardiovascular', 'disease risk']
+Total Contextual Score for index 3: 0.71
+Mandatory Keyword Score for index 3: 0.51
+Optional Keyword Score for index 3: 0.20
+Contextual Keyword Gate Pass for index 3: True
+Index: 4, Answer Segments: ['the document', 'strategy', 'asthma management', 'bronchodilators', 'acute symptoms', 'anti-inflammatory medications', 'long-term control', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , strategy is comprehensively explained as : asthma management involves bronchodilators for acute symptoms and anti - inflammatory medications for long - term control ....', 'as : asthma management involves bronchodilators for acute symptoms and anti - inflammatory medications for long - term control', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['asthma management', 'explained asthma', 'involves bronchodilators', 'asthma', 'bronchodilators acute']
+Total Contextual Score for index 4: 0.89
+Mandatory Keyword Score for index 4: 0.69
+Optional Keyword Score for index 4: 0.20
+Contextual Keyword Gate Pass for index 4: True
+Index: 5, Answer Segments: ['the document', 'system', 'machine learning algorithms', 'patterns', 'data', 'explicit programming', 'supervised, unsupervised, and reinforcement learning', 'main paradigms', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , system is comprehensively explained as : machine learning algorithms learn patterns from data without explicit programming .', 'as : machine learning algorithms learn patterns from data without explicit programming', 'supervised , unsupervised , and reinforcement learning are main paradigms ....', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['algorithms learn', 'explained machine', 'learning algorithms', 'machine learning', 'learn patterns']
+Total Contextual Score for index 5: 0.80
+Mandatory Keyword Score for index 5: 0.60
+Optional Keyword Score for index 5: 0.20
+Contextual Keyword Gate Pass for index 5: True
+Index: 6, Answer Segments: ['the document', 'process', 'cloud computing', 'scalable computing resources', 'virtualization', 'systems', 'multiple data centers', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , process is comprehensively explained as : cloud computing provides scalable computing resources through virtualization and distributed systems across multiple data centers ....', 'cloud computing provides scalable computing resources through virtualization and distributed systems across multiple data centers', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['cloud computing', 'explained cloud', 'virtualization distributed', 'cloud', 'virtualization']
+Total Contextual Score for index 6: 0.89
+Mandatory Keyword Score for index 6: 0.69
+Optional Keyword Score for index 6: 0.20
+Contextual Keyword Gate Pass for index 6: True
+Index: 7, Answer Segments: ['framework', 'the document', 'some information', 'various aspects', 'regarding framework , the document provides some information .', 'there are various aspects to consider .'], Mandatory Keywords: ['framework document', 'regarding framework', 'framework', 'document provides', 'document']
+Total Contextual Score for index 7: 0.89
+Mandatory Keyword Score for index 7: 0.69
+Optional Keyword Score for index 7: 0.20
+Contextual Keyword Gate Pass for index 7: True
+Index: 8, Answer Segments: ['the document', 'model', 'blockchain technology', 'cryptographic hashing', 'consensus mechanisms', 'immutable transaction', 'additional considerations', 'the context', 'the document mentions that model involves blockchain technology uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction re ... additional considerations may apply based on the context .', 'that model involves blockchain technology', 'uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction', 'to create immutable transaction', 're', '... additional considerations may apply based on the context'], Mandatory Keywords: ['immutable transaction', 'blockchain technology', 'involves blockchain', 'hashing distributed', 'blockchain']
+Total Contextual Score for index 8: 0.90
+Mandatory Keyword Score for index 8: 0.70
+Optional Keyword Score for index 8: 0.20
+Contextual Keyword Gate Pass for index 8: True
+Index: 9, Answer Segments: ['the document', 'solution', 'api integration', 'software interoperability', 'standardized communication protocols', 'data exchange formats', 'additional considerations', 'the context', 'the document mentions that solution involves api integration enables software interoperability through standardized communication protocols and data exchange formats', 'that solution involves api integration enables software interoperability through standardized communication protocols and data exchange formats', 'api integration enables software interoperability through standardized communication protocols and data exchange formats', 'the document mentions that solution involves api integration enables software interoperability through standardized communication protocols and data exchange formats ... additional considerations may apply based on the context .'], Mandatory Keywords: ['api integration', 'software interoperability', 'interoperability standardized', 'interoperability', 'api']
+Total Contextual Score for index 9: 0.92
+Mandatory Keyword Score for index 9: 0.72
+Optional Keyword Score for index 9: 0.20
+Contextual Keyword Gate Pass for index 9: True
+Index: 10, Answer Segments: ['the document', 'concept', 'type 2 diabetes', 'a chronic condition', 'glucose metabolism', 'insulin resistance', 'beta-cell dysfunction', 'key pathophysiological mechanisms', 'this detailed explanation', 'all key aspects', 'the source material', '2', 'according to the document , concept is comprehensively explained as : type 2 diabetes is a chronic condition affecting glucose metabolism .', 'as : type 2 diabetes is a chronic condition affecting glucose metabolism', 'insulin resistance and beta - cell dysfunction are key pathophysiological mechanisms ....', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['type diabetes', 'diabetes', 'diabetes chronic', 'insulin resistance', 'affecting glucose']
+Total Contextual Score for index 10: 0.83
+Mandatory Keyword Score for index 10: 0.63
+Optional Keyword Score for index 10: 0.20
+Contextual Keyword Gate Pass for index 10: True
+Index: 11, Answer Segments: ['method', 'the document', 'some information', 'various aspects', 'regarding method , the document provides some information .', 'there are various aspects to consider .'], Mandatory Keywords: ['method document', 'regarding method', 'method', 'document provides', 'document']
+Total Contextual Score for index 11: 0.87
+Mandatory Keyword Score for index 11: 0.67
+Optional Keyword Score for index 11: 0.20
+Contextual Keyword Gate Pass for index 11: True
+Index: 12, Answer Segments: ['approach', 'the document', 'some information', 'various aspects', 'regarding approach , the document provides some information .', 'there are various aspects to consider .'], Mandatory Keywords: ['approach document', 'regarding approach', 'document provides', 'document', 'various aspects']
+Total Contextual Score for index 12: 0.87
+Mandatory Keyword Score for index 12: 0.67
+Optional Keyword Score for index 12: 0.20
+Contextual Keyword Gate Pass for index 12: True
+Index: 13, Answer Segments: ['the document', 'technique', 'cardiovascular disease risk factors', 'modifiable elements', 'smoking', 'diet', 'exercise', 'non-modifiable factors', 'age', 'genetics', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , technique is comprehensively explained as : cardiovascular disease risk factors include modifiable elements like smoking , diet , exercise , and non - modifiable factors like age and genetics ....', 'cardiovascular disease risk factors include modifiable elements like smoking , diet , exercise , and non - modifiable factors like age and genetics', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['explained cardiovascular', 'cardiovascular disease', 'cardiovascular', 'disease risk', 'risk factors']
+Total Contextual Score for index 13: 0.70
+Mandatory Keyword Score for index 13: 0.50
+Optional Keyword Score for index 13: 0.20
+Contextual Keyword Gate Pass for index 13: True
+Index: 14, Answer Segments: ['the document', 'strategy', 'asthma management', 'bronchodilators', 'acute symptoms', 'anti-inflammatory medications', 'long-term control', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , strategy is comprehensively explained as : asthma management involves bronchodilators for acute symptoms and anti - inflammatory medications for long - term control ....', 'as : asthma management involves bronchodilators for acute symptoms and anti - inflammatory medications for long - term control', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['asthma management', 'explained asthma', 'involves bronchodilators', 'asthma', 'bronchodilators acute']
+Total Contextual Score for index 14: 0.89
+Mandatory Keyword Score for index 14: 0.69
+Optional Keyword Score for index 14: 0.20
+Contextual Keyword Gate Pass for index 14: True
+Index: 15, Answer Segments: ['the document', 'system', 'machine learning algorithms', 'patterns', 'data', 'explicit programming', 'supervised, unsupervised, and reinforcement learning', 'main paradigms', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , system is comprehensively explained as : machine learning algorithms learn patterns from data without explicit programming .', 'as : machine learning algorithms learn patterns from data without explicit programming', 'supervised , unsupervised , and reinforcement learning are main paradigms ....', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['algorithms learn', 'explained machine', 'learning algorithms', 'machine learning', 'learn patterns']
+Total Contextual Score for index 15: 0.80
+Mandatory Keyword Score for index 15: 0.60
+Optional Keyword Score for index 15: 0.20
+Contextual Keyword Gate Pass for index 15: True
+Index: 16, Answer Segments: ['the document', 'process', 'cloud computing', 'scalable computing resources', 'virtualization', 'systems', 'multiple data centers', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , process is comprehensively explained as : cloud computing provides scalable computing resources through virtualization and distributed systems across multiple data centers ....', 'cloud computing provides scalable computing resources through virtualization and distributed systems across multiple data centers', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['cloud computing', 'explained cloud', 'virtualization distributed', 'cloud', 'virtualization']
+Total Contextual Score for index 16: 0.89
+Mandatory Keyword Score for index 16: 0.69
+Optional Keyword Score for index 16: 0.20
+Contextual Keyword Gate Pass for index 16: True
+Index: 17, Answer Segments: ['the document', 'framework', 'cybersecurity', 'digital assets', 'threat detection', 'access controls', 'encryption', 'additional considerations', 'the context', 'the document mentions that framework involves cybersecurity protects digital assets through threat detection , access controls , encryption , and incident response proto ...', 'that framework involves cybersecurity protects digital assets through threat detection , access controls , encryption , and incident response proto ...', 'cybersecurity protects digital assets through threat detection , access controls , encryption , and incident response proto ...', 'additional considerations may apply based on the context .'], Mandatory Keywords: ['cybersecurity protects', 'protects digital', 'involves cybersecurity', 'framework', 'framework involves']
+Total Contextual Score for index 17: 0.86
+Mandatory Keyword Score for index 17: 0.66
+Optional Keyword Score for index 17: 0.20
+Contextual Keyword Gate Pass for index 17: True
+Index: 18, Answer Segments: ['the document', 'model', 'blockchain technology', 'cryptographic hashing', 'consensus mechanisms', 'immutable transaction records', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , model is comprehensively explained as : blockchain technology uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction records ....', 'blockchain technology uses cryptographic hashing and distributed consensus mechanisms to create immutable transaction records', 'to create immutable transaction records', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['explained blockchain', 'blockchain technology', 'blockchain', 'uses cryptographic', 'model comprehensively']
+Total Contextual Score for index 18: 0.82
+Mandatory Keyword Score for index 18: 0.62
+Optional Keyword Score for index 18: 0.20
+Contextual Keyword Gate Pass for index 18: True
+Index: 19, Answer Segments: ['the document', 'solution', 'api integration', 'software interoperability', 'standardized communication protocols', 'data exchange formats', 'this detailed explanation', 'all key aspects', 'the source material', 'according to the document , solution is comprehensively explained as : api integration enables software interoperability through standardized communication protocols and data exchange formats ....', 'this detailed explanation covers all key aspects mentioned in the source material .'], Mandatory Keywords: ['api integration', 'explained api', 'api', 'software interoperability', 'interoperability standardized']
+Total Contextual Score for index 19: 0.88
+Mandatory Keyword Score for index 19: 0.68
+Optional Keyword Score for index 19: 0.20
+Contextual Keyword Gate Pass for index 19: True
+Mean Total Score: 0.85
+Mean Mandatory Score: 0.65
+Mean Optional Score: 0.20
+Mean Pass Rate: 100.00%

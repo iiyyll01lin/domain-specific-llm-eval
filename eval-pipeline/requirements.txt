@@ -1,0 +1,200 @@
+# Domain-Specific RAG Evaluation Pipeline Requirements
+# Core dependencies for the hybrid evaluation system
+
+# ============================================================================
+# CORE FRAMEWORK DEPENDENCIES
+# ============================================================================
+
+# Data processing and analysis
+pandas>=1.5.0
+numpy>=1.21.0
+openpyxl>=3.0.10          # Excel file support
+xlsxwriter>=3.0.3         # Excel writing with formatting
+
+# Document processing
+PyPDF2>=3.0.1             # PDF processing
+python-docx>=0.8.11       # Word document processing
+pdfplumber>=0.9.0         # Advanced PDF text extraction
+docx2txt>=0.8            # Additional docx support
+
+# Machine Learning and NLP
+scikit-learn>=1.1.0       # ML utilities and metrics
+sentence-transformers>=2.2.2  # Semantic similarity embeddings
+spacy>=3.4.0              # NLP processing for contextual segmentation
+transformers>=4.21.0      # Hugging Face transformers
+
+# RAGAS dependencies
+# ragas>=0.1.0              # RAG evaluation metrics - BUILT FROM LOCAL SUBMODULE
+# NOTE: RAGAS is installed from local submodule in Dockerfile, not from PyPI
+datasets>=2.5.0           # Dataset handling for RAGAS
+langchain>=0.0.200        # LangChain for document processing
+langchain-community>=0.0.20  # Community components
+
+# Keyword extraction
+keybert>=0.7.0            # KeyBERT for automatic keyword extraction
+yake>=0.4.8               # YAKE keyword extraction
+nltk>=3.8.1               # Natural language toolkit
+textstat>=0.7.3           # Text statistics
+
+# ============================================================================
+# VISUALIZATION AND REPORTING
+# ============================================================================
+
+# Plotting and visualization
+matplotlib>=3.5.0         # Basic plotting
+seaborn>=0.11.0           # Statistical data visualization
+plotly>=5.10.0            # Interactive visualizations
+
+# Report generation
+jinja2>=3.1.0             # Template engine for HTML reports
+markdown>=3.4.0           # Markdown processing
+reportlab>=3.6.0          # PDF report generation
+weasyprint>=56.0          # HTML to PDF conversion
+
+# ============================================================================
+# API AND INTEGRATION
+# ============================================================================
+
+# HTTP and API clients
+requests>=2.28.0          # HTTP requests for RAG system APIs
+aiohttp>=3.8.0            # Async HTTP client
+httpx>=0.23.0             # Modern HTTP client
+
+# Configuration and environment
+PyYAML>=6.0               # YAML configuration files
+python-dotenv>=0.20.0     # Environment variable management
+configparser>=5.3.0       # Configuration parsing
+
+# ============================================================================
+# UTILITY AND DEVELOPMENT
+# ============================================================================
+
+# Logging and monitoring
+loguru>=0.6.0             # Enhanced logging
+tqdm>=4.64.0              # Progress bars
+rich>=12.5.0              # Rich terminal output
+
+# Date and time handling
+python-dateutil>=2.8.2    # Date utilities
+pytz>=2022.2              # Timezone handling
+
+# File and path utilities
+pathlib2>=2.3.7           # Enhanced pathlib (Python < 3.6 compatibility)
+watchdog>=2.1.9           # File system monitoring
+
+# Testing and validation
+pytest>=7.1.0             # Testing framework
+pytest-cov>=3.0.0         # Coverage reporting
+jsonschema>=4.7.0         # JSON schema validation
+
+# ============================================================================
+# OPTIONAL INTEGRATIONS
+# ============================================================================
+
+# MLflow integration (optional)
+mlflow>=1.28.0            # Experiment tracking
+
+# Weights & Biases integration (optional)  
+wandb>=0.13.0             # Experiment tracking and visualization
+
+# Database integration (optional)
+sqlalchemy>=1.4.0         # Database ORM
+# sqlite3 is built-in to Python, no need to install
+
+# ============================================================================
+# LANGUAGE MODELS AND APIS
+# ============================================================================
+
+# OpenAI integration (optional)
+openai>=0.27.0            # OpenAI API client
+
+# Hugging Face integration
+huggingface-hub>=0.10.0   # Hugging Face model hub
+
+# Local model serving (optional)
+torch>=1.12.0             # PyTorch for local models
+torchvision>=0.13.0       # Computer vision utilities
+
+# ============================================================================
+# DEVELOPMENT AND DEBUGGING
+# ============================================================================
+
+# Code formatting and linting
+black>=22.6.0             # Code formatter
+flake8>=5.0.0             # Linting
+isort>=5.10.0             # Import sorting
+
+# Type checking
+mypy>=0.971               # Static type checking
+types-requests>=2.28.0    # Type stubs for requests
+types-PyYAML>=6.0.0       # Type stubs for PyYAML
+
+# Jupyter notebook support (optional)
+jupyter>=1.0.0            # Jupyter notebooks
+ipykernel>=6.15.0         # Jupyter kernel
+ipywidgets>=8.0.0         # Interactive widgets
+
+# ============================================================================
+# PLATFORM-SPECIFIC DEPENDENCIES
+# ============================================================================
+
+# Windows-specific
+pywin32>=304; sys_platform == "win32"  # Windows API access
+
+# Linux-specific  
+python-magic>=0.4.27; sys_platform == "linux"  # File type detection
+
+# macOS-specific
+pyobjc-framework-Cocoa>=8.5; sys_platform == "darwin"  # macOS integration
+
+# ============================================================================
+# VERSION CONSTRAINTS AND COMPATIBILITY
+# ============================================================================
+
+# Python version requirement
+# Requires Python 3.8+ for best compatibility
+
+# Key compatibility notes:
+# - sentence-transformers requires torch
+# - RAGAS requires specific langchain versions
+# - Some visualization features require modern matplotlib
+# - PDF processing may require additional system libraries
+
+# ============================================================================
+# INSTALLATION NOTES
+# ============================================================================
+
+# For complete setup, also install system dependencies:
+# 
+# Ubuntu/Debian:
+# sudo apt-get install python3-dev build-essential
+# sudo apt-get install libffi-dev libssl-dev
+# sudo apt-get install poppler-utils  # For PDF processing
+#
+# macOS:
+# brew install poppler  # For PDF processing
+#
+# Windows:
+# Install Microsoft Visual C++ Build Tools
+# Install poppler for Windows
+
+# SpaCy language models (install after pip install):
+# python -m spacy download en_core_web_sm
+# python -m spacy download en_core_web_md  # Optional: better accuracy
+
+# NLTK data (downloaded automatically on first use):
+# punkt, stopwords, wordnet, averaged_perceptron_tagger
+
+# ============================================================================
+# CUSTOM LLM AND API INTEGRATION
+# ============================================================================
+
+# HTTP clients for custom LLM endpoints
+requests>=2.31.0          # HTTP requests for custom LLM APIs
+httpx>=0.24.0             # Async HTTP client (alternative)
+urllib3>=2.0.0            # HTTP client library
+
+# Configuration and secrets management
+python-dotenv>=0.19.0     # Environment variable management
+
+# ============================================================================

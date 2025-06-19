@@ -1,0 +1,12 @@
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Performance logging enabled: /app/outputs/run_20250619_025441_8e85a6cf/logs/performance_run_20250619_025441_8e85a6cf.log
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Logging initialized (level: DEBUG)
+2025-06-19 02:54:41 | INFO     | rag_evaluation | ================================================================================
+2025-06-19 02:54:41 | INFO     | rag_evaluation | 🚀 Starting Domain-Specific RAG Evaluation Pipeline
+2025-06-19 02:54:41 | INFO     | rag_evaluation | ================================================================================
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Run ID: run_20250619_025441_8e85a6cf
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Config: config/pipeline_config.yaml
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Mode: full
+2025-06-19 02:54:41 | INFO     | rag_evaluation | Stage: all
+2025-06-19 02:54:41 | INFO     | rag_evaluation | 🔍 Validating environment...
+2025-06-19 02:54:42 | ERROR    | rag_evaluation | ❌ Environment validation failed:
+2025-06-19 02:54:42 | ERROR    | rag_evaluation |   - Missing required packages: pyyaml

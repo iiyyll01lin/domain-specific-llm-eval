@@ -1,0 +1,123 @@
+# Docker Compose for RAG Evaluation Pipeline
+# Provides complete containerized environment with volume mounts and networking
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Main RAG Evaluation Pipeline Service
+  # =============================================================================
+  rag-eval-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: application  # Changed from 'production' to 'application' for dev mode by default
+    image: rag-eval-pipeline:latest
+    container_name: rag-eval-pipeline
+    
+    # Environment variables (dev-friendly defaults)
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PIPELINE_ENV=development  # Changed from 'docker' to 'development'
+      - LOG_LEVEL=DEBUG          # Changed from 'INFO' to 'DEBUG'
+      - CACHE_DIR=/app/cache
+      - TEMP_DIR=/app/temp
+      - PYTHONPATH=/app/src:/app/local_ragas/src:/app/workspace      # Added local RAGAS and workspace
+      - TIKTOKEN_CACHE_DIR=/app/.cache/tiktoken    # Use local tiktoken cache
+      - TIKTOKEN_CACHE_ONLY=1                     # Force offline mode
+      - TIKTOKEN_DISABLE_DOWNLOAD=1               # Disable downloads    # Volume mounts for persistent data (now includes source code mounting)
+    volumes:
+      # Source code for live development
+      - ./src:/app/src:rw                     # Live code reloading
+      - ./config:/app/config:rw               # Config editing (now writable)
+      - ./tests:/app/tests:rw                 # Test files
+      # RAGAS submodule for local development
+      - ../ragas:/app/ragas:rw                # Local RAGAS development
+      # Document input directory
+      - ./data:/app/data:ro
+      # Output directory for results
+      - ./outputs:/app/outputs:rw
+      # Cache directory for models and temporary files
+      - pipeline-cache:/app/cache:rw
+      # Logs directory
+      - pipeline-logs:/app/logs:rw
+      # Workspace root for Excel files and other resources
+      - ..:/app/workspace:ro                  # Access to workspace root
+      # Local RAGAS repository
+      - ../ragas:/app/local_ragas:ro          # Local RAGAS for development
+
+    # Port mapping for development (added)
+    ports:
+      - "8080:8080"
+      - "8888:8888"  # For Jupyter if needed
+
+    # Enable stdin for interactive debugging (added)
+    stdin_open: true
+    tty: true
+
+    # Network configuration
+    networks:
+      - rag-eval-network
+    
+    # Resource limits (increased for development)
+    deploy:
+      resources:
+        limits:
+          memory: 6G          # Increased from 4G
+          cpus: '3.0'         # Increased from 2.0
+        reservations:
+          memory: 1G          # Decreased from 2G for flexibility
+          cpus: '0.5'
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Command override for development (added)
+    command: ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml", "--log-level", "DEBUG"]
+
+  # =============================================================================
+  # Optional: Web Interface Service (Future Enhancement)
+  # =============================================================================
+  # web-interface:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.web
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     - rag-eval-pipeline
+  #   networks:
+  #     - rag-eval-network
+
+  # =============================================================================
+  # Optional: Database Service for Results Storage
+  # =============================================================================
+  # postgres:
+  #   image: postgres:13
+  #   environment:
+  #     POSTGRES_DB: rag_eval
+  #     POSTGRES_USER: pipeline
+  #     POSTGRES_PASSWORD: pipeline_password
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - rag-eval-network
+
+# =============================================================================
+# Named Volumes
+# =============================================================================
+volumes:
+  pipeline-cache:
+    driver: local
+  pipeline-logs:
+    driver: local
+  # postgres-data:
+  #   driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  rag-eval-network:
+    driver: bridge
+    name: rag-eval-network

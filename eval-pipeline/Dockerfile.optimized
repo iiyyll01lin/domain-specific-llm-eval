@@ -1,0 +1,260 @@
+# Optimized Domain-Specific RAG Evaluation Pipeline - Docker Container
+# Designed for network resilience and faster builds
+
+# Build arguments for proxy configuration
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY=localhost,127.0.0.1
+ARG REQUIREMENTS_FILE=requirements.txt
+ARG OFFLINE_MODE=0
+
+# =============================================================================
+# Stage 1: Base Python Environment with System Dependencies
+# =============================================================================
+FROM python:3.10-slim-bullseye as base
+
+# Build arguments
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+# Set environment variables for build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Set proxy environment variables if provided
+ENV http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    no_proxy=${NO_PROXY} \
+    NO_PROXY=${NO_PROXY}
+
+# Configure apt to use proxy if provided
+RUN if [ -n "${HTTP_PROXY}" ]; then \
+        echo "Acquire::http::Proxy \"${HTTP_PROXY}\";" > /etc/apt/apt.conf.d/01proxy && \
+        echo "Acquire::https::Proxy \"${HTTPS_PROXY}\";" >> /etc/apt/apt.conf.d/01proxy; \
+    fi
+
+# Install system dependencies with timeout and retries
+RUN apt-get update && \
+    timeout 300 apt-get install -y \
+        build-essential \
+        gcc \
+        g++ \
+        poppler-utils \
+        libffi-dev \
+        libssl-dev \
+        curl \
+        wget \
+        file \
+        && rm -rf /var/lib/apt/lists/* \
+        && apt-get clean
+
+# =============================================================================
+# Stage 2: Python Dependencies Installation with Resilience
+# =============================================================================
+FROM base as dependencies
+
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG REQUIREMENTS_FILE
+ARG OFFLINE_MODE
+
+# Create application directory
+WORKDIR /app
+
+# Copy dependency files
+COPY ${REQUIREMENTS_FILE} requirements.txt
+COPY setup.py .
+
+# Create essential packages list for fallback
+RUN cat > requirements.essential.txt << 'EOF'
+pandas>=1.5.0
+numpy>=1.21.0
+PyYAML>=6.0
+openpyxl>=3.0.10
+sentence-transformers>=2.2.2
+spacy>=3.4.0
+scikit-learn>=1.1.0
+keybert>=0.7.0
+yake>=0.4.8
+requests>=2.28.0
+tqdm>=4.64.0
+matplotlib>=3.5.0
+nltk>=3.8.1
+transformers>=4.21.0
+torch>=1.12.0
+EOF
+
+# Upgrade pip with retries
+RUN python -m pip install --upgrade pip setuptools wheel \
+    $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") || \
+    python -m pip install --upgrade pip setuptools wheel \
+    --index-url https://pypi.org/simple/ \
+    --trusted-host pypi.org \
+    $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}")
+
+# Install dependencies with multiple fallback strategies
+RUN if [ "$OFFLINE_MODE" = "1" ]; then \
+        echo "Offline mode - skipping package installation"; \
+    else \
+        # Strategy 1: Full requirements with extended timeout
+        timeout 900 pip install --no-cache-dir --timeout 120 --retries 10 -r requirements.txt \
+            $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") || \
+        # Strategy 2: Different PyPI index
+        timeout 600 pip install --no-cache-dir --timeout 120 --retries 5 \
+            --index-url https://pypi.org/simple/ \
+            --trusted-host pypi.org \
+            -r requirements.txt $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") || \
+        # Strategy 3: Essential packages only
+        timeout 300 pip install --no-cache-dir --timeout 120 --retries 5 \
+            -r requirements.essential.txt $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") || \
+        # Strategy 4: Absolute minimum
+        pip install --no-cache-dir pandas numpy PyYAML openpyxl \
+            $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}"); \
+    fi
+
+# =============================================================================
+# Stage 3: Model Downloads (Optional - with timeouts)
+# =============================================================================
+FROM dependencies as models
+
+ARG OFFLINE_MODE
+
+# Download NLP models if not in offline mode
+RUN if [ "$OFFLINE_MODE" != "1" ]; then \
+        # SpaCy models with timeout
+        timeout 300 python -m spacy download en_core_web_sm || \
+            echo "SpaCy small model download failed or timed out"; \
+        timeout 600 python -m spacy download en_core_web_md || \
+            echo "SpaCy medium model download failed or timed out"; \
+        # NLTK data with timeout
+        timeout 300 python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet'); nltk.download('averaged_perceptron_tagger')" || \
+            echo "NLTK data download failed or timed out"; \
+        # Sentence transformers model with timeout
+        timeout 600 python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" || \
+            echo "Sentence transformer model download failed or timed out"; \
+    else \
+        echo "Offline mode - skipping model downloads"; \
+    fi
+
+# =============================================================================
+# Stage 4: Tiktoken Setup (Optional)
+# =============================================================================
+FROM models as tiktoken-setup
+
+# Create tiktoken cache directory
+RUN mkdir -p /app/.cache/tiktoken
+
+# Set environment variables for tiktoken
+ENV TIKTOKEN_CACHE_DIR=/app/.cache/tiktoken \
+    TIKTOKEN_CACHE_ONLY=1 \
+    TIKTOKEN_DISABLE_DOWNLOAD=1
+
+# Copy tiktoken setup script if available
+RUN if [ -f scripts/setup_tiktoken_robust.sh ]; then \
+        cp scripts/setup_tiktoken_robust.sh /tmp/setup_tiktoken_robust.sh; \
+    else \
+        echo '#!/bin/bash' > /tmp/setup_tiktoken_robust.sh && \
+        echo 'echo "Tiktoken setup script not found - using runtime fallback"' >> /tmp/setup_tiktoken_robust.sh; \
+    fi
+
+# Setup tiktoken cache (optional)
+RUN chmod +x /tmp/setup_tiktoken_robust.sh && \
+    timeout 300 /tmp/setup_tiktoken_robust.sh || \
+    echo "Tiktoken cache setup skipped - will use runtime fallback" && \
+    rm /tmp/setup_tiktoken_robust.sh
+
+# =============================================================================
+# Stage 5: Application Setup and Production
+# =============================================================================
+FROM tiktoken-setup as production
+
+# Remove proxy configuration for production (as root before user switch)
+RUN if [ -f /etc/apt/apt.conf.d/01proxy ]; then \
+        rm -f /etc/apt/apt.conf.d/01proxy; \
+    fi
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash pipeline
+
+# Create application directories with proper permissions
+RUN mkdir -p \
+    /app/data/documents \
+    /app/outputs/testsets \
+    /app/outputs/evaluations \
+    /app/outputs/reports \
+    /app/outputs/visualizations \
+    /app/outputs/metadata \
+    /app/outputs/logs \
+    /app/cache \
+    /app/temp \
+    /app/logs \
+    /app/config && \
+    chown -R pipeline:pipeline /app
+
+# Copy application code
+COPY --chown=pipeline:pipeline . .
+
+# Make scripts executable
+RUN chmod +x docker-entrypoint.sh 2>/dev/null || echo "docker-entrypoint.sh not found" && \
+    chmod +x scripts/init_tiktoken.py 2>/dev/null || echo "init_tiktoken.py not found" && \
+    find /app -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+
+# Switch to non-root user
+USER pipeline
+
+# Set working directory
+WORKDIR /app
+
+# Clear proxy environment variables for production
+ENV http_proxy= \
+    https_proxy= \
+    HTTP_PROXY= \
+    HTTPS_PROXY= \
+    no_proxy= \
+    NO_PROXY=
+
+# Set production environment variables
+ENV PYTHONPATH="/app/src:/app" \
+    RAG_EVAL_ENV="production" \
+    RAG_EVAL_LOG_LEVEL="INFO"
+
+# Validate installation (with timeout)
+RUN timeout 60 python setup.py --quick-test 2>/dev/null || \
+    timeout 30 python -c "import pandas, numpy; print('Basic validation passed')" || \
+    echo "Validation completed with warnings"
+
+# Expose port
+EXPOSE 8080
+
+# Health check with timeout
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD timeout 10 python -c "import sys; print('Container healthy')" || exit 1
+
+# Default entrypoint and command
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml"]
+
+# =============================================================================
+# Build Instructions:
+# 
+# Normal build:
+#   docker build -t rag-eval-pipeline .
+# 
+# With proxy:
+#   docker build --build-arg HTTP_PROXY=http://proxy:port \
+#                --build-arg HTTPS_PROXY=http://proxy:port \
+#                -t rag-eval-pipeline .
+# 
+# Minimal build:
+#   docker build --build-arg REQUIREMENTS_FILE=requirements.essential.txt \
+#                -t rag-eval-pipeline .
+# 
+# Offline build:
+#   docker build --build-arg OFFLINE_MODE=1 -t rag-eval-pipeline .
+# =============================================================================

@@ -1,0 +1,37 @@
+# Minimal Dockerfile for testing proxy configuration
+FROM python:3.10-slim-bullseye
+
+# Build arguments for proxy configuration
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY=localhost,127.0.0.1
+
+# Set proxy environment variables
+ENV http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    no_proxy=${NO_PROXY} \
+    NO_PROXY=${NO_PROXY}
+
+# Configure apt to use proxy if provided
+RUN if [ -n "${HTTP_PROXY}" ]; then \
+        echo "Acquire::http::Proxy \"${HTTP_PROXY}\";" > /etc/apt/apt.conf.d/01proxy && \
+        echo "Acquire::https::Proxy \"${HTTPS_PROXY}\";" >> /etc/apt/apt.conf.d/01proxy; \
+    fi
+
+# Test proxy configuration by showing environment and trying to install a package
+RUN echo "🔍 Proxy Environment Check:" && \
+    echo "HTTP_PROXY: ${HTTP_PROXY}" && \
+    echo "HTTPS_PROXY: ${HTTPS_PROXY}" && \
+    echo "http_proxy: ${http_proxy}" && \
+    echo "https_proxy: ${https_proxy}" && \
+    echo "" && \
+    echo "🧪 Testing pip with proxy..." && \
+    pip install --no-cache-dir \
+        $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") \
+        --timeout 60 --retries 3 \
+        requests
+
+# Simple test command
+CMD ["python", "-c", "import requests; print('✅ Successfully imported requests')"]

@@ -1,0 +1,14 @@
+Cybersecurity Best Practices
+        
+        Cybersecurity involves protecting systems, networks, and programs from digital attacks. These cyberattacks are usually aimed at accessing, changing, or destroying sensitive information; extorting money from users; or interrupting normal business processes.
+        
+        Essential security measures:
+        - Multi-factor authentication (MFA)
+        - Regular software updates and patches
+        - Strong password policies
+        - Network segmentation
+        - Employee security training
+        - Backup and recovery procedures
+        - Incident response planning
+        
+        Common threats include malware, phishing, ransomware, social engineering, and advanced persistent threats (APTs).
