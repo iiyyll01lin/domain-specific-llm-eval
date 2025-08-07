@@ -1,8 +1,8 @@
 # ============================================================================
-# PYTHON GITIGNORE FOR DOMAIN-SPECIFIC LLM EVALUATION PROJECT
+# Python & Virtual Environments
 # ============================================================================
 
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -31,52 +31,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Virtual Environments
 .env
 .venv
 env/
@@ -84,118 +39,72 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+__pypackages__/
+.python-version
 
-# But keep templates
-!.env.template
-!.env.example
+# ============================================================================
+# Caches, Logs, and Outputs
+# ============================================================================
 
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
+# Cache directories
+cache/
+.cache/
+.pytest_cache/
 .mypy_cache/
-.dmypy.json
-dmypy.json
+.hypothesis/
 
-# Pyre type checker
-.pyre/
-
-# ============================================================================
-# PROJECT-SPECIFIC IGNORES
-# ============================================================================
-
-# Secrets and configuration
-**/secrets.yaml
-**/*.secret
-**/*.key
-**/config/secrets*
-
-# Environment files
-.env
-.env.*
-
-# But keep templates
-!.env.template
-!.env.example
-!**/*.template
-!**/*.example
-
-# Logs and outputs
+# Log files and directories
 logs/
 *.log
+pip-log.txt
+celerybeat-schedule
+celerybeat.pid
+
+# Output, results, and temporary directories from runs
 outputs/
+test_output/
+test_outputs/
+debug_output/
+debug_outputs/
+test_evaluation_output/
 results/
 experiments/
-**/outputs/
-**/logs/
+temp/
+tmp/
 
-# Data files and datasets (large files)
-*.xlsx
-*.csv
-*.jsonl
-data/
-datasets/
-**/data/
-**/datasets/
-knowledge_base/
-testset/*.jsonl
-testset/*.xlsx
+# ============================================================================
+# Project-Specific Ignores
+# ============================================================================
 
-# PDF documents (can be large)
-*.pdf
-documents/*.pdf
-**/documents/*.pdf
+# Secrets and local configurations
+# NOTE: Always commit template/example files, never actual secret files.
+secrets.yaml
+*.secret
+*.key
+config/secrets*
+!*template
+!*example
 
-# Model files and caches
+# Large model files and serialized objects
 models/
 *.pkl
 *.pickle
 *.model
-.cache/
-**/models/
+*.safetensors
+*.bin
 
-# IDE and editor files
-.vscode/
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# ============================================================================
+# IDE / Editor / OS Files
+# ============================================================================
 .idea/
+.vscode/
+.spyderproject
+.ropeproject
 *.swp
 *.swo
 *~
-
-# OS-specific files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-
-# Docker
-.dockerignore
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.temp
-
-# Build artifacts
-*.build
-build-*.log
-
-# ============================================================================
-# EXCEPTIONS (FORCE INCLUDE)
-# ============================================================================
-
-# Keep template and example files
-!**/secrets.yaml.template
-!**/config.yaml.example
-!sample_documents/
-!testset/lagacy/

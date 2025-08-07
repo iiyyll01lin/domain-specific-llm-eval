@@ -1,4 +1,4 @@
-# Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
+# Domain-Specific LLM Agents Evaluation with RAGAS Integration & Custom LLM
 
 ![base-metric](base-metric.png)
 
@@ -14,18 +14,53 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 ![auto-eval-framework](auto-eval-framework.png)
 
-This project aims to deal with the real domain-specific LLM agents' response evaluation problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Ref. Fig1) like RAGAS Metrics. There are 2 main designs to address the specific bottleneck:
+This project provides a comprehensive solution for domain-specific LLM agents' response evaluation that cannot be solely solved by standard LLM-based metrics. **NEW: Complete RAGAS Integration with Custom LLM API** provides professional-grade testset generation and evaluation using your own LLM endpoints.
 
-1. LLM-based metrics tend to neglect keyword correctness which means even if the score is high enough, the response is still unbearable.
-2. Multi-turn metrics like RAGAS though tend to use pre-sys prompts for LLM agents for multiple rounds of evaluation, which do not allow dynamic adjustments through human feedback.
+## 🎯 Key Features
 
-I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance. 
+### **✅ RAGAS Integration (NEW)**
+- **Complete RAGAS Library Integration**: Uses actual RAGAS `TestsetGenerator` and evaluation metrics
+- **Custom LLM Support**: Integrate your own LLM API endpoints (tested with `gpt-4o` via custom proxy)
+- **CSV-to-RAGAS Conversion**: Transform your CSV data into sophisticated Q&A testsets
+- **Professional Evaluation**: `context_precision`, `context_recall`, `faithfulness`, `answer_relevancy`
 
-The goal is to:
+### **✅ Advanced Dynamic Metrics**
+- **Independent Gates**: Keyword & reference-based metrics with no key information loss
+- **Contextual Keyword Gate**: Decoupled "keyword extraction evaluation" & "response keyword coverage"
+- **Human Feedback Integration**: Dynamic threshold adjustment using active learning
+- **Uncertainty Sampling**: Intelligent selection of cases requiring human review
 
-1. Independent gates for keyword & reference-based metrics, which do not allow key information loss.
-2. Contextual keyword gate decoupled "keyword extraction evaluation" & "response keyword coverage".
-3. Dynamically adjust the gates using human feedback both ensure a stable iteration.
+## 📋 Quick Start with RAGAS
+
+### **Option 1: RAGAS with Custom LLM (Recommended)**
+```bash
+cd eval-pipeline
+python test_ragas_integration.py  # Test your setup
+python run_pipeline.py --stage testset-generation  # Generate testsets
+python run_pipeline.py --stage evaluation  # Run evaluation
+```
+
+### **Option 2: Traditional Pipeline**
+```bash
+cd eval-pipeline
+python run_pipeline.py --config config.yaml
+```
+
+**📚 Complete Guide**: See [`eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`](eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md) for detailed setup and usage instructions.
+
+## 🚀 Core Capabilities
+
+This project addresses specific bottlenecks in domain-specific LLM evaluation:
+
+1. **LLM-based metrics neglect keyword correctness** - Even high scores may miss critical domain terms
+2. **Standard metrics lack dynamic adjustment** - No adaptation based on human feedback
+3. **Limited custom LLM integration** - Most frameworks require specific API providers
+
+**Our Solution:**
+- **RAGAS + Custom LLM**: Professional testset generation with your own models
+- **Dynamic Keyword Gates**: Context-aware keyword evaluation with semantic understanding
+- **Human-in-the-Loop**: Active learning for continuous improvement
+- **Privacy-Friendly**: Complete control over your data and models
 
 # Design
 
