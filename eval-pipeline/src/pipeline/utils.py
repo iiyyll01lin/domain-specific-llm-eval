@@ -50,6 +50,7 @@ def create_output_directories(config: Dict[str, Any], run_id: str) -> Dict[str, 
     directories = {
         'base': run_dir,
         'testsets': run_dir / 'testsets',
+        'evaluations': run_dir / 'evaluations',  # Add evaluations directory
         'reports': run_dir / 'reports', 
         'metadata': run_dir / 'metadata',
         'logs': run_dir / 'logs',

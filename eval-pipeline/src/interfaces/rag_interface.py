@@ -40,7 +40,64 @@ class RAGInterface:
             'confidence': 'confidence'
         })
         
+        # Load English prompt helpers
+        self._load_english_prompt_helpers()
+        
         logger.info(f"RAG interface initialized for endpoint: {self.endpoint}")
+    
+    def _load_english_prompt_helpers(self):
+        """Load English prompt helper functions."""
+        try:
+            from .english_prompts import get_english_system_prompt, create_custom_english_prompt
+            self.get_english_system_prompt = get_english_system_prompt
+            self.create_custom_english_prompt = create_custom_english_prompt
+        except ImportError:
+            # Fallback functions if module not available
+            def get_english_system_prompt(prompt_type: str = 'default') -> str:
+                return """You are a helpful assistant for evaluation purposes that MUST respond only in English. 
+
+MANDATORY REQUIREMENTS FOR EVALUATION:
+- Always respond in English language only, regardless of the input language
+- If the question is in Chinese, Japanese, Korean, or any other language, translate it internally and answer in English
+- Use clear, professional English with proper grammar and vocabulary
+- Do not mix languages in your response under any circumstances
+- If you cannot understand the input language, ask for clarification in English only
+- Provide comprehensive and accurate answers to enable proper evaluation
+
+EVALUATION CONTEXT:
+- Your responses are being evaluated for quality and accuracy
+- Consistent English responses ensure fair evaluation across all test cases
+- Focus on providing helpful, detailed answers in English
+
+Remember: ALL responses must be in English only for proper evaluation."""
+            
+            def create_custom_english_prompt(domain: str = "", requirements: list = None) -> str:
+                base = "You are a helpful assistant that MUST respond only in English."
+                if domain:
+                    base += f" You specialize in {domain} topics."
+                
+                base += """\n
+LANGUAGE REQUIREMENTS:
+- Always respond in English language only
+- Translate non-English inputs internally before answering
+- Use appropriate terminology for the domain
+- Maintain professional tone
+- Do not mix languages in your response
+
+EVALUATION CONTEXT:
+- Your responses are being evaluated for quality and accuracy
+- Consistent English responses ensure fair evaluation across all test cases"""
+                
+                if requirements:
+                    base += "\n\nADDITIONAL REQUIREMENTS:\n"
+                    for req in requirements:
+                        base += f"- {req}\n"
+                
+                base += "\nRemember: ALL responses must be in English only for proper evaluation."
+                return base
+            
+            self.get_english_system_prompt = get_english_system_prompt
+            self.create_custom_english_prompt = create_custom_english_prompt
     
     def _setup_session(self) -> requests.Session:
         """Setup HTTP session with authentication."""
@@ -79,12 +136,37 @@ class RAGInterface:
         if not self.endpoint:
             raise ValueError("RAG endpoint not configured")
         
-        # Prepare request
-        request_data = {self.question_field: question}
+        # Prepare request - check if payload_template is configured
+        payload_template = self.request_format.get('payload_template')
+        
+        # Enhanced system prompt to ensure responses are in English
+        system_prompt = self._build_english_system_prompt()
+        
+        if payload_template:
+            # Use payload template and substitute question
+            request_data = {}
+            for key, value in payload_template.items():
+                if isinstance(value, str) and "{question}" in value:
+                    request_data[key] = value.format(question=question)
+                else:
+                    request_data[key] = value
+            
+            # Add system prompt to payload in multiple possible fields
+            self._add_system_prompt_to_payload(request_data, system_prompt)
+            logger.debug(f"Using payload template: {request_data}")
+        else:
+            # Use simple question field format
+            request_data = {
+                self.question_field: question,
+                'system_prompt': system_prompt
+            }
+            logger.debug(f"Using simple format with field '{self.question_field}': {request_data}")
         
         # Add any additional request parameters
         request_params = self.config.get('request_params', {})
         request_data.update(request_params)
+        
+        logger.info(f"Final RAG request payload: {request_data}")
         
         # Execute request with retries
         for attempt in range(self.max_retries):
@@ -189,6 +271,22 @@ class RAGInterface:
         contexts = self._extract_field(response_data, self.response_fields.get('contexts', 'contexts'))
         confidence = self._extract_field(response_data, self.response_fields.get('confidence', 'confidence'))
         
+        # Debug logging for response parsing
+        logger.debug(f"RAG response keys: {list(response_data.keys())}")
+        logger.debug(f"RAG response structure: {response_data}")
+        logger.debug(f"Extracted answer: {answer}")
+        logger.debug(f"Answer field path: {self.response_fields.get('answer', 'answer')}")
+        
+        # If answer extraction failed, try alternative common fields
+        if not answer:
+            alternative_fields = ['response', 'result', 'text', 'content', 'answer']
+            for alt_field in alternative_fields:
+                alt_answer = self._extract_field(response_data, alt_field)
+                if alt_answer:
+                    logger.info(f"Found answer using alternative field: {alt_field}")
+                    answer = alt_answer
+                    break
+        
         # Ensure contexts is a list
         if contexts is not None and not isinstance(contexts, list):
             contexts = [str(contexts)]
@@ -214,11 +312,11 @@ class RAGInterface:
     
     def _extract_field(self, data: Dict[str, Any], field_path: str) -> Any:
         """
-        Extract field from nested dictionary using dot notation.
+        Extract field from nested dictionary using dot notation and array indexing.
         
         Args:
             data: Dictionary to extract from
-            field_path: Field path (e.g., 'data.answer' or 'result.contexts')
+            field_path: Field path (e.g., 'data.answer', 'message[0].content', 'results[0].text')
             
         Returns:
             Extracted value or None if not found
@@ -226,34 +324,139 @@ class RAGInterface:
         if not field_path:
             return None
         
+        import re
+        
         current = data
-        for key in field_path.split('.'):
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            else:
+        # Split path and handle both dot notation and array indexing
+        parts = field_path.split('.')
+        
+        for part in parts:
+            if current is None:
                 return None
+                
+            # Check if this part has array indexing like 'message[0]'
+            array_match = re.match(r'^(\w+)\[(\d+)\]$', part)
+            if array_match:
+                key, index = array_match.groups()
+                index = int(index)
+                
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                    if isinstance(current, list) and 0 <= index < len(current):
+                        current = current[index]
+                    else:
+                        return None
+                else:
+                    return None
+            else:
+                # Regular dictionary key access
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    return None
         
         return current
     
+    def _build_english_system_prompt(self) -> str:
+        """
+        Build a comprehensive system prompt to ensure English responses.
+        
+        Returns:
+            Comprehensive system prompt for English-only responses
+        """
+        # Check for custom prompt in config
+        custom_prompt = self.config.get('english_system_prompt')
+        if custom_prompt:
+            return custom_prompt
+        
+        # Check for prompt type preference
+        prompt_type = self.config.get('english_prompt_type', 'default')
+        
+        # Check for domain-specific requirements
+        domain = self.config.get('domain', '')
+        additional_requirements = self.config.get('english_requirements', [])
+        
+        if domain or additional_requirements:
+            return self.create_custom_english_prompt(domain, additional_requirements)
+        else:
+            return self.get_english_system_prompt(prompt_type)
+    
+    def _add_system_prompt_to_payload(self, request_data: dict, system_prompt: str) -> None:
+        """
+        Add system prompt to request payload, trying multiple common field names.
+        
+        Args:
+            request_data: The request payload dictionary
+            system_prompt: The system prompt to add
+        """
+        # Common field names for system prompts in different RAG systems
+        system_prompt_fields = [
+            'system_prompt',
+            'system_message', 
+            'system',
+            'instructions',
+            'prompt',
+            'context_instructions'
+        ]
+        
+        # Try to add system prompt to existing fields or create new one
+        prompt_added = False
+        
+        # Check if any system prompt field already exists
+        for field in system_prompt_fields:
+            if field in request_data:
+                # Append to existing system prompt
+                existing_prompt = request_data[field]
+                if existing_prompt:
+                    request_data[field] = f"{existing_prompt}\n\n{system_prompt}"
+                else:
+                    request_data[field] = system_prompt
+                prompt_added = True
+                break
+        
+        # If no existing field found, add as 'system_prompt'
+        if not prompt_added:
+            request_data['system_prompt'] = system_prompt
+        
+        # For SMT assistant specifically, also add to context if available
+        if 'context' in request_data and isinstance(request_data['context'], dict):
+            request_data['context']['language_instruction'] = "Respond only in English"
+            request_data['context']['evaluation_mode'] = "English-only responses required for evaluation"
+        
+        # Also try adding to common nested structures
+        if 'messages' in request_data and isinstance(request_data['messages'], list):
+            # Add system message to messages array if it exists
+            system_message = {
+                'role': 'system',
+                'content': system_prompt
+            }
+            request_data['messages'].insert(0, system_message)
+            prompt_added = True
+        
+        logger.debug(f"Added English system prompt to request payload")
+    
     def _create_error_response(self, error_type: str, response_time: float = 0.0) -> Dict[str, Any]:
         """
-        Create a standardized error response.
+        Create standardized error response.
         
         Args:
             error_type: Type of error that occurred
-            response_time: Time taken before error
+            response_time: Time taken for the failed request
             
         Returns:
-            Error response dictionary
+            Standardized error response dictionary
         """
         return {
-            'answer': '',
-            'contexts': [],
-            'confidence': None,
-            'response_time': response_time,
             'success': False,
             'error': error_type,
-            'raw_response': {}
+            'answer': f'Error: {error_type}',
+            'contexts': [],
+            'confidence': 0.0,
+            'response_time': response_time,
+            'metadata': {
+                'error_type': error_type,
+                'timestamp': time.time()
+            }
         }
     
     def test_connection(self) -> Dict[str, Any]:

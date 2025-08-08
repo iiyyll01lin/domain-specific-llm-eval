@@ -9,6 +9,17 @@ This module integrates:
 4. Multi-source testset evaluation
 """
 
+# Import fix applied
+import sys
+from pathlib import Path
+
+# Add utils directory to Python path for local imports
+current_file_dir = Path(__file__).parent
+utils_dir = current_file_dir.parent / "utils"
+if str(utils_dir) not in sys.path:
+    sys.path.insert(0, str(utils_dir))
+
+
 import sys
 import pandas as pd
 import numpy as np
@@ -242,7 +253,7 @@ class HybridEvaluator:
             }
             
             # Calculate composite RAGAS score
-            composite_score = np.mean([score for score in ragas_scores.values() if score > 0])
+            composite_score = safe_mean([score for score in ragas_scores.values() if score > 0])
             self.all_ragas_scores.append(composite_score)
             
             ragas_scores.update({
@@ -273,6 +284,8 @@ class HybridEvaluator:
         """Evaluate semantic similarity using sentence transformers"""
         try:
             from sentence_transformers import SentenceTransformer, util
+import math
+from nan_handling import safe_mean, safe_std, safe_min_max, is_valid_score
             
             # Use the same model as your contextual system
             model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -302,7 +315,7 @@ class HybridEvaluator:
             
             return {
                 'semantic_similarity': similarity_score,
-                'segment_similarity_avg': np.mean(segment_similarities) if segment_similarities else 0.0,
+                'segment_similarity_avg': safe_mean(segment_similarities) if segment_similarities else 0.0,
                 'segment_similarity_max': max(segment_similarities) if segment_similarities else 0.0,
                 'semantic_pass': similarity_score >= 0.6,
                 'segment_count_ratio': len(rag_segments) / len(expected_segments) if expected_segments else 0.0

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class DocumentProcessor:
     """Processes documents for testset generation using existing DocumentLoader."""
     
-    def __init__(self, config: Dict[str, Any], output_dir: Path):
+    def __init__(self, config: Dict[str, Any], output_dir):
         """
         Initialize document processor.
         
@@ -34,12 +34,12 @@ class DocumentProcessor:
             output_dir: Output directory for processed documents
         """
         self.config = config
-        self.output_dir = output_dir
+        self.output_dir = Path(output_dir)  # Convert to Path object
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize document loader if available
         if DocumentLoader:
-            self.document_loader = DocumentLoader()
+            self.document_loader = DocumentLoader(config)
         else:
             self.document_loader = None
             logger.warning("DocumentLoader not available, using basic processing")
@@ -53,24 +53,54 @@ class DocumentProcessor:
         """
         processed_docs = []
         
-        # Process primary documents
-        primary_docs = self.config.get('documents', {}).get('primary_docs', [])
-        for doc_path in primary_docs:
-            try:
-                doc_result = self._process_single_document(doc_path)
-                if doc_result:
-                    processed_docs.append(doc_result)
-            except Exception as e:
-                logger.error(f"Failed to process document {doc_path}: {e}")
+        logger.info(f"Document processor config: {self.config}")
         
-        # Process additional directories
-        additional_dirs = self.config.get('documents', {}).get('additional_dirs', [])
-        for dir_path in additional_dirs:
-            try:
-                dir_docs = self._process_directory(dir_path)
-                processed_docs.extend(dir_docs)
-            except Exception as e:
-                logger.error(f"Failed to process directory {dir_path}: {e}")
+        # Process CSV files
+        csv_files = self.config.get('csv_files', [])
+        if csv_files:
+            logger.info(f"Processing {len(csv_files)} CSV files: {csv_files}")
+            for csv_file in csv_files:
+                try:
+                    doc_result = self._process_single_document(csv_file)
+                    if doc_result:
+                        processed_docs.append(doc_result)
+                except Exception as e:
+                    logger.error(f"Failed to process CSV file {csv_file}: {e}")
+        
+        # Process PDF files
+        pdf_files = self.config.get('pdf_files', [])
+        if pdf_files:
+            logger.info(f"Processing {len(pdf_files)} PDF files: {pdf_files}")
+            for pdf_file in pdf_files:
+                try:
+                    doc_result = self._process_single_document(pdf_file)
+                    if doc_result:
+                        processed_docs.append(doc_result)
+                except Exception as e:
+                    logger.error(f"Failed to process PDF file {pdf_file}: {e}")
+        
+        # Process text files
+        text_files = self.config.get('text_files', [])
+        if text_files:
+            logger.info(f"Processing {len(text_files)} text files: {text_files}")
+            for text_file in text_files:
+                try:
+                    doc_result = self._process_single_document(text_file)
+                    if doc_result:
+                        processed_docs.append(doc_result)
+                except Exception as e:
+                    logger.error(f"Failed to process text file {text_file}: {e}")
+        
+        # Process directories
+        directories = self.config.get('directories', [])
+        if directories:
+            logger.info(f"Processing {len(directories)} directories: {directories}")
+            for dir_path in directories:
+                try:
+                    dir_docs = self._process_directory(dir_path)
+                    processed_docs.extend(dir_docs)
+                except Exception as e:
+                    logger.error(f"Failed to process directory {dir_path}: {e}")
         
         logger.info(f"Successfully processed {len(processed_docs)} documents")
         return processed_docs
@@ -85,12 +115,23 @@ class DocumentProcessor:
         Returns:
             Processed document dictionary or None if failed
         """
+        logger.info(f"Processing document path: {doc_path}")
         doc_file = Path(doc_path)
         
         # Convert to absolute path if relative
         if not doc_file.is_absolute():
-            # Try relative to config file or current directory
-            doc_file = Path.cwd() / doc_file
+            # Try relative to eval-pipeline directory first
+            pipeline_root = Path(__file__).parent.parent.parent
+            doc_file = pipeline_root / doc_file
+            logger.info(f"Trying relative to pipeline root: {doc_file}")
+            
+            # If that doesn't exist, try current directory
+            if not doc_file.exists():
+                doc_file = Path.cwd() / doc_path
+                logger.info(f"Trying relative to current directory: {doc_file}")
+        
+        logger.info(f"Final resolved path: {doc_file}")
+        logger.info(f"File exists: {doc_file.exists()}")
         
         if not doc_file.exists():
             logger.warning(f"Document not found: {doc_path}")
@@ -142,7 +183,14 @@ class DocumentProcessor:
             return []
         
         processed_docs = []
-        file_types = self.config.get('documents', {}).get('file_types', ['pdf', 'docx', 'txt', 'md'])
+        
+        # Handle different config structures - check if we have full config or just data_sources
+        documents_config = self.config.get('documents', {})
+        if not documents_config and 'data_sources' in self.config:
+            # We have full config, extract documents section
+            documents_config = self.config.get('data_sources', {}).get('documents', {})
+        
+        file_types = documents_config.get('file_types', ['pdf', 'docx', 'txt', 'md'])
         
         # Find files with supported extensions
         for file_type in file_types:
@@ -169,11 +217,29 @@ class DocumentProcessor:
         
         try:
             if file_type == '.pdf':
-                content = self.document_loader.load_pdf_file(str(doc_file))
+                documents, metadata = self.document_loader.load_pdf(str(doc_file))
+                content = " ".join(documents) if documents else ""
             elif file_type in ['.docx', '.doc']:
-                content = self.document_loader.load_docx_file(str(doc_file))
+                documents, metadata = self.document_loader.load_docx(str(doc_file))
+                content = " ".join(documents) if documents else ""
             elif file_type in ['.txt', '.md']:
-                content = self.document_loader.load_text_file(str(doc_file))
+                documents, metadata = self.document_loader.load_text_file(str(doc_file))
+                content = " ".join(documents) if documents else ""
+            elif file_type == '.csv':
+                # Handle CSV files by reading and concatenating text content
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(doc_file)
+                    # Concatenate all text columns into a single string
+                    text_content = []
+                    for column in df.columns:
+                        # Skip numeric columns, focus on text content
+                        if df[column].dtype == 'object':  # String columns
+                            text_content.extend(df[column].dropna().astype(str).tolist())
+                    content = " ".join(text_content)
+                except Exception as e:
+                    logger.warning(f"Failed to process CSV file {doc_file.name}: {e}")
+                    content = ""
             else:
                 logger.warning(f"Unsupported file type: {file_type}")
                 return ""
@@ -220,6 +286,22 @@ class DocumentProcessor:
                     logger.warning("PyPDF2 not available for PDF processing")
                     return ""
             
+            elif file_type == '.csv':
+                # Process CSV files by concatenating all text content
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(doc_file)
+                    # Concatenate all text columns into a single string
+                    text_content = []
+                    for column in df.columns:
+                        # Skip numeric columns, focus on text content
+                        if df[column].dtype == 'object':  # String columns
+                            text_content.extend(df[column].dropna().astype(str).tolist())
+                    return " ".join(text_content)
+                except Exception as e:
+                    logger.warning(f"Failed to process CSV file {doc_file.name}: {e}")
+                    return ""
+            
             elif file_type in ['.docx']:
                 # Try python-docx if available
                 try:
@@ -234,7 +316,7 @@ class DocumentProcessor:
                     return ""
             
             else:
-                logger.warning(f"Unsupported file type in fallback: {file_type}")
+                logger.warning(f"Unsupported file type: {file_type}")
                 return ""
                 
         except Exception as e:
@@ -303,4 +385,84 @@ class DocumentProcessor:
             'total_chars': total_chars,
             'file_types': file_types,
             'avg_words_per_doc': total_words // len(processed_docs) if processed_docs else 0
+        }
+    
+    def save_processed_documents(self, processed_docs: List[Dict[str, Any]], output_path: Path) -> None:
+        """
+        Save processed documents to JSON file.
+        
+        Args:
+            processed_docs: List of processed documents
+            output_path: Path where to save the JSON file
+        """
+        import json
+        
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Convert Path objects to strings for JSON serialization
+        serializable_docs = []
+        for doc in processed_docs:
+            serializable_doc = dict(doc)
+            if 'source_file' in serializable_doc:
+                serializable_doc['source_file'] = str(serializable_doc['source_file'])
+            serializable_docs.append(serializable_doc)
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(serializable_docs, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Saved {len(processed_docs)} processed documents to {output_path}")
+    
+    
+    def _create_document_loader_config(self, pipeline_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert pipeline configuration to DocumentLoader configuration format.
+        
+        Args:
+            pipeline_config: Pipeline configuration
+            
+        Returns:
+            DocumentLoader compatible configuration
+        """
+        # Get pipeline root for resolving relative paths
+        pipeline_root = Path(__file__).parent.parent.parent
+        
+        # Extract document configuration
+        documents_config = pipeline_config.get('documents', {})
+        primary_docs = documents_config.get('primary_docs', [])
+        additional_dirs = documents_config.get('additional_dirs', [])
+        processing_config = documents_config.get('processing', {})
+        
+        # Convert to absolute paths
+        pdf_files = []
+        directories = []
+        
+        for doc_path in primary_docs:
+            doc_file = Path(doc_path)
+            if not doc_file.is_absolute():
+                doc_file = pipeline_root / doc_file
+            if doc_file.exists():
+                pdf_files.append(str(doc_file))
+            else:
+                logger.warning(f"Primary document not found: {doc_path} (resolved to {doc_file})")
+        
+        for dir_path in additional_dirs:
+            dir_file = Path(dir_path)
+            if not dir_file.is_absolute():
+                dir_file = pipeline_root / dir_path
+            if dir_file.exists():
+                directories.append(str(dir_file))
+            else:
+                logger.warning(f"Additional directory not found: {dir_path} (resolved to {dir_file})")
+        
+        # Create DocumentLoader compatible config
+        return {
+            'custom_data': {
+                'enabled': True,
+                'data_sources': {
+                    'pdf_files': pdf_files,
+                    'directories': directories
+                },
+                'processing': processing_config
+            }
         }

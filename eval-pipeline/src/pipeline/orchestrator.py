@@ -113,16 +113,11 @@ class PipelineOrchestrator:
         """Initialize pipeline components."""
         logger.info("🏗️ Initializing pipeline components...")
         
-        # Document processor
-        self.document_processor = DocumentProcessor(
-            config=self.config.get('data_sources', {}),
-            output_dir=self.output_dirs['temp']
-        )
+        # Document processor (smart routing based on input type)
+        self.document_processor = self._create_data_processor()
         
-        # Testset generator
-        self.testset_generator = HybridTestsetGenerator(
-            config=self.config
-        )
+        # Testset generator (smart routing based on generator class)
+        self.testset_generator = self._create_testset_generator()
         
         # RAG interface
         self.rag_interface = RAGInterface(
@@ -150,29 +145,70 @@ class PipelineOrchestrator:
         
         # Human feedback manager
         if eval_config.get('human_feedback', {}).get('enabled', False):
+            # Add output_dir to the human feedback config
+            feedback_config = eval_config.get('human_feedback', {}).copy()
+            feedback_config['output_dir'] = str(self.output_dirs['metadata'])
             self.feedback_manager = HumanFeedbackManager(
-                config=eval_config.get('human_feedback', {}),
-                output_dir=self.output_dirs['metadata']
+                config={'evaluation': {'human_feedback': feedback_config}}
             )
         else:
             self.feedback_manager = None
         
         # RAG evaluator (coordinator)
-        self.rag_evaluator = RAGEvaluator(
-            rag_interface=self.rag_interface,
-            contextual_evaluator=self.contextual_evaluator,
-            ragas_evaluator=self.ragas_evaluator,
-            feedback_manager=self.feedback_manager,
-            output_dir=self.output_dirs['metadata']
-        )
+        self.rag_evaluator = RAGEvaluator(config=self.config)
         
         # Report generator
-        self.report_generator = ReportGenerator(
-            config=self.config.get('reporting', {}),
-            output_dir=self.output_dirs['reports']
-        )
+        self.report_generator = ReportGenerator(config=self.config)
         
         logger.info("✅ Pipeline components initialized")
+    
+    def _create_data_processor(self):
+        """
+        Create appropriate data processor based on input type.
+        
+        Returns:
+            DocumentProcessor or CSVDataProcessor based on config
+        """
+        input_type = self.config.get('data_sources', {}).get('input_type', 'documents')
+        logger.info(f"🔍 Detected input type: {input_type}")
+        
+        if input_type == 'csv':
+            logger.info("📊 Creating CSV data processor...")
+            from data.csv_data_processor import CSVDataProcessor
+            return CSVDataProcessor(
+                config=self.config.get('data_sources', {}),
+                output_dir=self.output_dirs['temp']
+            )
+        else:
+            logger.info("📄 Creating document file processor...")
+            return DocumentProcessor(
+                config=self.config.get('custom_data', {}).get('data_sources', {}),
+                output_dir=self.output_dirs['temp']
+            )
+    
+    def _create_testset_generator(self):
+        """
+        Create appropriate testset generator based on generator class.
+        
+        Returns:
+            PureRagasTestsetGenerator or HybridTestsetGenerator based on config
+        """
+        generator_class = self.config.get('testset_generation', {}).get('generator_class', 'hybrid')
+        method = self.config.get('testset_generation', {}).get('method', 'hybrid')
+        
+        logger.info(f"🔍 Detected generator class: {generator_class}")
+        logger.info(f"🔍 Detected method: {method}")
+        
+        if generator_class == 'pure_ragas_testset_generator' or method == 'pure_ragas':
+            logger.info("🧠 Creating Enhanced Pure RAGAS testset generator...")
+            from data.pure_ragas_testset_generator import PureRagasTestsetGenerator
+            return PureRagasTestsetGenerator(
+                config=self.config,  # Pass full config instead of just testset_generation section
+                output_dir=self.output_dirs['testsets']
+            )
+        else:
+            logger.info("🔄 Creating Hybrid testset generator...")
+            return HybridTestsetGenerator(config=self.config)
     
     def _run_testset_generation(self) -> Dict[str, Any]:
         """
@@ -217,24 +253,48 @@ class PipelineOrchestrator:
                 logger.info(f"✅ Generated testset with {len(testset_data)} QA pairs")
                 logger.info(f"Generation method: {metadata_results.get('generation_method', 'unknown')}")
                 
+                def make_json_serializable(obj):
+                    """Convert objects to JSON-serializable format."""
+                    import pandas as pd
+                    import numpy as np
+                    
+                    if hasattr(obj, 'to_dict'):  # DataFrame
+                        return obj.to_dict('records')
+                    elif isinstance(obj, pd.Timestamp):  # Pandas Timestamp
+                        return obj.isoformat()
+                    elif isinstance(obj, (pd.Series, np.ndarray)):  # Pandas Series or numpy array
+                        return obj.tolist()
+                    elif hasattr(obj, 'isoformat'):  # datetime objects
+                        return obj.isoformat()
+                    elif hasattr(obj, '__dict__'):  # Custom objects
+                        return {k: make_json_serializable(v) for k, v in obj.__dict__.items()}
+                    elif isinstance(obj, dict):
+                        return {k: make_json_serializable(v) for k, v in obj.items()}
+                    elif isinstance(obj, (list, tuple)):
+                        return [make_json_serializable(item) for item in obj]
+                    else:
+                        return obj
+                
                 # Step 3: Save metadata
                 metadata = {
                     'run_id': self.run_id,
                     'timestamp': datetime.now().isoformat(),
                     'documents_processed': len(processed_documents),
-                    'testsets_generated': 1 if testset_data else 0,
-                    'total_qa_pairs': len(testset_data),
+                    'testsets_generated': 1 if (testset_data is not None and not testset_data.empty) else 0,
+                    'total_qa_pairs': len(testset_data) if testset_data is not None else 0,
                     'document_sources': [doc['source_file'] for doc in processed_documents],
                     'generation_method': metadata_results.get('generation_method', 'unknown'),
-                    'generation_metadata': metadata_results,
-                    'results_by_method': generation_results
+                    'generation_metadata': make_json_serializable(metadata_results),
+                    'results_by_method': make_json_serializable(generation_results)
                 }
                 
                 # Save metadata
                 metadata_file = self.output_dirs['metadata'] / f"testset_metadata_{self.run_id}.json"
                 import json
+                # Make metadata JSON serializable
+                serializable_metadata = make_json_serializable(metadata)
                 with open(metadata_file, 'w') as f:
-                    json.dump(metadata, f, indent=2)
+                    json.dump(serializable_metadata, f, indent=2)
                 
                 self.memory_tracker.log_memory_usage("Testset Generation End")
                 
@@ -256,9 +316,15 @@ class PipelineOrchestrator:
             stage_duration = time.time() - stage_start
             log_stage_end(logger, "Testset Generation", False, stage_duration)
             
+            # Enhanced error logging for debugging
+            import traceback
+            logger.error(f"❌ Testset generation failed with {type(e).__name__}: {str(e)}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            
             return {
                 'success': False,
                 'error': str(e),
+                'error_type': type(e).__name__,
                 'duration': stage_duration
             }
     
@@ -351,8 +417,11 @@ class PipelineOrchestrator:
                 # Step 1: Load evaluation data
                 logger.info("📈 Loading evaluation data for reporting...")
                 
-                # Find evaluation results
+                # Find evaluation results - check both metadata and evaluations directories
                 eval_files = list(self.output_dirs['metadata'].glob("*evaluation_results*.json"))
+                if not eval_files:
+                    # Also check evaluations directory
+                    eval_files = list(self.output_dirs['evaluations'].glob("*evaluation_results*.json"))
                 if not eval_files:
                     raise Exception("No evaluation results found for reporting")
                 

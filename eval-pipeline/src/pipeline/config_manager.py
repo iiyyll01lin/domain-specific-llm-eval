@@ -100,12 +100,12 @@ class ConfigManager:
         data_sources = self.config.get('data_sources', {})
         if 'documents' in data_sources:
             docs = data_sources['documents']
-            if 'primary_docs' in docs:
+            if 'primary_docs' in docs and docs['primary_docs'] is not None:
                 for doc_path in docs['primary_docs']:
                     if not self._check_file_exists(doc_path):
                         warnings.append(f"Primary document not found: {doc_path}")
             
-            if 'additional_dirs' in docs:
+            if 'additional_dirs' in docs and docs['additional_dirs'] is not None:
                 for dir_path in docs['additional_dirs']:
                     if not self._check_dir_exists(dir_path):
                         warnings.append(f"Additional directory not found: {dir_path}")
