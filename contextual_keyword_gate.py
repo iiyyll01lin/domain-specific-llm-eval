@@ -41,6 +41,10 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
         optional_keywords = []
 
     answer_segments = get_contextual_segments(answer)
+    
+    # Safety check: if no segments, use the full answer as a single segment
+    if not answer_segments:
+        answer_segments = [answer.strip()] if answer.strip() else [""]
 
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -55,7 +59,12 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
             for ans_emb in answer_embeddings
         ]
 
-        mandatory_similarities.append(max(similarities))
+        # Safety check for empty similarities list
+        if similarities:
+            mandatory_similarities.append(max(similarities))
+        else:
+            # If no answer segments, assign a very low similarity score
+            mandatory_similarities.append(0.0)
 
     optional_similarities = []
     if optional_keywords:
@@ -66,7 +75,12 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
                 for ans_emb in answer_embeddings
             ]
 
-            optional_similarities.append(max(similarities))
+            # Safety check for empty similarities list
+            if similarities:
+                optional_similarities.append(max(similarities))
+            else:
+                # If no answer segments, assign a very low similarity score
+                optional_similarities.append(0.0)
 
     mandatory_score = np.mean(mandatory_similarities) * weights["mandatory"]
     optional_score = (
