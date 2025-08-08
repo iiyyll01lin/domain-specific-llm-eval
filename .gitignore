@@ -1,110 +1,92 @@
 # ============================================================================
 # Python & Virtual Environments
 # ============================================================================
-
-# Byte-compiled / optimized files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
 eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual Environments
 .env
 .venv
 env/
 venv/
-ENV/
-env.bak/
-venv.bak/
-__pypackages__/
-.python-version
 
 # ============================================================================
 # Caches, Logs, and Outputs
 # ============================================================================
-
-# Cache directories
+# Ignore all top-level cache and output directories
 cache/
-.cache/
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
-
-# Log files and directories
-logs/
-*.log
-pip-log.txt
-celerybeat-schedule
-celerybeat.pid
-
-# Output, results, and temporary directories from runs
 outputs/
 test_output/
 test_outputs/
 debug_output/
 debug_outputs/
 test_evaluation_output/
-results/
-experiments/
-temp/
-tmp/
+
+# Ignore these directories wherever they appear
+**/__pycache__/
+**/cache/
+**/outputs/
+**/logs/
+**/ragas_artifacts/
+**/test_output/
+**/test_outputs/
+
+# Ignore specific log file types
+*.log
+pip-log.txt
 
 # ============================================================================
-# Project-Specific Ignores
+# Project-Specific & Temporary Files
 # ============================================================================
+# Ignore common backup and temporary file extensions
+*.bak
+*.old
+*.backup
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
 
-# Secrets and local configurations
-# NOTE: Always commit template/example files, never actual secret files.
-secrets.yaml
-*.secret
-*.key
-config/secrets*
-!*template
-!*example
+# Ignore Jupyter Notebook checkpoints and temporary notebooks
+.ipynb_checkpoints
+**/Untitled-1.ipynb
 
-# Large model files and serialized objects
-models/
+# Ignore specific backup files found in the project
+**/document_processor.py.bak
+**/my_custom_testset.xlsx.bak
+**/pipeline_config.yaml.backup
+**/pure_ragas_testset_generator.py.backup
+**/setup.py.broken
+
+# Ignore downloaded models and large data files
 *.pkl
 *.pickle
 *.model
 *.safetensors
 *.bin
+*.ot
 
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
+# ============================================================================
+# Secrets & Local Configurations
+# ============================================================================
+# Ignore secret files but KEEP templates/examples
+secrets.yaml
+config.yaml
+!*template
+!*example
 
 # ============================================================================
 # IDE / Editor / OS Files
 # ============================================================================
-.idea/
 .vscode/
+.idea/
 .spyderproject
 .ropeproject
-*.swp
-*.swo
-*~
 .DS_Store
 Thumbs.db
