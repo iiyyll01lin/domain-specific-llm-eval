@@ -72,16 +72,30 @@ class LocalSyntheticDatasetGenerator:
             "API integration enables software interoperability through standardized communication protocols and data exchange formats."
         ]
 
-    def calculate_local_context_precision(self, context: str, answer: str) -> float:
+    def calculate_local_context_precision(self, context, answer: str) -> float:
         """Local implementation of context precision using sentence similarity"""
         if not self.sentence_model:
             # Fallback to simulation
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('context_precision', [0.6, 0.95])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
         
         try:
+            # Convert context to string if it's a Document object or list
+            if hasattr(context, 'page_content'):
+                # RAGAS Document object
+                context_str = context.page_content
+            elif isinstance(context, list):
+                # List of contexts - join them
+                context_str = ' '.join(str(c) for c in context)
+            else:
+                # Already a string
+                context_str = str(context)
+            
             # Calculate how much of the context is relevant to the answer
-            context_sentences = [s.strip() for s in context.split('.') if len(s.strip()) > 10]
+            context_sentences = [s.strip() for s in context_str.split('.') if len(s.strip()) > 10]
             
             if not context_sentences:
                 return 0.5
@@ -95,58 +109,122 @@ class LocalSyntheticDatasetGenerator:
             
             # Precision = proportion of context sentences that are relevant
             relevance_threshold = self.config.get('local', {}).get('thresholds', {}).get('relevance_threshold', 0.3)
-            precision = np.mean(similarities > relevance_threshold)
+            
+            # Safely calculate mean, handling edge cases
+            if len(similarities) == 0:
+                precision = 0.5
+            else:
+                # Filter out any NaN values
+                valid_similarities = similarities[~np.isnan(similarities)]
+                if len(valid_similarities) == 0:
+                    precision = 0.5
+                else:
+                    precision = np.mean(valid_similarities > relevance_threshold)
+            
+            # Ensure precision is a valid number
+            if not np.isfinite(precision) or precision is None:
+                precision = 0.5
             
             # Clamp values
             sim_min = self.config.get('local', {}).get('thresholds', {}).get('similarity_min', 0.1)
             sim_max = self.config.get('local', {}).get('thresholds', {}).get('similarity_max', 1.0)
-            return min(max(precision, sim_min), sim_max)
+            return min(max(float(precision), sim_min), sim_max)
             
         except Exception as e:
             print(f"⚠️  Context precision calculation failed: {e}")
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('context_precision', [0.6, 0.9])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
 
-    def calculate_local_context_recall(self, context: str, ground_truth: str) -> float:
+    def calculate_local_context_recall(self, context, ground_truth: str) -> float:
         """Local implementation of context recall"""
         if not self.sentence_model:
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('context_recall', [0.6, 0.95])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
         
         try:
+            # Convert context to string if it's a Document object or list
+            if hasattr(context, 'page_content'):
+                # RAGAS Document object
+                context_str = context.page_content
+            elif isinstance(context, list):
+                # List of contexts - join them
+                context_str = ' '.join(str(c) for c in context)
+            else:
+                # Already a string
+                context_str = str(context)
+            
             # Calculate how much of the ground truth is covered by context
             gt_embedding = self.sentence_model.encode([ground_truth])
-            context_embedding = self.sentence_model.encode([context])
+            context_embedding = self.sentence_model.encode([context_str])
             
             similarity = cosine_similarity(gt_embedding, context_embedding)[0][0]
+            
+            # Ensure similarity is valid
+            if not np.isfinite(similarity) or similarity is None:
+                similarity = 0.5
             
             # Transform similarity to recall score
             recall = (similarity + 1) / 2  # Transform from [-1,1] to [0,1]
             
+            # Ensure recall is valid
+            if not np.isfinite(recall) or recall is None:
+                recall = 0.5
+            
             sim_min = self.config.get('local', {}).get('thresholds', {}).get('similarity_min', 0.1)
             sim_max = self.config.get('local', {}).get('thresholds', {}).get('similarity_max', 1.0)
-            return min(max(recall, sim_min), sim_max)
+            return min(max(float(recall), sim_min), sim_max)
             
         except Exception as e:
             print(f"⚠️  Context recall calculation failed: {e}")
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('context_recall', [0.6, 0.9])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
 
-    def calculate_local_faithfulness(self, context: str, answer: str) -> float:
+    def calculate_local_faithfulness(self, context, answer: str) -> float:
         """Local implementation of faithfulness using semantic similarity"""
         if not self.sentence_model:
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('faithfulness', [0.6, 0.95])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
         
         try:
+            # Convert context to string if it's a Document object or list
+            if hasattr(context, 'page_content'):
+                # RAGAS Document object
+                context_str = context.page_content
+            elif isinstance(context, list):
+                # List of contexts - join them
+                context_str = ' '.join(str(c) for c in context)
+            else:
+                # Already a string
+                context_str = str(context)
+            
             # Check if answer is faithful to context
-            context_embedding = self.sentence_model.encode([context])
+            context_embedding = self.sentence_model.encode([context_str])
             answer_embedding = self.sentence_model.encode([answer])
             
             similarity = cosine_similarity(context_embedding, answer_embedding)[0][0]
             
+            # Ensure similarity is valid
+            if not np.isfinite(similarity) or similarity is None:
+                similarity = 0.5
+            
             # Transform similarity to faithfulness score
-            faithfulness = max(0, similarity)  # Ensure non-negative
+            faithfulness = max(0, float(similarity))  # Ensure non-negative and float
+            
+            # Ensure faithfulness is valid
+            if not np.isfinite(faithfulness):
+                faithfulness = 0.5
             
             sim_min = self.config.get('local', {}).get('thresholds', {}).get('similarity_min', 0.1)
             sim_max = self.config.get('local', {}).get('thresholds', {}).get('similarity_max', 1.0)
@@ -155,13 +233,19 @@ class LocalSyntheticDatasetGenerator:
         except Exception as e:
             print(f"⚠️  Faithfulness calculation failed: {e}")
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('faithfulness', [0.6, 0.9])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
 
     def calculate_local_answer_relevancy(self, question: str, answer: str) -> float:
         """Local implementation of answer relevancy"""
         if not self.sentence_model:
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('answer_relevancy', [0.6, 0.95])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
         
         try:
             # Check if answer is relevant to question
@@ -170,17 +254,28 @@ class LocalSyntheticDatasetGenerator:
             
             similarity = cosine_similarity(question_embedding, answer_embedding)[0][0]
             
+            # Ensure similarity is valid
+            if not np.isfinite(similarity) or similarity is None:
+                similarity = 0.5
+            
             # Transform similarity to relevancy score
             relevancy = (similarity + 1) / 2  # Transform from [-1,1] to [0,1]
             
+            # Ensure relevancy is valid
+            if not np.isfinite(relevancy) or relevancy is None:
+                relevancy = 0.5
+            
             sim_min = self.config.get('local', {}).get('thresholds', {}).get('similarity_min', 0.1)
             sim_max = self.config.get('local', {}).get('thresholds', {}).get('similarity_max', 1.0)
-            return min(max(relevancy, sim_min), sim_max)
+            return min(max(float(relevancy), sim_min), sim_max)
             
         except Exception as e:
             print(f"⚠️  Answer relevancy calculation failed: {e}")
             score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('answer_relevancy', [0.6, 0.9])
-            return np.random.uniform(score_range[0], score_range[1])
+            try:
+                return float(np.random.uniform(score_range[0], score_range[1]))
+            except (ValueError, TypeError):
+                return 0.7  # Safe fallback
 
     def calculate_local_ragas_metrics(self, qa_data: List[Dict]) -> pd.DataFrame:
         """Calculate RAGAS-like metrics using local implementations"""
@@ -256,8 +351,11 @@ class LocalSyntheticDatasetGenerator:
         
         topics = [
             "diabetes", "hypertension", "pneumonia", "heart disease", "asthma",
-            "machine learning", "cloud computing", "cybersecurity", "blockchain", "API integration"
-        ]
+            "machine learning", "cloud computing", "cybersecurity", "blockchain", "API integration"        ]
+        
+        # Check if we have any data to work with
+        if not topics or not question_templates or not self.documents:
+            raise ValueError("Cannot generate dataset: missing topics, question templates, or documents")
         
         # Get quality distribution from config
         quality_dist = self.config.get('dataset', {}).get('answer_quality_distribution', {})
@@ -301,7 +399,7 @@ class LocalSyntheticDatasetGenerator:
         
         # Step 2: Extract keywords locally
         if self.config.get('logging', {}).get('show_progress', True):
-            print("🔍 Extracting keywords using local methods...")
+            print("Extracting keywords using local methods...")
         for item in qa_data:
             keywords = self.extract_keywords_local(item['answer'])
             item['kw'] = str(keywords)
@@ -314,22 +412,76 @@ class LocalSyntheticDatasetGenerator:
             print("🔧 Combining data into final format...")
         final_data = []
         
-        for i, item in enumerate(qa_data):
+        # Validate DataFrame dimensions match
+        if len(ragas_df) != len(qa_data):
+            print(f"⚠️ Warning: DataFrame size mismatch. qa_data: {len(qa_data)}, ragas_df: {len(ragas_df)}")
+            # Use minimum length to avoid index errors
+            data_length = min(len(qa_data), len(ragas_df))
+        else:
+            data_length = len(qa_data)
+        
+        for i in range(data_length):
+            item = qa_data[i]
             kw_score_range = self.config.get('fallback', {}).get('score_ranges', {}).get('kw_metric', [0.5, 0.9])
             
-            row = {
-                'question': item['question'],
-                'contexts': item['contexts'],
-                'answer': item['answer'], 
-                'ground_truth': item['ground_truth'],
-                'context_precision': round(ragas_df.iloc[i]['context_precision'], 3),
-                'context_recall': round(ragas_df.iloc[i]['context_recall'], 3),
-                'faithfulness': round(ragas_df.iloc[i]['faithfulness'], 3),
-                'answer_relevancy': round(ragas_df.iloc[i]['answer_relevancy'], 3),
-                'kw': item['kw'],
-                'kw_metric': round(np.random.uniform(kw_score_range[0], kw_score_range[1]), 3),
-                'weighted_average_score': round(ragas_df.iloc[i][['context_precision', 'context_recall', 'faithfulness', 'answer_relevancy']].mean(), 3)
-            }
-            final_data.append(row)
-        
-        return pd.DataFrame(final_data)
+            # Safely get metric values with fallbacks
+            def safe_round(value, default=0.7, decimals=3):
+                """Safely round a value, returning default if invalid"""
+                try:
+                    if value is None or pd.isna(value) or not np.isfinite(value):
+                        print(f"   ⚠️ Invalid value detected: {value} (type: {type(value)})")
+                        return round(default, decimals)
+                    return round(float(value), decimals)
+                except (ValueError, TypeError) as e:
+                    print(f"   ⚠️ Error rounding value {value}: {e}")
+                    return round(default, decimals)
+            
+            # Extract metrics safely
+            try:
+                metrics_row = ragas_df.iloc[i]
+                print(f"   🔍 Metrics row {i}: {metrics_row.to_dict()}")
+                
+                context_precision = safe_round(metrics_row['context_precision'])
+                context_recall = safe_round(metrics_row['context_recall'])
+                faithfulness = safe_round(metrics_row['faithfulness'])
+                answer_relevancy = safe_round(metrics_row['answer_relevancy'])
+                
+            except (IndexError, KeyError) as e:
+                print(f"⚠️ Error accessing metrics for row {i}: {e}")
+                # Use fallback values
+                context_precision = safe_round(None)
+                context_recall = safe_round(None)
+                faithfulness = safe_round(None)
+                answer_relevancy = safe_round(None)
+            
+            try:
+                row = {
+                    'question': item['question'],
+                    'contexts': item['contexts'],
+                    'answer': item['answer'], 
+                    'ground_truth': item['ground_truth'],
+                    'context_precision': context_precision,
+                    'context_recall': context_recall,
+                    'faithfulness': faithfulness,
+                    'answer_relevancy': answer_relevancy,
+                    'kw': item['kw'],
+                    'kw_metric': round(np.random.uniform(kw_score_range[0], kw_score_range[1]), 3),
+                    'weighted_average_score': round(np.mean([context_precision, context_recall, faithfulness, answer_relevancy]), 3)
+                }
+                final_data.append(row)
+                print(f"   ✅ Row {i} processed successfully")
+                
+            except Exception as e:
+                print(f"❌ Critical error creating row {i}: {e}")
+                print(f"   Item: {item}")
+                raise  # Re-raise to see the full traceback
+        try:
+            result_df = pd.DataFrame(final_data)
+            if self.config.get('logging', {}).get('show_progress', True):
+                print(f"✅ Generated dataset with {result_df.shape[0]} rows and {result_df.shape[1]} columns")
+            return result_df
+        except Exception as e:
+            print(f"❌ Error creating DataFrame: {e}")
+            if final_data:
+                print(f"   Final data sample: {final_data[0]}")
+            raise

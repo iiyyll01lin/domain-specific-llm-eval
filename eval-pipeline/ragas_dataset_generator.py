@@ -220,7 +220,7 @@ class RAGASSyntheticDatasetGenerator:
             if self.config.get('logging', {}).get('show_progress', True):
                 print("📊 Calculating RAGAS metrics...")
             
-            # Convert to RAGAS format
+            # Convert to RAGAS format - ensure correct field names
             dataset_dict = {
                 'question': [item['question'] for item in qa_data],
                 'contexts': [[item['contexts']] for item in qa_data],  # RAGAS expects list of contexts
@@ -228,6 +228,7 @@ class RAGASSyntheticDatasetGenerator:
                 'ground_truth': [item['ground_truth'] for item in qa_data]
             }
             
+            # Create dataset with validation
             dataset = Dataset.from_dict(dataset_dict)
             
             # Configure metrics to use local LLM if available
@@ -251,6 +252,9 @@ class RAGASSyntheticDatasetGenerator:
             
         except Exception as e:
             print(f"⚠️  RAGAS evaluation failed: {e}")
+            if self.config.get('logging', {}).get('debug', False):
+                import traceback
+                print(f"Debug traceback: {traceback.format_exc()}")
             return self.simulate_ragas_metrics(qa_data)
 
     def simulate_ragas_metrics(self, qa_data: List[Dict]) -> pd.DataFrame:

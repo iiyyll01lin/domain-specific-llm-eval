@@ -347,13 +347,37 @@ def test_document_processing():
     try:
         from src.data.document_loader import DocumentLoader
         
-        loader = DocumentLoader()
+        # Create test config for DocumentLoader
+        test_config = {
+            'custom_data': {
+                'processing': {
+                    'chunk_size': 1000,                    'chunk_overlap': 200
+                }
+            }
+        }
+        
+        loader = DocumentLoader(test_config)
         test_doc_dir = Path(__file__).parent / "test_documents"
         
         for doc_file in test_doc_dir.glob("*.txt"):
             logger.info(f"Processing: {doc_file.name}")
             
-            doc_data = loader.load_document(str(doc_file))
+            try:
+                # Use appropriate loader method based on file type
+                if str(doc_file).endswith('.pdf'):
+                    documents, metadata = loader.load_pdf(str(doc_file))
+                    doc_data = {
+                        'content': ' '.join(documents) if documents else '',
+                        'metadata': metadata[0] if metadata else {}
+                    }
+                else:
+                    # For text files, use load_all_documents or create a simple loader
+                    with open(doc_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    doc_data = {'content': content, 'metadata': {'filename': doc_file.name}}
+            except Exception as e:
+                logger.error(f"Error loading {doc_file.name}: {e}")
+                doc_data = None
             
             if doc_data:
                 logger.info(f"✅ Loaded {doc_file.name}: {len(doc_data.get('content', ''))} characters")

@@ -98,29 +98,12 @@ def create_tiktoken_module():
     module = types.ModuleType('tiktoken')
     
     # Set required module attributes
-    module.__file__ = __file__
-    module.__package__ = 'tiktoken'
-    
-    # Add main functions
-    module.get_encoding = OfflineTiktokenModule.get_encoding
-    module.encoding_for_model = OfflineTiktokenModule.encoding_for_model
-    
-    # Create and add core submodule (this is what RAGAS is looking for)
-    core_module = types.ModuleType('tiktoken.core')
-    core_module.__file__ = __file__
-    core_module.__package__ = 'tiktoken.core'
-    core_module.Encoding = OfflineTiktokenFallback  # RAGAS might import this
-    
-    # Add core module to main tiktoken module
-    module.core = core_module
-    
-    return module
     module.__name__ = 'tiktoken'
     module.__file__ = '<tiktoken_fallback>'
-    module.__package__ = None
+    module.__package__ = 'tiktoken'
     module.__loader__ = None
     
-    # Create a proper ModuleSpec
+    # Create a proper ModuleSpec - this is critical for transformers compatibility
     spec = importlib.util.spec_from_loader(
         'tiktoken',
         loader=None,
@@ -128,10 +111,28 @@ def create_tiktoken_module():
     )
     module.__spec__ = spec
     
-    # Add our fallback functions to the module
-    fallback_instance = OfflineTiktokenModule()
-    module.get_encoding = fallback_instance.get_encoding
-    module.encoding_for_model = fallback_instance.encoding_for_model
+    # Add main functions
+    module.get_encoding = OfflineTiktokenModule.get_encoding
+    module.encoding_for_model = OfflineTiktokenModule.encoding_for_model
+    
+    # Create and add core submodule (this is what RAGAS is looking for)
+    core_module = types.ModuleType('tiktoken.core')
+    core_module.__name__ = 'tiktoken.core'
+    core_module.__file__ = '<tiktoken_fallback>'
+    core_module.__package__ = 'tiktoken.core'
+    core_module.__loader__ = None
+    
+    # Create spec for core module too
+    core_spec = importlib.util.spec_from_loader(
+        'tiktoken.core',
+        loader=None,
+        origin='<tiktoken_fallback>'
+    )
+    core_module.__spec__ = core_spec
+    core_module.Encoding = OfflineTiktokenFallback  # RAGAS might import this
+    
+    # Add core module to main tiktoken module
+    module.core = core_module
     
     # Add common constants that libraries might expect
     module.ENCODING_CONSTRUCTORS = {}
@@ -148,6 +149,8 @@ def patch_tiktoken_with_fallback():
     
     # Create a proper module object instead of just a class instance
     fallback_module = create_tiktoken_module()
+    
+    # Install the main module
     sys.modules['tiktoken'] = fallback_module
     
     # Also patch the core submodule specifically
@@ -173,6 +176,12 @@ def patch_tiktoken_with_fallback():
         # Test core module access (this is what RAGAS needs)
         import tiktoken.core
         print("✅ Tiktoken core module accessible")
+        
+        # Verify __spec__ is properly set (this is what transformers checks)
+        if hasattr(tiktoken, '__spec__') and tiktoken.__spec__ is not None:
+            print("✅ Tiktoken __spec__ properly set")
+        else:
+            print("⚠️ Tiktoken __spec__ issue detected")
         
     except Exception as e:
         print(f"⚠️ Tiktoken fallback test failed: {e}")

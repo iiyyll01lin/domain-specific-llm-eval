@@ -131,8 +131,18 @@ class ConfigurableDatasetGenerator:
             question = question_templates[i % len(question_templates)].format(topic)
             context = self.custom_documents[i % len(self.custom_documents)]
             
+            # Extract content from Document object if needed
+            if hasattr(context, 'page_content'):
+                context_text = context.page_content
+            elif hasattr(context, 'content'):
+                context_text = context.content
+            elif isinstance(context, str):
+                context_text = context
+            else:
+                context_text = str(context)
+            
             # Generate ground truth based on the document
-            ground_truth = f"Based on the document, {topic} involves the following aspects: {context[:150]}... This information provides comprehensive understanding of the concept."
+            ground_truth = f"Based on the document, {topic} involves the following aspects: {context_text[:150]}... This information provides comprehensive understanding of the concept."
             
             # Generate answer with varying quality
             answer_quality = np.random.choice(
@@ -141,9 +151,9 @@ class ConfigurableDatasetGenerator:
             )
             
             if answer_quality == 'high':
-                answer = f"According to the document, {topic} is comprehensively explained as: {context[:200]}... This detailed explanation covers all key aspects mentioned in the source material."
+                answer = f"According to the document, {topic} is comprehensively explained as: {context_text[:200]}... This detailed explanation covers all key aspects mentioned in the source material."
             elif answer_quality == 'medium':
-                answer = f"The document mentions that {topic} involves {context[:120]}... Additional considerations may apply based on the context."
+                answer = f"The document mentions that {topic} involves {context_text[:120]}... Additional considerations may apply based on the context."
             else:
                 answer = f"Regarding {topic}, the document provides some information. There are various aspects to consider."
             

@@ -220,3 +220,7 @@ sample_documents/
 !IMPLEMENTATION_COMPLETE.md
 !eval-pipeline/README.md
 !docs/**/*.md
+config/pipeline_config.yaml
+eval-pipeline/config/pipeline_config.yaml
+eval-pipeline/config/docker_production_config.yaml
+eval-pipeline/config.yaml

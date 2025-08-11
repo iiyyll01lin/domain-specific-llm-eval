@@ -42,6 +42,10 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
         optional_keywords = []
 
     answer_segments = get_contextual_segments(answer)
+    
+    # Safety check: if no segments, use the full answer as a single segment
+    if not answer_segments:
+        answer_segments = [answer.strip()] if answer.strip() else [""]
 
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -56,7 +60,12 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
             for ans_emb in answer_embeddings
         ]
 
-        mandatory_similarities.append(max(similarities))
+        # Safety check for empty similarities list
+        if similarities:
+            mandatory_similarities.append(max(similarities))
+        else:
+            # If no answer segments, assign a very low similarity score
+            mandatory_similarities.append(0.0)
 
     optional_similarities = []
     if optional_keywords:
@@ -67,7 +76,12 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
                 for ans_emb in answer_embeddings
             ]
 
-            optional_similarities.append(max(similarities))
+            # Safety check for empty similarities list
+            if similarities:
+                optional_similarities.append(max(similarities))
+            else:
+                # If no answer segments, assign a very low similarity score
+                optional_similarities.append(0.0)
 
     mandatory_score = np.mean(mandatory_similarities) * weights["mandatory"]
     optional_score = (
@@ -88,122 +102,132 @@ weights = {
 }
 contextual_relevance_threshold = 0.6
 
-# Try to find the Excel file in multiple possible locations
-excel_file_paths = [
-    "my_custom_testset.xlsx",                    # Current directory
-    "/app/workspace/my_custom_testset.xlsx",     # Workspace mount
-    "/app/data/my_custom_testset.xlsx",          # Data directory
-]
-
-df_res = None
-for excel_path in excel_file_paths:
-    try:
-        if os.path.exists(excel_path):
-            print(f"✅ Found Excel file at: {excel_path}")
-            df_res = pd.read_excel(excel_path)
-            break
-    except Exception as e:
-        print(f"⚠️ Could not read {excel_path}: {e}")
-        continue
-
-if df_res is None:
-    raise FileNotFoundError(f"Could not find my_custom_testset.xlsx in any of: {excel_file_paths}")
-
-df_res = df_res[
-    [
-        "question",
-        "contexts",
-        "answer",
-        "ground_truth",
-        "context_precision",
-        "context_recall",
-        "faithfulness",
-        "answer_relevancy",
-        "kw",
-        "kw_metric",
-        "weighted_average_score",
+def load_testset_data():
+    """Load testset data from Excel file when needed"""
+    # Try to find the Excel file in multiple possible locations
+    excel_file_paths = [
+        "my_custom_testset.xlsx",                    # Current directory
+        "/app/workspace/my_custom_testset.xlsx",     # Workspace mount
+        "/app/data/my_custom_testset.xlsx",          # Data directory
     ]
-]
 
-scores = []
-report_data = []
+    df_res = None
+    for excel_path in excel_file_paths:
+        try:
+            if os.path.exists(excel_path):
+                print(f"✅ Found Excel file at: {excel_path}")
+                df_res = pd.read_excel(excel_path)
+                break
+        except Exception as e:
+            print(f"⚠️ Could not read {excel_path}: {e}")
+            continue
 
-# start the gate calculation
-for index, row in df_res.iterrows():
-    keywords = str(row["kw"]).strip("[]").split(",")
-    mandatory_keywords = [k.strip().strip("'") for k in keywords]
-    answer = str(row["answer"])
+    if df_res is None:
+        print(f"⚠️ Could not find my_custom_testset.xlsx in any of: {excel_file_paths}")
+        return None
+    
+    return df_res
 
-    total_score, mandatory_score, optional_score, answer_segments = (
-        weighted_keyword_score(mandatory_keywords, answer, weights)
-    )
+# Only load data if this file is run directly, not when imported
+if __name__ == "__main__":
+    df_res = load_testset_data()
+    if df_res is None:
+        print("❌ No testset data available for analysis")
+        exit(1)
+    
+    df_res = df_res[
+        [
+            "question",
+            "contexts", 
+            "answer",
+            "ground_truth",
+            "context_precision",
+            "context_recall",
+            "faithfulness",
+            "answer_relevancy",
+            "kw",
+            "kw_metric", 
+            "weighted_average_score",
+        ]
+    ]
 
-    contextual_keyword_pass = total_score >= contextual_relevance_threshold
+    scores = []
+    report_data = []
 
-    scores.append(
-        (total_score, mandatory_score, optional_score, contextual_keyword_pass)
-    )
+    # start the gate calculation
+    for index, row in df_res.iterrows():
+        keywords = str(row["kw"]).strip("[]").split(",")
+        mandatory_keywords = [k.strip().strip("'") for k in keywords]
+        answer = str(row["answer"])
 
-    print(f"Total Contextual Score for index {index}: {total_score:.2f}")
-    print(f"Mandatory Keyword Score for index {index}: {mandatory_score:.2f}")
-    print(f"Optional Keyword Score for index {index}: {optional_score:.2f}")
-    print(f"Contextual Keyword Gate Pass for index {index}: {contextual_keyword_pass}")
-
-    report_content = (
-        f"Total Contextual Score for index {index}: {total_score:.2f}\n"
-        f"Mandatory Keyword Score for index {index}: {mandatory_score:.2f}\n"
-        f"Optional Keyword Score for index {index}: {optional_score:.2f}\n"
-        f"Contextual Keyword Gate Pass for index {index}: {contextual_keyword_pass}\n"
-    )
-    with open("contextual_keyword_report-3.txt", "a") as report_file:
-        report_file.write(
-            f"Index: {index}, Answer Segments: {answer_segments}, Mandatory Keywords: {mandatory_keywords}\n"
-            + report_content
+        total_score, mandatory_score, optional_score, answer_segments = (
+            weighted_keyword_score(mandatory_keywords, answer, weights)
         )
+
+        contextual_keyword_pass = total_score >= contextual_relevance_threshold
+
+        scores.append(
+            (total_score, mandatory_score, optional_score, contextual_keyword_pass)
+        )
+
+        print(f"Total Contextual Score for index {index}: {total_score:.2f}")
+        print(f"Mandatory Keyword Score for index {index}: {mandatory_score:.2f}")
+        print(f"Optional Keyword Score for index {index}: {optional_score:.2f}")
+        print(f"Contextual Keyword Gate Pass for index {index}: {contextual_keyword_pass}")
+
+        report_content = (
+            f"Total Contextual Score for index {index}: {total_score:.2f}\n"
+            f"Mandatory Keyword Score for index {index}: {mandatory_score:.2f}\n"
+            f"Optional Keyword Score for index {index}: {optional_score:.2f}\n"
+            f"Contextual Keyword Gate Pass for index {index}: {contextual_keyword_pass}\n"
+        )
+        with open("contextual_keyword_report-3.txt", "a") as report_file:
+            report_file.write(
+                f"Index: {index}, Answer Segments: {answer_segments}, Mandatory Keywords: {mandatory_keywords}\n"
+                + report_content
+            )
+
+        report_data.append(
+            {
+                "Index": index,
+                "Answer Segments": answer_segments,
+                "Mandatory Keywords": mandatory_keywords,
+                "Total Contextual Score": total_score,
+                "Mandatory Keyword Score": mandatory_score,
+                "Optional Keyword Score": optional_score,
+                "Contextual Keyword Gate Pass": contextual_keyword_pass,
+            }
+        )
+
+    mean_scores = (
+        np.mean([score[0] for score in scores]),
+        np.mean([score[1] for score in scores]),
+        np.mean([score[2] for score in scores]),
+        np.mean([1 if score[3] else 0 for score in scores]),
+    )
+
+    print(f"Mean Total Score: {mean_scores[0]:.2f}")
+    print(f"Mean Mandatory Score: {mean_scores[1]:.2f}")
+    print(f"Mean Optional Score: {mean_scores[2]:.2f}")
+    print(f"Mean Pass Rate: {mean_scores[3] * 100:.2f}%")
+
+    with open("contextual_keyword_report-3.txt", "a") as report_file:
+        report_file.write(f"Mean Total Score: {mean_scores[0]:.2f}\n")
+        report_file.write(f"Mean Mandatory Score: {mean_scores[1]:.2f}\n")
+        report_file.write(f"Mean Optional Score: {mean_scores[2]:.2f}\n")
+        report_file.write(f"Mean Pass Rate: {mean_scores[3] * 100:.2f}%\n")
 
     report_data.append(
         {
-            "Index": index,
-            "Answer Segments": answer_segments,
-            "Mandatory Keywords": mandatory_keywords,
-            "Total Contextual Score": total_score,
-            "Mandatory Keyword Score": mandatory_score,
-            "Optional Keyword Score": optional_score,
-            "Contextual Keyword Gate Pass": contextual_keyword_pass,
+            "Index": "Mean",
+            "Answer Segments": "",
+            "Mandatory Keywords": "",
+            "Total Contextual Score": mean_scores[0],
+            "Mandatory Keyword Score": mean_scores[1],
+            "Optional Keyword Score": mean_scores[2],
+            "Contextual Keyword Gate Pass": mean_scores[3] * 100,  # percentage
         }
     )
 
-mean_scores = (
-    np.mean([score[0] for score in scores]),
-    np.mean([score[1] for score in scores]),
-    np.mean([score[2] for score in scores]),
-    np.mean([1 if score[3] else 0 for score in scores]),
-)
-
-print(f"Mean Total Score: {mean_scores[0]:.2f}")
-print(f"Mean Mandatory Score: {mean_scores[1]:.2f}")
-print(f"Mean Optional Score: {mean_scores[2]:.2f}")
-print(f"Mean Pass Rate: {mean_scores[3] * 100:.2f}%")
-
-
-with open("contextual_keyword_report-3.txt", "a") as report_file:
-    report_file.write(f"Mean Total Score: {mean_scores[0]:.2f}\n")
-    report_file.write(f"Mean Mandatory Score: {mean_scores[1]:.2f}\n")
-    report_file.write(f"Mean Optional Score: {mean_scores[2]:.2f}\n")
-    report_file.write(f"Mean Pass Rate: {mean_scores[3] * 100:.2f}%\n")
-
-
-report_data.append(
-    {
-        "Index": "Mean",
-        "Answer Segments": "",
-        "Mandatory Keywords": "",
-        "Total Contextual Score": mean_scores[0],
-        "Mandatory Keyword Score": mean_scores[1],
-        "Optional Keyword Score": mean_scores[2],
-        "Contextual Keyword Gate Pass": mean_scores[3] * 100,  # percentage
-    }
-)
-
-report_df = pd.DataFrame(report_data)
-report_df.to_excel("contextual_keyword_report.xlsx", index=False)
+    report_df = pd.DataFrame(report_data)
+    report_df.to_excel("contextual_keyword_report.xlsx", index=False)

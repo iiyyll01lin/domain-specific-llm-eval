@@ -9,6 +9,24 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 import warnings
+# Document objects for RAGAS compatibility
+try:
+    from langchain_core.documents import Document
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    try:
+        from langchain.schema import Document
+        LANGCHAIN_AVAILABLE = True
+    except ImportError:
+        LANGCHAIN_AVAILABLE = False
+        print("⚠️ Warning: langchain not available, Document objects will not be created")
+        
+        # Fallback Document class
+        class Document:
+            def __init__(self, page_content: str, metadata: dict = None):
+                self.page_content = page_content
+                self.metadata = metadata or {}
+
 warnings.filterwarnings('ignore')
 
 # PDF processing
@@ -22,7 +40,7 @@ except ImportError:
 
 # Word document processing
 try:
-    from docx import Document
+    from docx import Document as DocxDocument
     DOCX_AVAILABLE = True
 except ImportError:
     print("⚠️  DOCX support not available. Install with: pip install python-docx")
@@ -67,8 +85,8 @@ class DocumentLoader:
         self.processing_config = self.custom_config.get('processing', {})
         self.topic_config = self.custom_config.get('topic_extraction', {})
         
-        # Initialize topic extraction models
-        self.keybert_model = KeyBERT() if KEYBERT_AVAILABLE else None
+        # Initialize topic extraction models with proper offline configuration
+        self.keybert_model = self._initialize_keybert_offline()
         self.yake_extractor = yake.KeywordExtractor(
             lan="en", n=3, dedupLim=0.7, top=10
         ) if YAKE_AVAILABLE else None
@@ -76,11 +94,203 @@ class DocumentLoader:
         # Document storage
         self.documents = []
         self.document_metadata = []
+    
+    def _get_best_device(self):
+        """Get the best available device for KeyBERT based on configuration"""
+        try:
+            # First check testset_generation > knowledge_graph > sentence_model_config
+            kg_config = self.config.get('testset_generation', {}).get('knowledge_graph', {})
+            sentence_config = kg_config.get('sentence_model_config', {})
+            config_device = sentence_config.get('device', None)
+            
+            # Fallback to LLM config if not found in testset generation
+            if not config_device:
+                keybert_config = self.config.get('llm', {}).get('keyword_extraction', {}).get('keybert', {})
+                config_device = keybert_config.get('device', 'cpu')
+            
+            # If config specifies CPU, use it
+            if config_device == 'cpu':
+                print("💻 Using CPU device as configured")
+                return 'cpu'
+            
+            # Parse device configuration (could be "cuda:0, cuda:1" or "cuda:0")
+            if isinstance(config_device, str) and 'cuda' in config_device:
+                # Extract first CUDA device from comma-separated list
+                cuda_devices = [d.strip() for d in config_device.split(',')]
+                for device in cuda_devices:
+                    if device.startswith('cuda'):
+                        try:
+                            import torch
+                            if torch.cuda.is_available():
+                                device_id = device.split(':')[1] if ':' in device else '0'
+                                if int(device_id) < torch.cuda.device_count():
+                                    print(f"🎮 Using GPU device: {device}")
+                                    return device
+                        except Exception as e:
+                            print(f"⚠️  GPU device {device} not available: {e}")
+                            continue
+            
+            # Fallback to CPU if no valid GPU found
+            print("💻 Falling back to CPU device")
+            return 'cpu'
+            
+        except Exception as e:
+            print(f"⚠️  Device detection error: {e}")
+            return 'cpu'
+
+    def _initialize_keybert_offline(self):
+        """Initialize KeyBERT with offline mode and GPU support based on configuration"""
+        if not KEYBERT_AVAILABLE:
+            print("⚠️  KeyBERT not available - skipping keyword extraction")
+            return None
+            
+        try:
+            # Get KeyBERT configuration from config
+            keybert_config = self.config.get('llm', {}).get('keyword_extraction', {}).get('keybert', {})
+            
+            # Check if KeyBERT is enabled in config
+            if not keybert_config.get('enabled', True):
+                print("⚠️  KeyBERT disabled in configuration")
+                return None
+            
+            # Get model name from config
+            model_name = keybert_config.get('model', 'all-MiniLM-L6-v2')
+            print(f"🔧 Initializing KeyBERT with model: {model_name}")
+            
+            # Get cache directory from config (matching offline model manager)
+            cache_dir = self.config.get('advanced', {}).get('caching', {}).get('cache_dir', './cache')
+            sentence_cache_dir = os.path.join(cache_dir, 'sentence_transformers')
+            
+            # Get best available device for GPU acceleration
+            device = self._get_best_device()
+            
+            # Try to initialize with offline mode first
+            try:
+                from sentence_transformers import SentenceTransformer
+                print(f"🔄 Loading sentence transformer: {model_name} on {device}")
+                
+                # Initialize SentenceTransformer with offline mode and GPU support
+                sentence_model = SentenceTransformer(
+                    model_name,
+                    cache_folder=sentence_cache_dir,
+                    local_files_only=True,
+                    device=device
+                )
+                
+                # Initialize KeyBERT with the offline model
+                keybert_model = KeyBERT(model=sentence_model)
+                print(f"✅ KeyBERT initialized with offline model: {model_name} on {device}")
+                return keybert_model
+                
+            except Exception as e:
+                print(f"⚠️  KeyBERT offline initialization failed on {device}: {e}")
+                
+                # Try CPU fallback if GPU failed
+                if device != 'cpu':
+                    print("🔄 Attempting CPU fallback with local_files_only...")
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                        sentence_model = SentenceTransformer(
+                            model_name,
+                            cache_folder=sentence_cache_dir,
+                            local_files_only=True,
+                            device='cpu'
+                        )
+                        keybert_model = KeyBERT(model=sentence_model)
+                        print(f"✅ KeyBERT initialized with offline model on CPU: {model_name}")
+                        return keybert_model
+                    except Exception as e_cpu:
+                        print(f"⚠️  CPU fallback with offline mode also failed: {e_cpu}")
+                
+                print("🔄 Attempting fallback without local_files_only...")
+                
+                # Fallback: Try without local_files_only but with cache
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    fallback_device = 'cpu' if device != 'cpu' else device
+                    sentence_model = SentenceTransformer(
+                        model_name,
+                        cache_folder=sentence_cache_dir,
+                        device=fallback_device
+                    )
+                    keybert_model = KeyBERT(model=sentence_model)
+                    print(f"✅ KeyBERT initialized with fallback method: {model_name} on {fallback_device}")
+                    return keybert_model
+                    
+                except Exception as e2:
+                    print(f"⚠️  KeyBERT fallback initialization also failed: {e2}")
+                    print("🔄 Final fallback: Disabling KeyBERT - continuing without keyword extraction")
+                    return None
+                    
+        except Exception as e:
+            print(f"⚠️  KeyBERT configuration error: {e}")
+            print("🔄 Disabling KeyBERT - continuing without keyword extraction")
+            return None
         
-    def load_all_documents(self) -> Tuple[List[str], List[Dict]]:
+    def load_all_documents(self) -> Tuple[List[Document], List[Dict]]:
         """Load all documents from configured sources"""
         print("📂 Loading documents from configured sources...")
         
+        # Check if we're using pipeline config structure
+        if 'data_sources' in self.config:
+            pipeline_data_sources = self.config['data_sources']
+            input_type = pipeline_data_sources.get('input_type', 'documents')
+            
+            if input_type == 'csv':
+                print("📊 Using CSV input mode from pipeline config")
+                # Load CSV files from pipeline config
+                csv_config = pipeline_data_sources.get('csv', {})
+                csv_files = csv_config.get('csv_files', [])
+                
+                for csv_file in csv_files:
+                    if os.path.exists(csv_file):
+                        print(f"  📊 Loading CSV: {csv_file}")
+                        docs, metadata = self.load_csv_content(csv_file)
+                        self.documents.extend(docs)
+                        self.document_metadata.extend(metadata)
+                    else:
+                        print(f"  ⚠️  CSV file not found: {csv_file}")
+                
+                # Process and return
+                if self.documents:
+                    print(f"📋 Processing {len(self.documents)} raw documents...")
+                    processed_docs, processed_metadata = self.process_documents(
+                        self.documents, self.document_metadata
+                    )
+                    print(f"✅ Final document count: {len(processed_docs)}")
+                    
+                    # Convert to Document objects for RAGAS compatibility
+                    if LANGCHAIN_AVAILABLE:
+                        document_objects = []
+                        for doc_content, metadata in zip(processed_docs, processed_metadata):
+                            doc_obj = Document(
+                                page_content=doc_content,
+                                metadata=metadata
+                            )
+                            document_objects.append(doc_obj)
+                        print(f"📄 Created {len(document_objects)} Document objects for RAGAS")
+                        return document_objects, processed_metadata
+                    else:
+                        print("⚠️ langchain not available, returning strings")
+                        return processed_docs, processed_metadata
+                else:
+                    print("⚠️  No CSV documents loaded. Using default document corpus.")
+                    default_docs, default_metadata = self.get_default_documents()
+                    
+                    # Convert default documents to Document objects
+                    if LANGCHAIN_AVAILABLE and isinstance(default_docs[0], str):
+                        document_objects = []
+                        for doc_content, metadata in zip(default_docs, default_metadata):
+                            doc_obj = Document(
+                                page_content=doc_content,
+                                metadata=metadata
+                            )
+                            document_objects.append(doc_obj)
+                        return document_objects, default_metadata
+                    else:
+                        return default_docs, default_metadata
+        
+        # Original document loading logic
         data_sources = self.custom_config.get('data_sources', {})
         
         # Load PDF files
@@ -139,18 +349,55 @@ class DocumentLoader:
             else:
                 print(f"  ⚠️  Structured file not found: {file_path}")
         
+        # Load CSV files from custom config
+        csv_files = data_sources.get('csv_files', [])
+        for csv_file in csv_files:
+            if os.path.exists(csv_file):
+                print(f"  📊 Loading CSV: {csv_file}")
+                docs, metadata = self.load_csv_content(csv_file)
+                self.documents.extend(docs)
+                self.document_metadata.extend(metadata)
+            else:
+                print(f"  ⚠️  CSV file not found: {csv_file}")
+        
         # Process documents
         if self.documents:
             print(f"📋 Processing {len(self.documents)} raw documents...")
-            self.documents, self.document_metadata = self.process_documents(
+            processed_docs, processed_metadata = self.process_documents(
                 self.documents, self.document_metadata
             )
-            print(f"✅ Final document count: {len(self.documents)}")
+            print(f"✅ Final document count: {len(processed_docs)}")
+            
+            # Convert to Document objects for RAGAS compatibility
+            if LANGCHAIN_AVAILABLE:
+                document_objects = []
+                for doc_content, metadata in zip(processed_docs, processed_metadata):
+                    doc_obj = Document(
+                        page_content=doc_content,
+                        metadata=metadata
+                    )
+                    document_objects.append(doc_obj)
+                print(f"📄 Created {len(document_objects)} Document objects for RAGAS")
+                return document_objects, processed_metadata
+            else:
+                print("⚠️ langchain not available, returning strings")
+                return processed_docs, processed_metadata
         else:
             print("⚠️  No documents loaded. Using default document corpus.")
-            return self.get_default_documents()
-        
-        return self.documents, self.document_metadata
+            default_docs, default_metadata = self.get_default_documents()
+            
+            # Convert default documents to Document objects
+            if LANGCHAIN_AVAILABLE and default_docs and isinstance(default_docs[0], str):
+                document_objects = []
+                for doc_content, metadata in zip(default_docs, default_metadata):
+                    doc_obj = Document(
+                        page_content=doc_content,
+                        metadata=metadata
+                    )
+                    document_objects.append(doc_obj)
+                return document_objects, default_metadata
+            else:
+                return default_docs, default_metadata
     
     def load_pdf(self, file_path: str) -> Tuple[List[str], List[Dict]]:
         """Load and extract text from PDF file"""
@@ -220,7 +467,7 @@ class DocumentLoader:
             return documents, metadata
         
         try:
-            doc = Document(file_path)
+            doc = DocxDocument(file_path)
             full_text = ""
             
             for paragraph in doc.paragraphs:
@@ -330,6 +577,230 @@ class DocumentLoader:
         
         return documents, metadata
     
+    def load_csv_content(self, file_path: str) -> Tuple[List[str], List[Dict]]:
+        """Load content from CSV file with JSON content field"""
+        documents = []
+        metadata = []
+        
+        try:
+            import json
+            import re
+            
+            df = pd.read_csv(file_path)
+            print(f"  📊 Loading CSV: {file_path} ({len(df)} rows)")
+            
+            # Check for required columns
+            if 'id' not in df.columns or 'content' not in df.columns:
+                print(f"  ❌ CSV file missing required columns 'id' or 'content': {file_path}")
+                return documents, metadata
+            
+            # Get content_json_fields configuration
+            csv_config = self.config.get('data_sources', {}).get('csv', {})
+            format_config = csv_config.get('format', {})
+            content_json_fields = format_config.get('content_json_fields', {})
+            
+            # Default field mapping if not configured
+            text_field = content_json_fields.get('text', 'text')
+            title_field = content_json_fields.get('title', 'title')
+            metadata_field = content_json_fields.get('metadata', 'metadata')
+            
+            print(f"  🔧 JSON field mapping: text='{text_field}', title='{title_field}', metadata='{metadata_field}'")
+            
+            for idx, row in df.iterrows():
+                try:
+                    # Extract content from JSON field
+                    content_json = row['content'] if 'content' in row and pd.notna(row['content']) else '{}'
+                    if isinstance(content_json, str) and content_json.strip():
+                        try:
+                            content_data = json.loads(content_json)
+                            
+                            # Use configured field names with fallback to hardcoded names
+                            if text_field and text_field != 'null':
+                                text_content = content_data.get(text_field, '')
+                                if not text_content:
+                                    text_content = content_data.get('text', content_data.get('Content', ''))
+                            else:
+                                # If text_field is None/null, use direct content or fallback to Content
+                                text_content = str(content_json) if not content_json.startswith('{') else content_data.get('Content', content_data.get('text', ''))
+                            
+                            if title_field and title_field != 'null':
+                                content_title = content_data.get(title_field, '')
+                                if not content_title:
+                                    content_title = content_data.get('title', content_data.get('Title', ''))
+                            else:
+                                content_title = content_data.get('Title', content_data.get('title', ''))
+                            
+                            if metadata_field and metadata_field != 'null':
+                                content_metadata = content_data.get(metadata_field, {})
+                                if not isinstance(content_metadata, dict):
+                                    content_metadata = {}
+                            else:
+                                content_metadata = {}
+                            
+                            # Extract language and other metadata
+                            content_language = content_data.get('language', 'EN')
+                            if isinstance(content_metadata, dict) and content_language == 'EN':
+                                content_language = content_metadata.get('language', 'EN')
+                            
+                            content_source = content_data.get('source', '')
+                            if isinstance(content_metadata, dict) and not content_source:
+                                content_source = content_metadata.get('source', '')
+                            
+                        except json.JSONDecodeError:
+                            # Fallback to raw string if not JSON
+                            text_content = str(content_json)
+                            content_metadata = {}
+                            content_language = 'EN'
+                            content_title = ''
+                            content_source = ''
+                    else:
+                        text_content = str(content_json) if content_json else ''
+                        content_metadata = {}
+                        content_language = 'EN'
+                        content_title = ''
+                        content_source = ''
+                    
+                    # Skip if content is too short
+                    if len(text_content.strip()) < 10:  # Minimum content check
+                        continue
+                    
+                    # Clean the text
+                    cleaned_text = self.clean_text(text_content)
+                    
+                    if len(cleaned_text) >= 10:
+                        # Enhanced content for RAGAS compatibility
+                        enhanced_content = self._enhance_content_for_ragas(cleaned_text, content_data)
+                        
+                        # For CSV: Each row = 1 document chunk (1:1 mapping as requested)
+                        documents.append(enhanced_content)
+                        
+                        # Enhanced metadata with RAGAS-required attributes
+                        enhanced_metadata = {
+                            'source_file': file_path,
+                            'file_type': 'csv',
+                            'csv_id': row['id'] if 'id' in row and pd.notna(row['id']) else idx,
+                            'csv_row': idx,
+                            'template_key': row['template_key'] if 'template_key' in row and pd.notna(row['template_key']) else '',
+                            'source': row['source'] if 'source' in row and pd.notna(row['source']) else '',
+                            'author': row['author'] if 'author' in row and pd.notna(row['author']) else '',
+                            'created_at': row['created_at'] if 'created_at' in row and pd.notna(row['created_at']) else '',
+                            'updated_at': row['updated_at'] if 'updated_at' in row and pd.notna(row['updated_at']) else '',
+                            'content_title': content_title,
+                            'content_source': content_source,
+                            'content_language': content_language,
+                            'content_metadata': content_metadata,
+                            'word_count': len(cleaned_text.split()),
+                            'chunk_id': 0,  # Each CSV row is one chunk
+                            'total_chunks': 1,
+                            # RAGAS-required attributes for knowledge graph compatibility
+                            'document_id': f"doc_{idx}",
+                            'entities': self._extract_entities(cleaned_text),
+                            'keyphrases': self._extract_keyphrases(cleaned_text),
+                            'summary': self._create_summary(cleaned_text),
+                            'themes': self._extract_themes(cleaned_text),
+                            'headlines': self._extract_headlines(cleaned_text),
+                            'has_technical_content': self._has_technical_content(cleaned_text),
+                            'page_content': enhanced_content  # RAGAS expects page_content
+                        }
+                        metadata.append(enhanced_metadata)
+                
+                except Exception as e:
+                    print(f"  ⚠️  Error processing CSV row {idx}: {e}")
+                    continue
+            
+            print(f"  ✅ Loaded {len(documents)} content chunks from CSV")
+            
+        except Exception as e:
+            print(f"  ❌ Error loading CSV {file_path}: {e}")
+        
+        return documents, metadata
+    
+    def _enhance_content_for_ragas(self, text_content: str, content_data: Dict) -> str:
+        """Enhance content for RAGAS compatibility"""
+        # Ensure minimum content length
+        if len(text_content.strip()) < 50:
+            title = content_data.get('title', 'Document')
+            source = content_data.get('source', 'Unknown')
+            enhanced_content = f"Title: {title}\n\nContent: {text_content}\n\nSource: {source}"
+            return enhanced_content
+        return text_content
+    
+    def _extract_entities(self, content: str) -> list:
+        """Extract entities from content"""
+        import re
+        entities = []
+        
+        # Capitalized words (proper nouns)
+        capitalized = re.findall(r'\b[A-Z][a-z]+\b', content)
+        entities.extend(capitalized[:8])
+        
+        # Technical terms/abbreviations  
+        technical = re.findall(r'\b[A-Z]{2,}\b', content)
+        entities.extend(technical[:5])
+        
+        # Numbers and codes
+        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', content)
+        entities.extend(numbers[:3])
+        
+        # Remove duplicates while preserving order
+        return list(dict.fromkeys(entities))
+    
+    def _extract_keyphrases(self, content: str) -> list:
+        """Extract keyphrases from content"""
+        import re
+        words = content.split()
+        keyphrases = []
+        
+        for word in words:
+            # Clean word
+            clean_word = re.sub(r'[^\w]', '', word.lower())
+            
+            # Include words longer than 3 characters
+            if len(clean_word) > 3 and clean_word.isalpha():
+                keyphrases.append(clean_word)
+        
+        # Return unique keyphrases
+        return list(dict.fromkeys(keyphrases))[:15]
+    
+    def _create_summary(self, content: str) -> str:
+        """Create a summary of content"""
+        sentences = content.split('.')[:3]  # First 3 sentences
+        summary = '. '.join(s.strip() for s in sentences if s.strip())
+        return summary if summary else content[:200]
+    
+    def _extract_themes(self, content: str) -> list:
+        """Extract themes from content"""
+        themes = []
+        technical_terms = ['system', 'process', 'error', 'code', 'function', 
+                          'operation', 'performance', 'quality', 'standard', 'procedure']
+        
+        content_lower = content.lower()
+        for term in technical_terms:
+            if term in content_lower:
+                themes.append(term)
+        
+        return themes[:5]
+    
+    def _extract_headlines(self, content: str) -> list:
+        """Extract headlines from content"""
+        sentences = [s.strip() for s in content.split('.') if len(s.strip()) > 10]
+        headlines = []
+        
+        for sentence in sentences[:5]:
+            if len(sentence) <= 80:
+                headlines.append(sentence)
+            else:
+                headlines.append(sentence[:77] + "...")
+        
+        return headlines
+    
+    def _has_technical_content(self, content: str) -> bool:
+        """Check if content has technical information"""
+        technical_indicators = ['error', 'code', 'system', 'function', 'process',
+                              'procedure', 'standard', 'specification', 'parameter']
+        content_lower = content.lower()
+        return any(indicator in content_lower for indicator in technical_indicators)
+    
     def load_directory(self, directory_path: str) -> Tuple[List[str], List[Dict]]:
         """Load all supported files from directory recursively"""
         all_documents = []
@@ -402,15 +873,23 @@ class DocumentLoader:
         processed_docs = []
         processed_metadata = []
         
+        # Use different minimum lengths for different file types
         min_length = self.processing_config.get('min_document_length', 100)
         
         for doc, meta in zip(documents, metadata):
             # Clean and validate document
             cleaned_doc = self.clean_text(doc)
             
-            if len(cleaned_doc) >= min_length:
+            # For CSV files, use a lower minimum length since each row is intentionally a chunk
+            effective_min_length = min_length
+            if meta.get('file_type') == 'csv':
+                effective_min_length = 10  # Lower threshold for CSV content
+            
+            if len(cleaned_doc) >= effective_min_length:
                 processed_docs.append(cleaned_doc)
                 processed_metadata.append(meta)
+            else:
+                print(f"  ⚠️  Skipping short document: {len(cleaned_doc)} chars (min: {effective_min_length})")
         
         print(f"  📋 Filtered documents: {len(documents)} → {len(processed_docs)}")
         return processed_docs, processed_metadata
@@ -585,6 +1064,60 @@ class DocumentLoader:
             print(f"\nExtracted topics: {', '.join(topics[:5])}")
             if len(topics) > 5:
                 print(f"  ... and {len(topics) - 5} more")
+
+    def _extract_themes(self, text):
+        """Extract main themes from text"""
+        try:
+            words = text.lower().split()
+            # Simple theme extraction based on common patterns
+            themes = []
+            
+            # Technical themes
+            tech_keywords = ['api', 'database', 'system', 'framework', 'technology', 'software', 'hardware']
+            if any(keyword in words for keyword in tech_keywords):
+                themes.append('technical')
+            
+            # Business themes
+            business_keywords = ['business', 'market', 'customer', 'revenue', 'strategy', 'management']
+            if any(keyword in words for keyword in business_keywords):
+                themes.append('business')
+            
+            # Educational themes
+            edu_keywords = ['learn', 'education', 'training', 'course', 'study', 'knowledge']
+            if any(keyword in words for keyword in edu_keywords):
+                themes.append('educational')
+            
+            return themes if themes else ['general']
+        except Exception:
+            return ['general']
+
+    def _extract_headlines(self, text):
+        """Extract potential headlines from text"""
+        try:
+            lines = text.split('\n')
+            headlines = []
+            
+            for line in lines[:5]:  # Check first 5 lines
+                line = line.strip()
+                if line and (len(line) < 100) and (line.endswith(':') or line.isupper() or any(char in line for char in ['#', '*', '-'])):
+                    headlines.append(line)
+            
+            return headlines if headlines else [text.split('.')[0][:50] + '...']
+        except Exception:
+            return [text[:50] + '...']
+
+    def _has_technical_content(self, text):
+        """Check if text contains technical content"""
+        try:
+            tech_indicators = [
+                'api', 'database', 'sql', 'json', 'xml', 'http', 'https',
+                'function', 'method', 'class', 'variable', 'algorithm',
+                'framework', 'library', 'module', 'interface', 'protocol'
+            ]
+            text_lower = text.lower()
+            return any(indicator in text_lower for indicator in tech_indicators)
+        except Exception:
+            return False
 
 def main():
     """Test document loading functionality"""

@@ -94,6 +94,10 @@ python setup.py
 python setup.py --quick-test
 ```
 
+There are 2 requirements need to handle:
+- main
+- ragas (submodule)
+
 ### **2. Configure Your Evaluation**
 
 Edit `config/pipeline_config.yaml`:
