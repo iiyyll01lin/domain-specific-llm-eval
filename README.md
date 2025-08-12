@@ -1,3 +1,5 @@
+** This is the stable version, find my latest version in branch: `202508-rc1`! **
+
 # Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
 
 ![base-metric](base-metric.png)
