@@ -1,6 +1,6 @@
 ** This is the stable version, find my latest version in branch: `202508-rc1`! **
 
-** To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)* **
+** To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** **
 
 # Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
 
