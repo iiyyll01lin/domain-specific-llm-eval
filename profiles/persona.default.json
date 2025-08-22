@@ -1,0 +1,19 @@
+{
+  "$schema": "https://example.org/schemas/persona-profile.schema.json",
+  "version": "1.0.0",
+  "id": "default",
+  "name": "Default Persona",
+  "locale": "zh-TW",
+  "dashboards": [
+    "executive_overview",
+    "qa_failure_explorer",
+    "analytics_distribution"
+  ],
+  "defaults": {
+    "filters": {
+      "language": "all",
+      "success": "any"
+    },
+    "thresholdTemplate": "standard"
+  }
+}
