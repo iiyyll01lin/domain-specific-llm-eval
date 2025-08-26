@@ -16,11 +16,21 @@ export const ExecutiveOverview: React.FC = () => {
   const [sortByGap, setSortByGap] = React.useState(false)
 
   const entries = React.useMemo(() => {
-    if (!run) return [] as Array<[string, number]>
-    const arr = Object.entries(run.kpis as Record<string, number>)
-    if (!sortByGap) return arr
-    // Sort by largest gap vs warning threshold (or critical if both present and value < critical)
-    return arr.sort((a, b) => gap(b[0], b[1], thresholds) - gap(a[0], a[1], thresholds))
+    // Ensure run and kpis exist and are objects
+    if (!run || !run.kpis || typeof run.kpis !== 'object') return [] as Array<[string, number]>
+
+    // Keep only valid [key, number] pairs with finite numeric values
+    const pairs = Object.entries(run.kpis as Record<string, unknown>).filter(
+      (e): e is [string, number] =>
+        Array.isArray(e) &&
+        typeof e[0] === 'string' &&
+        typeof e[1] === 'number' &&
+        Number.isFinite(e[1]),
+    )
+
+    if (!sortByGap) return pairs
+    // Sort by largest gap vs warning threshold (or critical if value < critical)
+    return [...pairs].sort((a, b) => gap(b[0], b[1], thresholds) - gap(a[0], a[1], thresholds))
   }, [run, thresholds, sortByGap])
 
   return (
@@ -46,13 +56,17 @@ export const ExecutiveOverview: React.FC = () => {
               <span style={{ marginLeft: 16, opacity: 0.8 }}>latency p50/p90: {formatNum(run.latencies.p50)} ms / {formatNum(run.latencies.p90)} ms</span>
             )}
           </div>
-          {entries.map(([k, v]) => (
-            <div key={k} style={{ padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
-              <div style={{ fontWeight: 600 }}>{t(getMetricMeta(k).labelKey as any)}</div>
-              <div style={{ fontSize: 24 }}>{getMetricMeta(k).format?.(v, locale)}</div>
-              {renderGap(k, v ?? NaN, thresholds)}
-            </div>
-          ))}
+          {entries.map((pair) => {
+            const k = Array.isArray(pair) ? pair[0] : String(pair)
+            const v = Array.isArray(pair) ? pair[1] : NaN
+            return (
+              <div key={k} style={{ padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
+                <div style={{ fontWeight: 600 }}>{t(getMetricMeta(k).labelKey as any)}</div>
+                <div style={{ fontSize: 24 }}>{getMetricMeta(k).format?.(v, locale)}</div>
+                {renderGap(k, v ?? NaN, thresholds)}
+              </div>
+            )
+          })}
         </div>
       )}
   <ThresholdEditor />

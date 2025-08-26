@@ -11,9 +11,40 @@ export const RunLoader: React.FC = () => {
   const onPickFile = async () => {
     try {
       setError('')
-      // Use file picker for a single summary json to simplify v1
-      const [handle] = await (window as any).showOpenFilePicker?.({ types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] })
-      const file = await handle.getFile()
+      // Prefer File System Access API when available; otherwise fallback to <input type="file">
+      let file: File | undefined
+
+      const pickWithFS = async (): Promise<File | undefined> => {
+        try {
+          const api: any = (window as any).showOpenFilePicker
+          if (!api) return undefined
+          const res: any = await api({ types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] })
+          const handle = Array.isArray(res) ? res[0] : res
+          if (!handle || typeof handle.getFile !== 'function') return undefined
+          return await handle.getFile()
+        } catch (e: any) {
+          if (e?.name === 'AbortError') throw e
+          // Fall back to input picker on any other error (e.g., insecure context)
+          return undefined
+        }
+      }
+
+      const pickWithInput = async (): Promise<File> =>
+        await new Promise<File>((resolve, reject) => {
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = 'application/json,.json'
+          input.onchange = () => {
+            const f = input.files?.[0]
+            if (f) resolve(f)
+            else reject(new Error('未選取檔案'))
+          }
+          input.click()
+        })
+
+      file = await pickWithFS()
+      if (!file) file = await pickWithInput()
+
       await parseSummaryJson(file)
     } catch (e: any) {
       if (e?.name === 'AbortError') return
