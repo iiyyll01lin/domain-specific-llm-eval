@@ -16,6 +16,30 @@ type OutMsg =
   | { type: 'scan'; total: number; metricsCoverage?: Record<string, number> }
   | { type: 'error'; message: string }
 
+function extractArrayFromJson(data: any): any[] {
+  // 1) Direct array
+  if (Array.isArray(data)) return data
+  if (!data || typeof data !== 'object') return []
+  // 2) Common container keys
+  const candidates = ['items', 'results', 'evaluations', 'records', 'rows', 'data']
+  for (const k of candidates) {
+    const v = (data as any)[k]
+    if (Array.isArray(v)) return v
+    // nested container: e.g., { data: { items: [...] } }
+    if (v && typeof v === 'object') {
+      for (const kk of candidates) {
+        const vv = (v as any)[kk]
+        if (Array.isArray(vv)) return vv
+      }
+    }
+  }
+  // 3) First array value in object
+  for (const v of Object.values(data)) {
+    if (Array.isArray(v)) return v
+  }
+  return []
+}
+
 async function parseFile(file: File): Promise<EvaluationItem[]> {
   const text = await file.text()
   let data: unknown
@@ -24,7 +48,7 @@ async function parseFile(file: File): Promise<EvaluationItem[]> {
   } catch (e: any) {
     throw new Error(`JSON 解析失敗: ${e?.message ?? e}`)
   }
-  const arr = Array.isArray(data) ? data : (data as any)?.items ?? []
+  const arr = extractArrayFromJson(data)
   const items: EvaluationItem[] = []
   let i = 0
   for (const raw of arr) {

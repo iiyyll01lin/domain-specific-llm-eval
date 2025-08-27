@@ -4,7 +4,7 @@ import type { EvaluationItem, MetricKey } from './types'
 // Flexible item schema to accommodate various input shapes
 export const RawItemSchema = z
   .object({
-    id: z.string().or(z.number()).transform((v: string | number) => String(v)),
+    id: z.string().or(z.number()).optional().nullable(),
     language: z.string().optional().nullable(),
     latencyMs: z.number().optional().nullable(),
   })
@@ -22,6 +22,14 @@ const knownMetricKeys: MetricKey[] = [
 ]
 
 export function normalizeItem(input: RawItem): EvaluationItem {
+  // Determine a robust id, falling back to common alternatives
+  const idCandidate =
+    (input as any).id ??
+    (input as any).index ??
+    (input as any).sample_id ??
+    (input as any).row_id ??
+    (input as any).question_id
+
   const metrics: EvaluationItem['metrics'] = {}
   for (const k of knownMetricKeys) {
     const v = (input as any)[k]
@@ -63,7 +71,7 @@ export function normalizeItem(input: RawItem): EvaluationItem {
   }
 
   return {
-    id: String(input.id),
+    id: String(idCandidate ?? ''),
     language: (input as any).language ?? null,
     latencyMs: latency,
     metrics,
