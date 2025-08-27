@@ -277,3 +277,16 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Plan Export CSV/XLSX (T-070).
 
 Note: All code comments must be in English.
+
+---
+
+## Addendum — Data ingestion compatibility (2025-08-27)
+
+Context: Files in `evaluations-pre/` are not a stable portal-ready shape; many are reports without per-item metrics. Portal now has best-effort extraction, but we should formalize the contract.
+
+Action items (adopted):
+- Pipeline: emit a portal-ready summary JSON per run under `outputs/<run-id>/portal/` with `{ items: [...] }`.
+- Converter: added `eval-pipeline/convert_to_portal_summary.py` to transform `evaluations-pre` artifacts into the summary (averages metric scores grouped by question).
+- Portal worker: keep current fallback for `items/results/evaluations/records/rows/data` (one-level nesting) — no further heuristics unless a concrete dataset requires it.
+- Samples: maintain `public/samples/` for quick manual verification; include at least one array-shaped and one object-with-items file.
+- Validation: optional CI step to assert that emitted summaries are parseable and produce non-zero items for the supported metrics.

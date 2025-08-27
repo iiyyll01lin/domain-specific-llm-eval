@@ -1,3 +1,45 @@
+# Insights Portal - Design
+
+## Data ingestion and format compatibility (reconsideration)
+
+The portal expects an "Evaluation Summary JSON" that contains a flat list of evaluation items with metric scores. In practice, evaluation artifacts under `eval-pipeline/outputs/.../evaluations-pre/` can vary by tool and step (e.g., comprehensive_report, enhanced_contextual_summary), and many of them are not a simple array of items nor do they carry the final KPI values the UI needs.
+
+To reduce friction while keeping a clear contract, we adopt a dual strategy:
+
+1) Recommended contract (preferred)
+- Provide a single summary file per run in one of the following shapes:
+  - Direct array of items: `[{ id, metrics..., latencyMs? }]`
+  - Object with `items`: `{ items: [{ id, metrics..., latencyMs? }] }`
+- Metrics keys accepted (case-sensitive):
+  - ContextPrecision, ContextRecall, Faithfulness, AnswerRelevancy, AnswerSimilarity, ContextualKeywordMean
+- Also accepted alternative keys (auto-mapped):
+  - context_precision, context_recall, faithfulness, answer_relevancy, answer_similarity, contextual_keyword_mean
+- Latency fields auto-detected: `latencyMs`, `latency_ms`, `latency`, `response_time_ms`, `inference_latency_ms`
+- ID fallback: if `id` is missing, we attempt `index`, `sample_id`, `row_id`, `question_id`; if still missing we assign an empty string to avoid dropping the row.
+
+2) Browser-side fallback parsing (best-effort)
+- The worker now tries to extract the first array from common container keys: `items`, `results`, `evaluations`, `records`, `rows`, `data`, including one-level nesting.
+- If the file is a report/summary that does not include per-item metrics at all, it will still yield 0 items. In such cases you must convert the upstream artifacts into the portal-ready summary format.
+
+Why not parse everything automatically?
+- Report-style JSON files often aggregate metrics or change shapes per release. Baking all heuristics into the browser increases complexity, CPU cost, and brittleness.
+- A thin, explicit contract is easier to keep stable and validate.
+
+### Recommended pipeline change
+- The evaluation pipeline should emit an additional portal-ready summary file per run, e.g.:
+  `.../outputs/<run-id>/portal/ragas_enhanced_evaluation_results_<timestamp>.json`
+- Content: `{ items: [...] }` with the fields described above.
+- This keeps the portal ingestion simple, while you can keep rich reports elsewhere.
+
+### Optional converter
+- Provide a small converter (Python/Node) in the evaluation repo to transform existing `evaluations-pre` artifacts into the portal summary. This can be wired into the pipeline or executed ad-hoc.
+
+### Validation and samples
+- We included two sample inputs under `insights-portal/public/samples/`:
+  - `run_minimal/ragas_enhanced_evaluation_results_sample.json` (array)
+  - `run_full/outputs/ragas_enhanced_evaluation_results_YYYYMMDD.json` (object with items)
+- Use them to verify UI behavior (Verdict, Items, KPI cards, latency p50/p90, threshold adjustments).
+
 # LLM RAG Evaluation Insights Portal — Technical Design
 
 This document consolidates technical architecture, data flow, sequence diagrams, and implementation considerations for a local-first single-page app that reads existing outputs under `eval-pipeline/outputs/**`. It provides role-oriented dashboards, configurable thresholds and verdicts, interactive filtering, failure exploration, multi-run comparison, and rule-based insights.
