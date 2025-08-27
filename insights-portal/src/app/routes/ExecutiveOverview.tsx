@@ -46,8 +46,17 @@ export const ExecutiveOverview: React.FC = () => {
       {!run && <p style={{ marginTop: 12 }}>請選擇 JSON 結果檔以載入 run。</p>}
       {run && (
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          <div style={{ gridColumn: '1 / -1', padding: 12, border: '1px solid #ccc', borderRadius: 8, background: verdictColor(verdict?.verdict) }}>
-            <strong>Verdict:</strong> {verdict?.verdict}
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              padding: 12,
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              background: 'var(--bg-muted)',
+              color: 'var(--text)'
+            }}
+          >
+            <strong>Verdict:</strong> {verdict?.verdict ?? '—'}
             {verdict?.failingMetrics?.length ? (
               <span style={{ marginLeft: 8 }}>↓ {verdict.failingMetrics.join(', ')}</span>
             ) : null}
@@ -60,7 +69,7 @@ export const ExecutiveOverview: React.FC = () => {
             const k = Array.isArray(pair) ? pair[0] : String(pair)
             const v = Array.isArray(pair) ? pair[1] : NaN
             return (
-              <div key={k} style={{ padding: 12, border: '1px solid #ddd', borderRadius: 8 }}>
+              <div key={k} style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>
                 <div style={{ fontWeight: 600 }}>{t(getMetricMeta(k).labelKey as any)}</div>
                 <div style={{ fontSize: 24 }}>{getMetricMeta(k).format?.(v, locale)}</div>
                 {renderGap(k, v ?? NaN, thresholds)}
@@ -74,12 +83,7 @@ export const ExecutiveOverview: React.FC = () => {
   )
 }
 
-function verdictColor(v?: string) {
-  if (v === 'Blocked') return '#ffe6e6'
-  if (v === 'At Risk') return '#fff7e6'
-  if (v === 'Ready') return '#eaffea'
-  return '#f5f5f5'
-}
+// Colors are now driven by CSS variables in theme.css.
 
 function formatNum(v?: number) {
   if (v == null || Number.isNaN(v)) return 'N/A'
@@ -89,9 +93,9 @@ function formatNum(v?: number) {
 function renderGap(key: string, v: number, thresholds: any) {
   const th = thresholds[key as keyof typeof thresholds]
   if (!th || Number.isNaN(v)) return null
-  if (v < th.critical) return <div style={{ color: 'crimson' }}>低於 critical {diffPct(v, th.critical)}</div>
-  if (v < th.warning) return <div style={{ color: '#d48806' }}>低於 warning {diffPct(v, th.warning)}</div>
-  return <div style={{ color: 'seagreen' }}>達標</div>
+  if (v < th.critical) return <div style={{ color: 'var(--status-error)' }}>低於 critical {diffPct(v, th.critical)}</div>
+  if (v < th.warning) return <div style={{ color: 'var(--status-warn)' }}>低於 warning {diffPct(v, th.warning)}</div>
+  return <div style={{ color: 'var(--status-ready)' }}>達標</div>
 }
 
 function diffPct(v: number, t: number) {

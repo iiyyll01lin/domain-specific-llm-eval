@@ -165,6 +165,14 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress (i18n wired with LangSwitcher and persisted locale; a11y/alt texts pending)
 - DoD: No reload on language switch; RTL out of scope.
 
+### T-081 Dark mode switch (default dark)
+- Description: Provide a UI toggle to switch between Dark/Light themes; persist preference in localStorage; default to Dark on first load.
+- Outcomes: Global theme applies to body, text, buttons, and form controls via CSS variables; toggle available in header next to language switcher.
+- Deps/Res: T-080 (global UI), store.
+- EARS: Story 12 (a11y — contrast and user preference).
+- Status: Done (theme store, global stylesheet, and ThemeSwitcher wired; default dark, persists across reloads)
+- DoD: Page loads in Dark by default; switching to Light updates immediately and persists after refresh.
+
 ### T-090 Error handling & resilience
 - Description: Errors include filename/offset; missing metrics show N/A; memory pressure hints; no network calls by default offline.
 - Outcomes: Self-healing UX without blocking main flows.
@@ -267,6 +275,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Threshold profile load and `config.yaml` override merge (T-030).
   - i18n and LangSwitcher with persisted locale (partial T-080).
   - Single-file JSON load with Worker parsing, KPI aggregation, and latency stats (partial T-010/T-012).
+  - Dark mode switch with default dark and persistence (T-081).
 - Added:
   - Overview “sort by threshold gap” toggle (T-050).
   - Dev autoload sample JSON via /@fs for quicker verification.

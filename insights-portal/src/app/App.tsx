@@ -5,6 +5,7 @@ import { QAFailureExplorer } from './routes/QAFailureExplorer'
 import { AnalyticsDistribution } from './routes/AnalyticsDistribution'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import { usePortalStore } from '@/app/store/usePortalStore'
+import { ThemeSwitcher } from './ThemeSwitcher'
 
 export const App: React.FC = () => {
   const { t } = useTranslation()
@@ -74,6 +75,7 @@ export const App: React.FC = () => {
         <button onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
         <button onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
         <button onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
+        <ThemeSwitcher />
         <LangSwitcher />
       </header>
       <main style={{ marginTop: 16 }}>

@@ -1,0 +1,62 @@
+/* Global theme variables controlled by data-theme on :root. Default to dark. */
+
+:root[data-theme='dark'] {
+  --bg: #0f1115;
+  --bg-muted: #151821;
+  --text: #e6e6e6;
+  --text-muted: #b6b6b6;
+  --border: #2a2f3a;
+  --accent: #7aa2f7;
+  --btn-bg: #1b2030;
+  --btn-text: #e6e6e6;
+  --status-ready: #7ee787;
+  --status-warn: #f2cc60;
+  --status-error: #ff7b72;
+}
+
+:root[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-muted: #f6f7fb;
+  --text: #1b1f2a;
+  --text-muted: #4a5161;
+  --border: #e6e8ef;
+  --accent: #2f6feb;
+  --btn-bg: #ffffff;
+  --btn-text: #1b1f2a;
+  --status-ready: #2ea043;
+  --status-warn: #9a6700;
+  --status-error: #d1242f;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button, select, input {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+}
+
+.card {
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.small-muted { color: var(--text-muted); font-size: 12px; }
