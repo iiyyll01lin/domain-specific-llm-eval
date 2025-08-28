@@ -61,14 +61,31 @@ export function buildRowsFromItems(items: EvaluationItem[], visibleCols: string[
   })
 }
 
-export function buildRowsWithBookmarks(
-  items: EvaluationItem[],
-  visibleCols: string[],
-  bookmarked: Set<string> | string[]
-): Array<Record<string, unknown>> {
-  const ids = new Set(Array.isArray(bookmarked) ? bookmarked.map((x) => String(x)) : Array.from(bookmarked))
-  const base = buildRowsFromItems(items, visibleCols)
-  return base.map((r) => ({ ...r, bookmarked: ids.has(String((r as any).id)) }))
+export interface QAItemRow {
+  id: string
+  question?: string
+  answer?: string
+  reference?: string
+  bookmarked?: boolean
+  // metrics will be spread dynamically
+  [k: string]: any
+}
+
+export function buildRowsWithBookmarks(items: any[], metricKeys: string[], bookmarks: Set<string>): QAItemRow[] {
+  return items.map((it) => {
+    const row: QAItemRow = {
+      id: it.id,
+      question: it.user_input || it.question || '',
+      answer: it.rag_answer || it.answer || '',
+      reference: it.reference || it.ground_truth || '',
+      bookmarked: bookmarks.has(it.id),
+    }
+    for (const m of metricKeys) {
+      const v = it.metrics?.[m] ?? it[m]
+      row[m] = typeof v === 'number' ? v : null
+    }
+    return row
+  })
 }
 
 function triggerDownloadBlob(filename: string, blob: Blob) {

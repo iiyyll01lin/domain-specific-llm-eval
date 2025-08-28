@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RunLoader } from '@/components/RunLoader'
 import { usePortalStore } from '@/app/store/usePortalStore'
@@ -6,18 +6,27 @@ import { evaluateVerdict } from '@/core/verdict'
 import { ThresholdEditor } from '@/components/ThresholdEditor'
 import { RunDirectoryPicker } from '@/components/RunDirectoryPicker'
 import { getMetricMeta } from '@/core/metrics/registry'
+import { FiltersBar } from '@/components/FiltersBar';
+import type { FiltersState as UIFilters } from '@/components/filters/chips';
 import { usePortalStore as useStore } from '@/app/store/usePortalStore'
 import { exportTableToCSV } from '@/core/exporter'
-import { FiltersBar } from '@/components/FiltersBar'
 
-export const ExecutiveOverview: React.FC = () => {
+export default function ExecutiveOverview() {
   const { t } = useTranslation()
   const run = usePortalStore((s) => s.run)
   const thresholds = usePortalStore((s) => s.thresholds)
   const locale = usePortalStore((s) => s.locale)
   const verdict = run ? evaluateVerdict(run.kpis, thresholds) : undefined
   const [sortByGap, setSortByGap] = React.useState(false)
-  const filters = useStore((s) => s.filters)
+  const filtersFromStore = useStore((s) => s.filters)
+  const setFiltersInStore = useStore((s) => s.setFilters)
+
+  const filters: UIFilters = useMemo(() => ({
+    language: (filtersFromStore as any).language ?? undefined,
+    latencyMs: (filtersFromStore as any).latencyMs,
+    metrics: (filtersFromStore as any).metrics,
+  }), [filtersFromStore])
+
   const [derived, setDerived] = React.useState<{ kpis: any; total: number; latencies?: any } | null>(null)
 
   React.useEffect(() => {
@@ -48,6 +57,11 @@ export const ExecutiveOverview: React.FC = () => {
     })
   }
 
+  const availableMetricKeys = useMemo(() => {
+    const source = (derived && derived.kpis) || (run ? run.kpis : undefined) || {}
+    return Object.keys(source)
+  }, [derived, run])
+
   // entries replaced by derived aggregation flow
 
   return (
@@ -58,7 +72,14 @@ export const ExecutiveOverview: React.FC = () => {
       <div style={{ marginTop: 8 }}>
         <button onClick={exportKpis}>Export KPIs (CSV)</button>
       </div>
-  <FiltersBar run={run || undefined} />
+      <section style={{ marginBottom: 16 }}>
+        <FiltersBar
+          metrics={availableMetricKeys}
+          filters={filters}
+          onChange={(next: UIFilters) => setFiltersInStore(next)}
+          locale={locale}
+        />
+      </section>
       <div style={{ marginTop: 8 }}>
         <label>
       <input type="checkbox" checked={sortByGap} onChange={(e) => setSortByGap(e.target.checked)} /> {t('overview.sortByGap')}

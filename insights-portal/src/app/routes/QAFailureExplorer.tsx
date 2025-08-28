@@ -2,81 +2,81 @@ import React from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
 import { getMetricMeta } from '@/core/metrics/registry'
-import { buildRowsFromItems, buildRowsWithBookmarks, exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
+import { buildRowsWithBookmarks, exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import { buildFilterChips } from '@/components/filters/chips'
 
-export const QAFailureExplorer: React.FC = () => {
-  const run = usePortalStore((s) => s.run)
-  const [metric, setMetric] = React.useState('Faithfulness')
+export default function QAFailureExplorer() {
+  const { run, filters } = usePortalStore((s) => ({ run: s.run, filters: s.filters }))
+  const items = React.useMemo(() => run?.items ?? [], [run?.items])
   const [query, setQuery] = React.useState('')
-  const [selected, setSelected] = React.useState<number | null>(null)
+
+  // Derive metric keys and selected metric
+  const metricKeys = React.useMemo(() => {
+    return Array.isArray(items) && items.length > 0 ? Object.keys(items[0].metrics || {}) : []
+  }, [items])
+  const [selectedMetric, setSelectedMetric] = React.useState<string>('')
+  React.useEffect(() => {
+    if (!selectedMetric && metricKeys.length > 0) setSelectedMetric(metricKeys[0])
+    else if (selectedMetric && !metricKeys.includes(selectedMetric)) setSelectedMetric(metricKeys[0] || '')
+  }, [metricKeys, selectedMetric])
+
+  // Apply base filters (from global filters) then query filter by question/user_input
+  const filteredItems = React.useMemo(() => {
+    const base = applyFilters(items, filters)
+    if (!query.trim()) return base
+    const q = query.toLowerCase()
+    return base.filter((it) => (it.user_input || '').toLowerCase().includes(q))
+  }, [items, filters, query])
+
+  // Simple virtualization config
+  const rowHeight = 44
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const [scrollTop, setScrollTop] = React.useState(0)
+  const onScroll = () => setScrollTop(containerRef.current?.scrollTop || 0)
+  const viewportHeight = 440
+  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 5)
+  const end = Math.min(filteredItems.length, start + Math.ceil(viewportHeight / rowHeight) + 10)
+
   const [bookmarks, setBookmarks] = React.useState<Set<string>>(new Set())
-
-  const rows = React.useMemo(() => {
-    const items = applyFilters(run?.items || [], usePortalStore.getState().filters)
-    const scored = items.map((it, idx) => ({ idx, it, score: (it.metrics as any)?.[metric] as number | undefined }))
-    let out = scored.filter((r) => typeof r.score === 'number')
-    if (query.trim()) {
-      const q = query.toLowerCase()
-      out = out.filter((r) => (r.it.user_input || '').toLowerCase().includes(q))
-    }
-    out.sort((a, b) => (a.score! - b.score!))
-  return out
-  }, [run, metric, query])
-
-  const columns = ['bookmark', 'id', 'user_input', metric]
-  const onExport = async (fmt: 'csv' | 'xlsx') => {
-    const visible = ['id', 'user_input', metric]
-  const raw = buildRowsWithBookmarks(rows.map((r) => r.it), visible, bookmarks)
-    const meta = {
-      runId: 'local-run',
-      filters: (usePortalStore.getState().filters as any),
-      thresholds: usePortalStore.getState().thresholds as any,
-      timestamp: new Date().toISOString(),
-    }
-    if (fmt === 'csv') exportTableToCSV('qa-failures.csv', raw, meta)
-    else await exportTableToXLSX('qa-failures.xlsx', raw, meta)
-  }
-
-  const toggleBookmark = (id: string|number) => {
+  const toggleBookmark = (id: string) => {
     setBookmarks((prev) => {
       const next = new Set(prev)
-      const key = String(id)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
 
-  const exportBookmarks = async () => {
-    const visible = ['id', 'user_input', metric]
-    const filtered = rows.filter((r) => bookmarks.has(String(r.it.id)))
-  const raw = buildRowsWithBookmarks(filtered.map((r) => r.it), visible, bookmarks)
-    await exportTableToXLSX('qa-bookmarks.xlsx', raw, {
-      runId: 'local-run',
-      filters: (usePortalStore.getState().filters as any),
-      thresholds: usePortalStore.getState().thresholds as any,
-      timestamp: new Date().toISOString(),
-    })
+  const exportVisible = () => {
+    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
+    exportTableToCSV('qa_view.csv', rows, { timestamp: new Date().toISOString() })
+  }
+
+  const exportVisibleXlsx = async () => {
+    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
+    await exportTableToXLSX('qa_view.xlsx', rows, { timestamp: new Date().toISOString() })
   }
 
   return (
-    <section>
-      <h2>QA Failure Explorer</h2>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <label>
-          Metric
-          <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>
-            {Object.keys(run?.kpis || {}).map((k) => (
-              <option key={k} value={k}>{getMetricMeta(k as any).key}</option>
-            ))}
-          </select>
-        </label>
-        <input placeholder="Search question" value={query} onChange={(e) => setQuery(e.target.value)} style={{ minWidth: 240 }} />
-        <span className="small-muted">Sorted by low scores</span>
-  <button onClick={() => onExport('csv')}>Export CSV</button>
-  <button onClick={() => onExport('xlsx')}>Export XLSX</button>
-  <button onClick={exportBookmarks} disabled={bookmarks.size === 0}>Export Bookmarks</button>
+    <div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+        <label>Metric</label>
+        <select value={selectedMetric} onChange={(e) => setSelectedMetric(e.target.value)} aria-label="metric-selector">
+          {metricKeys.map((k) => (
+            <option value={k} key={k}>
+              {getMetricMeta(k as any).key}
+            </option>
+          ))}
+        </select>
+        <input
+          placeholder="Search question"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ minWidth: 240 }}
+          aria-label="qa-search-input"
+        />
+        <button onClick={exportVisible}>Export CSV</button>
+        <button onClick={exportVisibleXlsx}>Export XLSX</button>
       </div>
       {/* Active filter chips */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
@@ -86,85 +86,35 @@ export const QAFailureExplorer: React.FC = () => {
           </span>
         ))}
       </div>
-      <VirtualizedTable
-        rows={rows}
-        columns={columns}
-        onRowClick={(r) => setSelected(r.idx)}
-        isBookmarked={(id) => bookmarks.has(String(id))}
-        onToggleBookmark={(id) => toggleBookmark(id)}
-      />
-      {selected != null && run?.items[selected] && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <button onClick={() => setSelected(null)} style={{ float: 'right' }}>✕</button>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Details</div>
-          <div><strong>ID:</strong> {run.items[selected].id}</div>
-          <div><strong>Question:</strong> {run.items[selected].user_input || '—'}</div>
-          <div><strong>Answer:</strong> {run.items[selected].rag_answer || '—'}</div>
-          <div><strong>Reference:</strong> {run.items[selected].reference || '—'}</div>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function fmt(v?: number) {
-  if (v == null || Number.isNaN(v)) return 'N/A'
-  return v.toFixed(3)
-}
-
-function truncate(s?: string, n = 80) {
-  if (!s) return '—'
-  return s.length > n ? s.slice(0, n) + '…' : s
-}
-
-type Row = { idx: number; it: any; score?: number }
-
-type VProps = {
-  rows: Row[]
-  columns: string[]
-  rowHeight?: number
-  height?: number
-  onRowClick: (r: Row) => void
-  isBookmarked: (id: string|number) => boolean
-  onToggleBookmark: (id: string|number) => void
-}
-
-const VirtualizedTable: React.FC<VProps> = ({ rows, columns, rowHeight = 36, height = 400, onRowClick, isBookmarked, onToggleBookmark }) => {
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const [scrollTop, setScrollTop] = React.useState(0)
-  const total = rows.length
-  const visibleCount = Math.ceil(height / rowHeight) + 4
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 2)
-  const end = Math.min(total, start + visibleCount)
-  const visible = rows.slice(start, end)
-
-  return (
-    <div style={{ marginTop: 12, overflow: 'auto', maxHeight: height }} ref={containerRef} onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', position: 'relative', height: total * rowHeight }}>
-        <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-muted)' }}>
-          <tr>
-            {columns.map((c) => (
-              <th key={c} style={{ textAlign: 'left', borderBottom: '1px solid var(--border)', padding: 6 }}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{ height: start * rowHeight }}><td colSpan={columns.length} /></tr>
-          {visible.map((r) => (
-            <tr key={r.idx} style={{ cursor: 'pointer', height: rowHeight }} onClick={() => onRowClick(r)}>
-              <td style={{ padding: 6, borderBottom: '1px solid var(--border)' }}>
-                <button onClick={(e) => { e.stopPropagation(); onToggleBookmark(r.it.id) }} title="Toggle bookmark">
-                  {isBookmarked(r.it.id) ? '★' : '☆'}
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        style={{ position: 'relative', height: viewportHeight, overflow: 'auto', border: '1px solid var(--border-color, #333)' }}
+      >
+        <div style={{ height: filteredItems.length * rowHeight, position: 'relative' }}>
+          {filteredItems.slice(start, end).map((it, i) => {
+            const top = (start + i) * rowHeight
+            const isMarked = bookmarks.has(it.id)
+            return (
+              <div key={it.id} style={{ position: 'absolute', top, left: 0, right: 0, height: rowHeight, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 8 }}>
+                <button
+                  onClick={() => toggleBookmark(it.id)}
+                  aria-label="toggle-bookmark"
+                  title={isMarked ? 'Unbookmark' : 'Bookmark'}
+                >
+                  {isMarked ? '★' : '☆'}
                 </button>
-              </td>
-              <td style={{ padding: 6, borderBottom: '1px solid var(--border)' }}>{r.it.id}</td>
-              <td style={{ padding: 6, borderBottom: '1px solid var(--border)' }}>{truncate(r.it.user_input)}</td>
-              <td style={{ padding: 6, borderBottom: '1px solid var(--border)' }}>{fmt(r.score)}</td>
-            </tr>
-          ))}
-          <tr style={{ height: Math.max(0, (total - end) * rowHeight) }}><td colSpan={columns.length} /></tr>
-        </tbody>
-      </table>
+                <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {it.user_input || it.id}
+                </div>
+                <div style={{ width: 120, textAlign: 'right' }}>{selectedMetric ? (it.metrics?.[selectedMetric] ?? '').toString() : ''}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
+
+// No extra helpers needed here; keep component lean.

@@ -21,6 +21,7 @@ interface PortalState {
   filters: FiltersState
   setFilters: (f: Partial<FiltersState>) => void
   clearFilters: () => void
+  clearMetricRange: (key: string) => void
   thresholds: Thresholds
   setThresholds: (t: Thresholds) => void
   defaultThresholds?: Thresholds
@@ -52,6 +53,11 @@ export const usePortalStore = create<PortalState>((set) => ({
   filters: { language: null, latencyRange: [null, null], metricRanges: {} },
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f, metricRanges: { ...(s.filters.metricRanges||{}), ...(f.metricRanges||{}) } } })),
   clearFilters: () => set({ filters: { language: null, latencyRange: [null, null], metricRanges: {} } }),
+  clearMetricRange: (key: string) => set((s) => {
+    const mr = { ...(s.filters.metricRanges || {}) }
+    delete mr[key]
+    return { filters: { ...s.filters, metricRanges: mr } }
+  }),
   thresholds: {
     ContextPrecision: { warning: 0.9, critical: 0.8 },
     ContextRecall: { warning: 0.9, critical: 0.8 },

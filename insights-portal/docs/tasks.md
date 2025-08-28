@@ -117,6 +117,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated → UI Complete (MVP)
   - Implemented: Global filters (language, latency range, metric ranges) in store; worker-side aggregate with filters; Executive Overview/QA/Analytics respect filters.
   - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview.
+  - Tests: Added unit tests for metric range filter and chips clear behavior.
   - TODO: Performance tune for 20k+ (debounce slider input, worker batching), polish labels and help texts.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
 
@@ -136,6 +137,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated (virtualized + bookmarks)
   - Implemented: Sort by low scores, keyword search (question), row details panel; Export CSV/XLSX of current table with metadata.
   - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks.
+  - Tests: Added unit test for bookmark flag in exported rows.
   - TODO: Configurable visible columns and persistent bookmarks across sessions.
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
