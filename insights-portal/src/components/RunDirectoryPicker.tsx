@@ -49,9 +49,10 @@ export const RunDirectoryPicker: React.FC = () => {
       setRuns(Object.values(found))
   // Fast scan each detected summary JSON to estimate counts and coverage
   setScanning(true)
-  // Dynamic import of the web worker for fast scan; use ts-ignore to silence type warnings for ?worker suffix
-  // @ts-ignore - vite worker dynamic import
-  const WorkerCtor: any = (await import('../workers/parser.worker.ts?worker')).default
+  // Dynamic import of the web worker for fast scan; cast to any to accommodate ?worker suffix without extra types
+  const WorkerCtor = (await import('../workers/parser.worker.ts?worker')).default as unknown as {
+    new (): Worker
+  }
       await Promise.all(
         Object.values(found).map(async (r) => {
           if (!r.summaryJson) return

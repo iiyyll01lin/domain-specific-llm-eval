@@ -58,7 +58,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated
   - Implemented: pick directory and scan runs; detect result JSON and `config.yaml`; one-click load.
   - Added: artifact type counts (results/csv/other json); fast-scan returns total items and metrics coverage (top 3 metrics shown).
-  - TODO: full metrics list with tooltips, empty-state polish.
+  - TODO: full metrics list with tooltips, polished empty-state.
 - DoD: Each run displays artifact types and counts; shows “No compatible files” when none.
 
 ### T-012 JSON/CSV parsing & normalization (with latency stats)
@@ -114,7 +114,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Consistent KPIs/charts/table updates; active chips and one-click clear.
 - Deps/Res: T-012, T-020.
 - EARS: Story 5, 11 (perf).
-- Status: Planned
+- Status: In-Progress → Updated → UI Complete (MVP)
+  - Implemented: Global filters (language, latency range, metric ranges) in store; worker-side aggregate with filters; Executive Overview/QA/Analytics respect filters.
+  - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview.
+  - TODO: Performance tune for 20k+ (debounce slider input, worker batching), polish labels and help texts.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
 
 ### T-050 Executive Overview
@@ -130,7 +133,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Quickly locate low-scoring samples; support bookmarking and export.
 - Deps/Res: T-040.
 - EARS: Story 8.
-- Status: Planned (route scaffold present, UI placeholder)
+- Status: In-Progress → Updated (virtualized + bookmarks)
+  - Implemented: Sort by low scores, keyword search (question), row details panel; Export CSV/XLSX of current table with metadata.
+  - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks.
+  - TODO: Configurable visible columns and persistent bookmarks across sessions.
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
 ### T-052 Analytics Distribution (hist/box/scatter)
@@ -138,7 +144,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Visualize distributions and relations; interactive filters stay in sync.
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
-- Status: Planned (route scaffold present, UI placeholder)
+- Status: In-Progress → Updated (minimal histogram)
+  - Implemented: Histogram with ECharts, metric selector; honors global filters.
+  - TODO: Box plot, scatter with brush to filter, range sliders.
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
@@ -154,7 +162,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: CSV/XLSX with metadata footer (run IDs, filters, timestamp, thresholds).
 - Deps/Res: T-050, T-051, T-052.
 - EARS: Story 10.
-- Status: Planned
+- Status: In-Progress → Updated
+  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata.
+  - TODO: Add export from Analytics view; style templates/back-matter; PDF/PNG snapshot in later milestone.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -276,14 +286,20 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - i18n and LangSwitcher with persisted locale (partial T-080).
   - Single-file JSON load with Worker parsing, KPI aggregation, and latency stats (partial T-010/T-012).
   - Dark mode switch with default dark and persistence (T-081).
+  - Filters engine with UI (language/latency/metric sliders + chips) wired in Overview/QA/Analytics (T-040 UI complete, engine ongoing perf work).
+  - QA Failure Explorer: virtualized list, bookmarks with export, sort/search/details, export CSV/XLSX (T-051/T-070 expanded).
+  - Analytics histogram MVP with ECharts and filter awareness (partial T-052).
+  - Tooling solidified: ESLint/Prettier/Vitest configured; minimal unit tests added (T-002/T-120 partial).
 - Added:
   - Overview “sort by threshold gap” toggle (T-050).
   - Dev autoload sample JSON via /@fs for quicker verification.
 - Next:
-  - Complete T-011 DoD (full metrics list/tooltips; empty-state polish).
-  - Start Filters/Cohorts engine and QA Failure Explorer skeleton (T-040/T-051).
-  - Add minimal unit tests and wire Vitest (T-002/T-120).
-  - Plan Export CSV/XLSX (T-070).
+  - Complete T-011 DoD (full metrics list/tooltips, polished empty-state).
+  - Filters perf: debounce slider input and worker batching for 20k+ (T-040).
+  - QA Table: selectable columns and persistent bookmarks across sessions (T-051/T-070).
+  - Analytics: box plot and scatter with brush to filter (T-052).
+  - Export: Analytics export, Overview XLSX, PDF/PNG snapshot later (T-070).
+  - Expand unit/integration/E2E tests (RTL/Playwright) (T-120).
 
 Note: All code comments must be in English.
 

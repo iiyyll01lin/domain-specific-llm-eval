@@ -52,6 +52,22 @@ export function normalizeItem(input: RawItem): EvaluationItem {
     }
   }
 
+  // Extensibility: include any other numeric fields that look like a metric in [0,1].
+  // Skip known non-metric keys and nested structures.
+  const reserved = new Set<string>([
+    'id', 'index', 'sample_id', 'row_id', 'question_id',
+    'language', 'latencyMs', 'latency_ms', 'latency', 'response_time_ms', 'inference_latency_ms',
+    'user_input', 'reference', 'rag_answer', 'reference_contexts', 'rag_contexts',
+    ...knownMetricKeys,
+    ...Object.keys(altMap),
+  ])
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (reserved.has(k)) continue
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1) {
+      if (metrics[k as any] == null) metrics[k as any] = v
+    }
+  }
+
   // Normalize latency using common alternative field names
   const latencyCandidates = [
     (input as any).latencyMs,

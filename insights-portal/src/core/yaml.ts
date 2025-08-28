@@ -11,7 +11,7 @@ export function parseSimpleYAML(yamlText: string): any {
   const root: Node = { indent: -1, value: {} }
   let current: Node = root
 
-  for (let raw of lines) {
+  for (const raw of lines) {
     const line = raw.replace(/#.*$/, '').trimEnd()
     if (!line.trim()) continue
     const leading = raw.length - raw.trimStart().length

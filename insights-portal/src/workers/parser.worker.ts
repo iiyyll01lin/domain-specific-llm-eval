@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { RawItemSchema, normalizeItem, aggregateKpis, computeLatencyStats } from '@/core/schemas'
 import type { EvaluationItem } from '@/core/types'
+import { applyFilters, aggregateKpisFiltered } from '@/core/analysis/filters'
 // PapaParse is used for chunked CSV parsing inside the worker
 // Typings are optional; declare module shim is provided to avoid hard dependency on @types
 import Papa from 'papaparse'
@@ -9,12 +10,9 @@ type InMsg =
   | { type: 'parse-summary-json'; file: File }
   | { type: 'parse-csv'; file: File }
   | { type: 'fast-scan'; file: File; sample?: number }
+  | { type: 'aggregate'; items: EvaluationItem[]; filters: any }
 
-type OutMsg =
-  | { type: 'progress'; phase: string; current: number; total: number }
-  | { type: 'parsed'; items: EvaluationItem[]; kpis: Record<string, number>; total: number; latencies?: { avg?: number; p50?: number; p90?: number; p99?: number } }
-  | { type: 'scan'; total: number; metricsCoverage?: Record<string, number> }
-  | { type: 'error'; message: string }
+// Note: union type for outgoing messages is intentionally omitted to avoid unused type warnings in strict lint settings.
 
 function extractArrayFromJson(data: any): any[] {
   // 1) Direct array
@@ -75,7 +73,7 @@ async function parseCsvFile(file: File): Promise<EvaluationItem[]> {
       skipEmptyLines: 'greedy',
       chunkSize: 1024 * 128,
       // Use explicit any annotations to satisfy strict settings without external type defs
-      chunk: (results: any, parser: any) => {
+  chunk: (results: any) => {
         const rows = results.data as any[]
         for (const raw of rows) {
           try {
@@ -136,6 +134,11 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
         coverage[k] = sample ? n / sample : 0
       }
       postMessage({ type: 'scan', total: arr.length, metricsCoverage: coverage })
+    } else if (msg.type === 'aggregate') {
+      const filtered = applyFilters(msg.items, msg.filters || {})
+      const kpis = aggregateKpisFiltered(filtered)
+      const lat = computeLatencyStats(filtered)
+      postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat })
     }
   } catch (e: any) {
     postMessage({ type: 'error', message: e?.message ?? String(e) })

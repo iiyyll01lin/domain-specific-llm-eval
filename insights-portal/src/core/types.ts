@@ -5,7 +5,7 @@ export type MetricKey =
   | 'AnswerRelevancy'
   | 'AnswerSimilarity'
   | 'ContextualKeywordMean'
-  | (string & {})
+  | (string & Record<never, never>)
 
 export interface EvaluationItem {
   id: string

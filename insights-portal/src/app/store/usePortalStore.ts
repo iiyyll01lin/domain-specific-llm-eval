@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { RunParsed, Thresholds } from '@/core/types'
 
+export interface FiltersState {
+  language?: string | null
+  latencyRange?: [number | null, number | null]
+  metricRanges?: Record<string, [number | null, number | null]>
+}
+
 export type Locale = 'zh-TW'|'en-US'
 export type ThemeMode = 'dark'|'light'
 
@@ -12,6 +18,9 @@ interface PortalState {
   toggleTheme: () => void
   run?: RunParsed
   setRunData: (run: RunParsed) => void
+  filters: FiltersState
+  setFilters: (f: Partial<FiltersState>) => void
+  clearFilters: () => void
   thresholds: Thresholds
   setThresholds: (t: Thresholds) => void
   defaultThresholds?: Thresholds
@@ -40,6 +49,9 @@ export const usePortalStore = create<PortalState>((set) => ({
   },
   run: undefined,
   setRunData: (run) => set({ run }),
+  filters: { language: null, latencyRange: [null, null], metricRanges: {} },
+  setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f, metricRanges: { ...(s.filters.metricRanges||{}), ...(f.metricRanges||{}) } } })),
+  clearFilters: () => set({ filters: { language: null, latencyRange: [null, null], metricRanges: {} } }),
   thresholds: {
     ContextPrecision: { warning: 0.9, critical: 0.8 },
     ContextRecall: { warning: 0.9, critical: 0.8 },
