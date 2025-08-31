@@ -55,10 +55,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: List artifacts and counts; non-blocking warnings when missing.
 - Deps/Res: T-010.
 - EARS: Story 1 (artifact listing & counts).
-- Status: In-Progress → Updated
+- Status: Done
   - Implemented: pick directory and scan runs; detect result JSON and `config.yaml`; one-click load.
-  - Added: artifact type counts (results/csv/other json); fast-scan returns total items and metrics coverage (top 3 metrics shown).
-  - TODO: full metrics list with tooltips, polished empty-state.
+  - Added: artifact type counts (results/csv/other json); fast-scan returns total items and metrics coverage (tooltip shows full list).
+  - Added: polished empty-state when no compatible files found.
+  - TODO: Inline full metrics list beyond tooltip (optional polish).
 - DoD: Each run displays artifact types and counts; shows “No compatible files” when none.
 
 ### T-012 JSON/CSV parsing & normalization (with latency stats)
@@ -82,7 +83,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: UI agnostic to raw differences; unknown metrics handled by registry.
 - Deps/Res: T-012.
 - EARS: Story 9 (metric extensibility).
-- Status: Planned (latency alias candidates already considered)
+- Status: Done (latency alias candidates implemented; unknown metrics pass-through)
 - DoD: Unknown metric key appears as default KPI/distribution without custom code.
 
 ### T-020 Metrics Registry (extensible)
@@ -117,8 +118,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated → UI Complete (MVP)
   - Implemented: Global filters (language, latency range, metric ranges) in store; worker-side aggregate with filters; Executive Overview/QA/Analytics respect filters.
   - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview.
+  - Added: Debounced worker aggregation to improve responsiveness while adjusting sliders.
   - Tests: Added unit tests for metric range filter and chips clear behavior.
-  - TODO: Performance tune for 20k+ (debounce slider input, worker batching), polish labels and help texts.
+  - TODO: Performance tune for 20k+ (additional worker batching), polish labels and help texts.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
 
 ### T-050 Executive Overview
@@ -126,7 +128,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: One screen to judge release readiness and gaps.
 - Deps/Res: T-031, T-040.
 - EARS: Story 2.
-- Status: In-Progress (wired to RunLoader/DirectoryPicker; KPI cards + Verdict banner + counts + latency p50/p90; added “sort by threshold gap” toggle)
+- Status: In-Progress (wired to RunLoader/DirectoryPicker; KPI cards + Verdict banner + counts + latency p50/p90; “sort by threshold gap” now sorts KPI cards by severity)
 - DoD: With default thresholds, verdict renders; sub-threshold metrics show colors and gaps.
 
 ### T-051 QA Failure Explorer
@@ -146,8 +148,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Visualize distributions and relations; interactive filters stay in sync.
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
-- Status: In-Progress → Updated (minimal histogram)
-  - Implemented: Histogram with ECharts, metric selector; honors global filters.
+-,  - TODO: Box plot, scatter with brush to filter, range sliders.
+- Status: In-Progress → Updated (minimal histogram + CSV export)
+  - Implemented: Histogram with ECharts, metric selector; honors global filters; CSV export of current metric values.
+  - TODO: Box plot, scatter with brush to filter, range sliders.
   - TODO: Box plot, scatter with brush to filter, range sliders.
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
@@ -165,8 +169,8 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-050, T-051, T-052.
 - EARS: Story 10.
 - Status: In-Progress → Updated
-  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata.
-  - TODO: Add export from Analytics view; style templates/back-matter; PDF/PNG snapshot in later milestone.
+  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV of histogram source values.
+  - TODO: Add XLSX export from Analytics view; style templates/back-matter; PDF/PNG snapshot in later milestone.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -174,7 +178,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Live language switch; charts and key components provide alt text or summary.
 - Deps/Res: Global UI; LangSwitcher.
 - EARS: Story 12.
-- Status: In-Progress (i18n wired with LangSwitcher and persisted locale; a11y/alt texts pending)
+- Status: In-Progress (i18n wired with LangSwitcher and persisted locale; added aria/alt on charts and controls; more a11y pending)
 - DoD: No reload on language switch; RTL out of scope.
 
 ### T-081 Dark mode switch (default dark)
@@ -280,7 +284,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 
 ---
 
-## Progress Update — Current (2025-08-26)
+## Progress Update — Current (2025-08-31)
 - Done:
   - Verdict engine v1 (T-031); Executive Overview MVP shows KPIs, verdict, counts and latency p50/p90 (partial T-050).
   - Directory scan detects runs, artifact type counts, and items/metrics fast-scan (partial T-011).
@@ -290,17 +294,19 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Dark mode switch with default dark and persistence (T-081).
   - Filters engine with UI (language/latency/metric sliders + chips) wired in Overview/QA/Analytics (T-040 UI complete, engine ongoing perf work).
   - QA Failure Explorer: virtualized list, bookmarks with export, sort/search/details, export CSV/XLSX (T-051/T-070 expanded).
-  - Analytics histogram MVP with ECharts and filter awareness (partial T-052).
+  - Analytics histogram MVP with ECharts and filter awareness (partial T-052). Analytics CSV export added (T-070 partial).
+  - Run discovery coverage tooltip and polished empty-state (T-011 update).
+  - Debounced worker aggregation for filters (T-040 update).
   - Tooling solidified: ESLint/Prettier/Vitest configured; minimal unit tests added (T-002/T-120 partial).
 - Added:
-  - Overview “sort by threshold gap” toggle (T-050).
+  - Overview “sort by threshold gap” toggle with active sorting (T-050).
   - Dev autoload sample JSON via /@fs for quicker verification.
 - Next:
-  - Complete T-011 DoD (full metrics list/tooltips, polished empty-state).
+  - Optional polish for T-011: inline full metrics list beyond tooltip.
   - Filters perf: debounce slider input and worker batching for 20k+ (T-040).
   - QA Table: selectable columns and persistent bookmarks across sessions (T-051/T-070).
   - Analytics: box plot and scatter with brush to filter (T-052).
-  - Export: Analytics export, Overview XLSX, PDF/PNG snapshot later (T-070).
+  - Export: Analytics XLSX, PDF/PNG snapshot later (T-070).
   - Expand unit/integration/E2E tests (RTL/Playwright) (T-120).
 
 Note: All code comments must be in English.

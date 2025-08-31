@@ -18,6 +18,7 @@ export const RunDirectoryPicker: React.FC = () => {
   const [error, setError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [scanning, setScanning] = React.useState(false)
+  const [scannedOnce, setScannedOnce] = React.useState(false)
 
   const onPickDir = async () => {
     setError('')
@@ -46,7 +47,8 @@ export const RunDirectoryPicker: React.FC = () => {
           }
         }
       }
-      setRuns(Object.values(found))
+  setRuns(Object.values(found))
+  setScannedOnce(true)
   // Fast scan each detected summary JSON to estimate counts and coverage
   setScanning(true)
   // Dynamic import of the web worker for fast scan; cast to any to accommodate ?worker suffix without extra types
@@ -126,10 +128,18 @@ export const RunDirectoryPicker: React.FC = () => {
                   </span>
                 )}
                 {r.metricsCoverage && (
-                  <span style={{ opacity: 0.8 }}>
+                  <span
+                    style={{ opacity: 0.8 }}
+                    title={
+                      Object.entries(r.metricsCoverage)
+                        .sort((a, b) => a[0].localeCompare(b[0]))
+                        .map(([k, v]) => `${k}: ${Math.round((v as number) * 100)}%`)
+                        .join('\n') || undefined
+                    }
+                  >
                     · coverage: {Object.entries(r.metricsCoverage)
                       .slice(0, 3)
-                      .map(([k, v]) => `${k}:${Math.round(v * 100)}%`)
+                      .map(([k, v]) => `${k}:${Math.round((v as number) * 100)}%`)
                       .join(', ')}{Object.keys(r.metricsCoverage).length > 3 ? '…' : ''}
                   </span>
                 )}
@@ -137,6 +147,11 @@ export const RunDirectoryPicker: React.FC = () => {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {!busy && scannedOnce && runs.length === 0 && (
+        <div style={{ marginTop: 8, opacity: 0.85 }}>
+          沒有找到相容的檔案（需要 ragas_enhanced_evaluation_results_*.json 或 portal summary）。
         </div>
       )}
     </div>

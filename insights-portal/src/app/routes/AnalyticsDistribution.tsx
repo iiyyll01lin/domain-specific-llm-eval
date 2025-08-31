@@ -2,17 +2,19 @@ import React from 'react'
 import * as echarts from 'echarts'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
+import { exportTableToCSV } from '@/core/exporter'
 
 export const AnalyticsDistribution: React.FC = () => {
   const run = usePortalStore((s) => s.run)
   const ref = React.useRef<HTMLDivElement | null>(null)
   const [metric, setMetric] = React.useState('Faithfulness')
 
+  // Recompute and draw chart when inputs change
   React.useEffect(() => {
     if (!ref.current) return
     const chart = echarts.init(ref.current)
-  const filtered = applyFilters(run?.items || [], usePortalStore.getState().filters)
-  const vals = filtered.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+    const filtered = applyFilters(run?.items || [], usePortalStore.getState().filters)
+    const vals = filtered.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
     const bins = 20
     const hist = new Array(bins).fill(0)
     for (const v of vals) {
@@ -29,7 +31,13 @@ export const AnalyticsDistribution: React.FC = () => {
     const onResize = () => chart.resize()
     window.addEventListener('resize', onResize)
     return () => { window.removeEventListener('resize', onResize); chart.dispose() }
-  }, [run, metric])
+  }, [run, metric, usePortalStore.getState().filters])
+
+  const onExportCsv = () => {
+    const filtered = applyFilters(run?.items || [], usePortalStore.getState().filters)
+    const rows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
+    exportTableToCSV(`analytics_hist_${metric}.csv`, rows, { timestamp: new Date().toISOString() })
+  }
 
   return (
     <section>
@@ -43,8 +51,9 @@ export const AnalyticsDistribution: React.FC = () => {
             ))}
           </select>
         </label>
+        <button onClick={onExportCsv} aria-label="export-analytics-csv">Export CSV</button>
       </div>
-      <div ref={ref} style={{ height: 320, marginTop: 12 }} />
+      <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
     </section>
   )
 }

@@ -9,7 +9,7 @@ import { getMetricMeta } from '@/core/metrics/registry'
 import { FiltersBar } from '@/components/FiltersBar';
 import type { FiltersState as UIFilters } from '@/components/filters/chips';
 import { usePortalStore as useStore } from '@/app/store/usePortalStore'
-import { exportTableToCSV } from '@/core/exporter'
+import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 
 export default function ExecutiveOverview() {
   const { t } = useTranslation()
@@ -28,6 +28,12 @@ export default function ExecutiveOverview() {
   }), [filtersFromStore])
 
   const [derived, setDerived] = React.useState<{ kpis: any; total: number; latencies?: any } | null>(null)
+  // Debounce filters to reduce worker churn on rapid slider input
+  const [debouncedFilters, setDebouncedFilters] = React.useState(filters)
+  React.useEffect(() => {
+    const h = setTimeout(() => setDebouncedFilters(filters), 200)
+    return () => clearTimeout(h)
+  }, [filters])
 
   React.useEffect(() => {
     if (!run?.items?.length) { setDerived(null); return }
@@ -42,14 +48,23 @@ export default function ExecutiveOverview() {
           w.terminate()
         }
       }
-      w.postMessage({ type: 'aggregate', items: run.items, filters })
+    w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters })
     })()
     return () => { canceled = true }
-  }, [run?.items, filters])
+  }, [run?.items, debouncedFilters])
 
   const exportKpis = () => {
     const data = Object.entries((derived?.kpis ?? run?.kpis) || {}).map(([k, v]) => ({ metric: k, value: v }))
     exportTableToCSV('overview-kpis.csv', data, {
+      runId: 'local-run',
+      filters: filters as any,
+      thresholds: thresholds as any,
+      timestamp: new Date().toISOString(),
+    })
+  }
+  const exportKpisXlsx = async () => {
+    const data = Object.entries((derived?.kpis ?? run?.kpis) || {}).map(([k, v]) => ({ metric: k, value: v }))
+    await exportTableToXLSX('overview-kpis.xlsx', data, {
       runId: 'local-run',
       filters: filters as any,
       thresholds: thresholds as any,
@@ -62,6 +77,23 @@ export default function ExecutiveOverview() {
     return Object.keys(source)
   }, [derived, run])
 
+  // Prepare KPI entries with optional sort by threshold gap
+  const kpiEntries = useMemo(() => {
+    const source = (derived?.kpis ?? run?.kpis) as Record<string, number> | undefined
+    if (!source) return [] as Array<[string, number]>
+    const entries = Object.entries(source)
+    if (!sortByGap) return entries
+    const gapOf = (k: string, v: number) => {
+      const th = (thresholds as any)[k]
+      if (!th) return Number.POSITIVE_INFINITY
+      // Negative for below thresholds to bubble up; smaller is worse
+      if (v < th.critical) return -(th.critical - v)
+      if (v < th.warning) return -(th.warning - v) + 1 // keep below-warning after below-critical
+      return (v - th.warning) + 2 // above warning goes to the end
+    }
+    return entries.slice().sort((a, b) => gapOf(a[0], a[1]) - gapOf(b[0], b[1]))
+  }, [derived?.kpis, run?.kpis, sortByGap, thresholds])
+
   // entries replaced by derived aggregation flow
 
   return (
@@ -69,14 +101,29 @@ export default function ExecutiveOverview() {
     <h2>{t('nav.executive')}</h2>
       <RunLoader />
   <RunDirectoryPicker />
-      <div style={{ marginTop: 8 }}>
+      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
         <button onClick={exportKpis}>Export KPIs (CSV)</button>
+        <button onClick={exportKpisXlsx}>Export KPIs (XLSX)</button>
       </div>
       <section style={{ marginBottom: 16 }}>
         <FiltersBar
           metrics={availableMetricKeys}
           filters={filters}
-          onChange={(next: UIFilters) => setFiltersInStore(next)}
+          onChange={(next: UIFilters) => {
+            // Map UI filters shape into store shape
+            const metricRanges: Record<string, [number | null, number | null]> = {}
+            for (const [k, r] of Object.entries(next.metrics || {})) {
+              metricRanges[k] = [r.min ?? null, r.max ?? null]
+            }
+            const latencyRange: [number | null, number | null] | undefined = next.latencyMs
+              ? [next.latencyMs.min ?? null, next.latencyMs.max ?? null]
+              : undefined
+            setFiltersInStore({
+              language: (next.language as any) ?? null,
+              ...(latencyRange ? { latencyRange } : {}),
+              metricRanges,
+            } as any)
+          }}
           locale={locale}
         />
       </section>
@@ -108,9 +155,9 @@ export default function ExecutiveOverview() {
             )}
           </div>
           {/* Use derived kpis when filtered */}
-          {Object.entries((derived?.kpis ?? run.kpis) as Record<string, number>).map((pair) => {
-            const k = Array.isArray(pair) ? pair[0] : String(pair)
-            const v = Array.isArray(pair) ? pair[1] : NaN
+          {kpiEntries.map((pair) => {
+            const k = pair[0]
+            const v = pair[1]
             return (
               <div key={k} style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>
                 <div style={{ fontWeight: 600 }} title={getMetricMeta(k).helpKey ? t(getMetricMeta(k).helpKey as any) : ''}>
