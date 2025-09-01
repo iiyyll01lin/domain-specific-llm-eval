@@ -32,3 +32,15 @@ export function startServer(port = 8787) {
   srv.listen(port)
   return srv
 }
+
+// Auto-start when executed directly (not when imported by tests)
+try {
+  if (typeof process !== 'undefined' && Array.isArray(process.argv) && process.argv[1] && process.argv[1].endsWith('pdf-service.js')) {
+    const port = process.env.PORT ? Number(process.env.PORT) : 8787
+    startServer(port)
+    // eslint-disable-next-line no-console
+    console.log(`[pdf-service] listening on :${port}`)
+  }
+} catch {
+  // ignore
+}

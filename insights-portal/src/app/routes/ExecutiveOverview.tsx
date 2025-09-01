@@ -66,7 +66,6 @@ export default function ExecutiveOverview() {
 
   const runBenchmarks = React.useCallback(async () => {
     if (!run?.items?.length) return
-    // Build synthetic pools by reusing current items (repeat if shorter than target)
     const base = run.items
     const makeSize = (n: number) => {
       if (base.length >= n) return base.slice(0, n)
@@ -77,24 +76,27 @@ export default function ExecutiveOverview() {
       }
       return arr
     }
-    const targets = [5000, 20000, 100000]
-    const samplePcts: Array<number | null> = [null, 0.25, 0.1]
+    const sizes = [5000, 20000, 100000]
+    const coalesces = [0, 50, coalesceMs]
+    const samples: Array<number | null> = [null, 0.25]
     const results: typeof bench = []
-    for (let i = 0; i < targets.length; i++) {
-      const size = targets[i]
+    for (const size of sizes) {
       const items = makeSize(size)
-      const pct = samplePcts[i]
-      const WM = (await import('@/workers/parser.worker.ts?worker')).default as unknown as { new(): Worker }
-      const w = new WM()
-      w.postMessage({ type: 'config', coalesceMs })
-      const res = await new Promise<any>((resolve) => {
-        w.onmessage = (ev: MessageEvent<any>) => {
-          if (ev.data?.type === 'aggregated') { resolve(ev.data); w.terminate() }
+      for (const c of coalesces) {
+        for (const pct of samples) {
+          const WM = (await import('@/workers/parser.worker.ts?worker')).default as unknown as { new(): Worker }
+          const w = new WM()
+          w.postMessage({ type: 'config', coalesceMs: c })
+          const res = await new Promise<any>((resolve) => {
+            w.onmessage = (ev: MessageEvent<any>) => {
+              if (ev.data?.type === 'aggregated') { resolve(ev.data); w.terminate() }
+            }
+            w.postMessage({ type: 'aggregate', items, filters: debouncedFilters, sample: pct == null ? undefined : { pct, method: 'random' as const } })
+          })
+          const t = res?.timings || { filterMs: 0, sampleMs: 0, aggregateMs: 0 }
+          results.push({ size, samplePct: pct, coalesceMs: c, filterMs: t.filterMs, sampleMs: t.sampleMs, aggregateMs: t.aggregateMs })
         }
-      w.postMessage({ type: 'aggregate', items, filters: debouncedFilters, sample: pct == null ? undefined : { pct, method: 'random' as const } })
-      })
-      const t = res?.timings || { filterMs: 0, sampleMs: 0, aggregateMs: 0 }
-      results.push({ size, samplePct: pct, coalesceMs, filterMs: t.filterMs, sampleMs: t.sampleMs, aggregateMs: t.aggregateMs })
+      }
     }
     setBench(results)
   }, [run?.items, debouncedFilters, coalesceMs])

@@ -12,7 +12,7 @@ export const AnalyticsDistribution: React.FC = () => {
   const [mode, setMode] = React.useState<'hist'|'box'|'scatter'>('hist')
   const [scatterY, setScatterY] = React.useState('AnswerRelevancy')
   const thresholds = usePortalStore((s) => s.thresholds)
-  const [cohort, setCohort] = React.useState<'language'|'success'>('language')
+  const [cohort, setCohort] = React.useState<'language'|'success'|'failingMetric'>('language')
 
   // Recompute and draw chart when inputs change
   const stableFilters = usePortalStore((s) => s.filters)
@@ -36,7 +36,7 @@ export const AnalyticsDistribution: React.FC = () => {
         tooltip: { trigger: 'axis' },
       })
     } else if (mode === 'box') {
-      // Group by language cohort when available; otherwise single series
+      // Group by cohort when available; otherwise single series
       const items = filtered
       const groups: Record<string, number[]> = {}
       if (items.length) {
@@ -52,6 +52,20 @@ export const AnalyticsDistribution: React.FC = () => {
               return th ? (typeof vv === 'number' ? vv >= th.warning : false) : true
             })
             key = ok ? 'success' : 'failure'
+          } else if (cohort === 'failingMetric') {
+            // Place the same item into one or more failing metric buckets based on current thresholds
+            let placed = false
+            for (const [mk, vv] of Object.entries((it.metrics as any) || {})) {
+              const th = (thresholds as any)?.[mk]
+              if (th && typeof vv === 'number' && vv < th.warning) {
+                (groups[mk] = groups[mk] || []).push(v)
+                placed = true
+              }
+            }
+            if (!placed) {
+              (groups['none'] = groups['none'] || []).push(v)
+            }
+            continue
           }
           ;(groups[key] = groups[key] || []).push(v)
         }
@@ -180,12 +194,13 @@ export const AnalyticsDistribution: React.FC = () => {
             <option value="scatter">Scatter</option>
           </select>
         </label>
-        {mode === 'box' && (
+    {mode === 'box' && (
           <label>
             Cohort
             <select value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
               <option value="language">Language</option>
               <option value="success">Success/Failure</option>
+      <option value="failingMetric">Failing Metric</option>
             </select>
           </label>
         )}
