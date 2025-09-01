@@ -5,6 +5,16 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    exclude: [
+  // Vitest defaults + project-specific
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/.{idea,git,cache,output,temp}/**',
+      'tests/e2e/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
   },
   resolve: {
     alias: {

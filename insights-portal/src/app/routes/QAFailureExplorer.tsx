@@ -5,6 +5,7 @@ import { getMetricMeta } from '@/core/metrics/registry'
 import { buildRowsWithBookmarks, exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import { buildFilterChips } from '@/components/filters/chips'
 import { loadBookmarks, saveBookmarks, loadVisibleCols, saveVisibleCols, loadVisibleMetrics, saveVisibleMetrics } from '@/core/qa/prefs'
+import { TID } from '@/testing/testids'
 
 export default function QAFailureExplorer() {
   const { run, filters } = usePortalStore((s) => ({ run: s.run, filters: s.filters }))
@@ -92,6 +93,7 @@ export default function QAFailureExplorer() {
           onChange={(e) => setQuery(e.target.value)}
           style={{ minWidth: 240 }}
           aria-label="qa-search-input"
+          data-testid={TID.qa.search}
         />
         {/* Visible columns toggles */}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -128,13 +130,14 @@ export default function QAFailureExplorer() {
         ref={containerRef}
         onScroll={onScroll}
         style={{ position: 'relative', height: viewportHeight, overflow: 'auto', border: '1px solid var(--border-color, #333)' }}
+        data-testid={TID.qa.table}
       >
         <div style={{ height: filteredItems.length * rowHeight, position: 'relative' }}>
           {filteredItems.slice(start, end).map((it, i) => {
             const top = (start + i) * rowHeight
             const isMarked = bookmarks.has(it.id)
             return (
-              <div key={it.id} style={{ position: 'absolute', top, left: 0, right: 0, height: rowHeight, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 8 }}>
+              <div key={it.id} style={{ position: 'absolute', top, left: 0, right: 0, height: rowHeight, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 8 }} data-testid={TID.qa.row(start + i)}>
                 <button
                   onClick={() => toggleBookmark(it.id)}
                   aria-label="toggle-bookmark"
@@ -142,7 +145,7 @@ export default function QAFailureExplorer() {
                 >
                   {isMarked ? '★' : '☆'}
                 </button>
-                <button onClick={() => setDetailsId(it.id)} aria-label="open-details">Details</button>
+                <button onClick={() => setDetailsId(it.id)} aria-label="open-details" data-testid={TID.qa.detailsBtn(it.id)}>Details</button>
                 {/* Dynamic columns */}
                 {visibleCols.question && (
                   <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -172,10 +175,10 @@ export default function QAFailureExplorer() {
       </div>
       {/* Row details drawer */}
       {detailsId && (
-        <div role="dialog" aria-label="row-details" style={{ position: 'fixed', top: 0, right: 0, width: '40%', minWidth: 360, bottom: 0, background: 'var(--bg, #111)', color: 'var(--fg, #ddd)', borderLeft: '1px solid var(--border, #333)', padding: 12, overflow: 'auto' }}>
+        <div role="dialog" aria-label="row-details" data-testid={TID.qa.detailsDrawer} style={{ position: 'fixed', top: 0, right: 0, width: '40%', minWidth: 360, bottom: 0, background: 'var(--bg, #111)', color: 'var(--fg, #ddd)', borderLeft: '1px solid var(--border, #333)', padding: 12, overflow: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>Row details</strong>
-            <button onClick={() => setDetailsId(null)} aria-label="close-details">×</button>
+            <button onClick={() => setDetailsId(null)} aria-label="close-details" data-testid={TID.qa.detailsClose}>×</button>
           </div>
           {(() => {
             const it = filteredItems.find((x) => x.id === detailsId)

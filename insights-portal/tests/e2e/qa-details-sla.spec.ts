@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test'
+import pw from '@playwright/test'
+const { test, expect } = pw
 
 const enabled = process.env.PW_E2E_ENABLED === '1'
 

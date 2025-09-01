@@ -1,4 +1,5 @@
 import React from 'react'
+import { saveBaseline, compareWithBaseline } from '@/utils/perfBaseline'
 
 export type TimingSample = {
   at: number
@@ -58,6 +59,17 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
     URL.revokeObjectURL(a.href)
   }
 
+  const onSaveBaseline = () => {
+    const totalsNow = bench.map((r, i) => ({ name: `r${i}-${r.size}-${r.samplePct ?? 'full'}-${r.coalesceMs}`, value: r.filterMs + r.sampleMs + r.aggregateMs }))
+    saveBaseline(totalsNow)
+  }
+  const onCompareBaseline = () => {
+    const totalsNow = bench.map((r, i) => ({ name: `r${i}-${r.size}-${r.samplePct ?? 'full'}-${r.coalesceMs}`, value: r.filterMs + r.sampleMs + r.aggregateMs }))
+    const res = compareWithBaseline(totalsNow, 0.1)
+    // eslint-disable-next-line no-alert
+    alert(res.ok ? 'Baseline OK' : `Regressions: ${res.regressions.map((x) => x.name).join(', ')}`)
+  }
+
   return (
     <details style={{ marginTop: 8 }}>
       <summary>Dev: Worker timings</summary>
@@ -91,6 +103,12 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
           {bench.length > 0 && (
             <button onClick={exportBenchCsv} style={{ padding: '4px 8px', marginLeft: 8 }}>Export Benchmarks CSV</button>
           )}
+          {bench.length > 0 && (
+            <>
+              <button onClick={onSaveBaseline} style={{ padding: '4px 8px', marginLeft: 8 }}>Save Baseline</button>
+              <button onClick={onCompareBaseline} style={{ padding: '4px 8px', marginLeft: 8 }}>Compare Baseline</button>
+            </>
+          )}
         </div>
         {bench.length > 0 && (
           <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -120,6 +138,12 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
                 </div>
               )
             })}
+          </div>
+        )}
+        {/* Simple matrix placeholder for combinations visualization */}
+        {bench.length > 0 && (
+          <div aria-label="bench-matrix" style={{ marginTop: 8, fontSize: 12 }}>
+            Matrix: size × sample × coalesce (placeholder)
           </div>
         )}
       </div>

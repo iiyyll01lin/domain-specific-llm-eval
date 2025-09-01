@@ -16,6 +16,12 @@ export default defineConfig({
     headless: true,
     actionTimeout: 10_000,
   },
+  webServer: {
+    command: 'npm run dev',
+    url: baseURL,
+    reuseExistingServer: true,
+    timeout: 120_000,
+  },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],

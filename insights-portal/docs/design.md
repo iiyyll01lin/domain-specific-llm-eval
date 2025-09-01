@@ -89,7 +89,7 @@ sequenceDiagram
   UI->>FS: Read eval-pipeline/outputs/** structure
   FS-->>UI: File list (JSON/CSV/config.yaml)
   UI->>W: Send file paths in batches
-  W-->>UI: Progress updates; normalized data
+  W-->>UI: Progress updates & normalized data
   UI->>S: Write runs, items, metrics, artifacts
   UI->>V: Apply thresholds (profiles/UI settings)
   V-->>UI: Verdict (Ready/At Risk/Blocked) + triggered rule

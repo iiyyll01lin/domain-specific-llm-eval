@@ -125,6 +125,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Tests: Added unit tests for metric range filter and chips clear behavior.
   - TODO: Performance tune for 20k+ (additional worker batching), polish labels and help texts.
   - TODO (next): Batch-run multiple coalesce×sample×size combinations and render comparison matrix (box/median lines), then export a consolidated report.
+  - Added (placeholder): Matrix area in Dev panel to visualize combinations; Save/Compare baseline utilities for quick regressions check.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
 
 ### T-050 Executive Overview
@@ -140,12 +141,13 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Quickly locate low-scoring samples; support bookmarking and export.
 - Deps/Res: T-040.
 - EARS: Story 8.
-- Status: In-Progress → Updated (virtualized + bookmarks + columns/persist) → Enhanced (prefs module + SLA test + details drawer)
+- Status: In-Progress → Updated (virtualized + bookmarks + columns/persist) → Enhanced (prefs module + SLA test + details drawer) → E2E SLA stabilized
   - Implemented: Sort by low scores, keyword search (question), row details panel; Export CSV/XLSX of current table with metadata.
   - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks; persistent bookmarks (localStorage); selectable base columns and togglable metric columns.
   - Added: Persist visible column preferences (localStorage) for base and metric columns via prefs helpers.
   - Added: Row Details drawer panel with context expansion and lightweight highlighting; for long contexts, use chunked slicing (500 characters per slice) with a "Show more" progressive loading strategy to avoid excessive DOM; the SLA utility validates first open ≤200ms (typical contexts).
-  - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader).
+  - New: Stable data-testid selectors for QA table, rows, controls, and details drawer; Playwright E2E SLA spec gated by env; long-context sample fixture under `public/samples/run_minimal/outputs/long_context_sample.json`; App supports `?sample=` param for autoload.
+  - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader). E2E SLA spec now passes locally with `PW_E2E_ENABLED=1`; Playwright is configured with `webServer` to auto-start Vite dev server and uses stable `data-testid` selectors.
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
 ### T-052 Analytics Distribution (hist/box/scatter)
@@ -157,6 +159,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
   - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR) and grouped box plots by cohort (language, success/failure, or failing metric bucket), including outliers.
   - TODO: Grouped comparison and multi-run legends in a later milestone.
+  - Added (placeholder): Legend toggle and reserved structure for multi-run datasets (UI only; data plumbing pending).
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
@@ -175,7 +178,8 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated → PDF plan scaffolded (Option B API draft)
   - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV/XLSX of source values and front-end PNG snapshot.
   - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text; added PDF manifest builder (Option B pipeline plan) to define sections/meta; created `server/pdf-service.js` scaffold exposing `/render/pdf`, returning a tiny dummy PDF (with %PDF header). Added a lightweight golden test to check the header (`server/__tests__/pdf_service.test.ts`). Added Dockerfile and simple deploy script for the PDF service scaffold.
-  - TODO: Styling templates and header/footer layout polish; wire Option B renderer（Puppeteer/Chromium）with Docker deployment; add golden fixtures/content assertions.
+  - Updated: Optional Puppeteer rendering path (dynamic import; env `PDF_RENDERER=puppeteer`) with environment-gated golden (`server/__tests__/pdf_puppeteer_golden.test.ts`); Dockerfile switched to Debian base with required system dependencies and preinstalled puppeteer for consistent rendering in container.
+  - TODO: Styling templates and header/footer layout polish; richer content assertions.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -229,7 +233,12 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - EARS: Multiple (11 perf, 8 failure explorer, 10 export).
 - Status: Planned → Partially addressed (unit + integration smoke)
   - Added: Unit tests for QA preferences, row details SLA utility, and PDF manifest builder; worker parse/aggregate integration smoke test; PDF service golden header test.
-  - Pending: Playwright E2E (QA interactions, row details ≤200ms, exports with branding/threshold metadata) and automated perf baseline scripts (integrated with the Dev panel). Playwright config and a disabled-by-default SLA E2E spec scaffolded.
+  - Pending: Playwright E2E (QA interactions, row details ≤200ms, exports with branding/threshold metadata). Added `npm run test:e2e` and `npm run test:e2e:sla` (env-gated) scripts. Dev panel now supports one-click benchmarks → Save Baseline → Compare with tolerance.
+  - Update (2025-09-01):
+    - Vitest config updated to explicitly exclude `node_modules`, `dist/build`, e2e folders, and reports to prevent third-party tests from running under Vitest.
+    - Playwright `playwright.config.ts` now uses `webServer` to launch Vite automatically; E2E is gated by `PW_E2E_ENABLED=1` and a single SLA spec passes locally.
+    - ESLint cleaned up for E2E specs (no `@ts-nocheck`; use default import style for Playwright APIs to satisfy types).
+    - Current quality gates: Unit tests PASS (17 files), E2E SLA PASS (1 spec), Lint PASS (1 warning in RunLoader about fast-refresh advisory).
   - DoD: CI shows main paths green; perf gates met or degradations explained; worker parse/aggregate integration and Playwright E2E pending.
 
 ### T-130 Docs & User Guide

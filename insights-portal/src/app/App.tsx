@@ -6,6 +6,7 @@ import { AnalyticsDistribution } from './routes/AnalyticsDistribution'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { ThemeSwitcher } from './ThemeSwitcher'
+import { TID } from '@/testing/testids'
 
 export const App: React.FC = () => {
   const { t } = useTranslation()
@@ -43,15 +44,26 @@ export const App: React.FC = () => {
 
   React.useEffect(() => {
     // In dev, auto-load a fixed JSON so reviewers don't need to pick a file.
-    // Use Vite /@fs to fetch from absolute path. No effect in production.
+    // Also allow ?sample= URL param to load from public/samples.
+    // Use Vite /@fs to fetch from absolute path for local absolute dev path.
     if (!import.meta.env.DEV) return
-    const abs = '/@fs/mnt/d/workspace/domain-specific-llm-eval/eval-pipeline/outputs/run_20250709_160725_85a5ba54/evaluations-pre/ragas_enhanced_evaluation_results_20250709_205451_fixed.json'
+    const url = new URL(window.location.href)
+    const sample = url.searchParams.get('sample') // e.g., "run_full" or "run_minimal"
+    const candidatePaths = sample
+      ? [
+          `/samples/${sample}/outputs/long_context_sample.json`,
+          `/samples/${sample}/outputs/ragas_enhanced_evaluation_results_20250827.json`,
+        ]
+      : ['/@fs/mnt/d/workspace/domain-specific-llm-eval/eval-pipeline/outputs/run_20250709_160725_85a5ba54/evaluations-pre/ragas_enhanced_evaluation_results_20250709_205451_fixed.json']
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(abs)
-        if (!res.ok) return
-        const data = await res.json()
+        let data: any | null = null
+        for (const p of candidatePaths) {
+          const res = await fetch(p)
+          if (res.ok) { data = await res.json(); break }
+        }
+        if (!data) return
         // Normalize in the same way worker does: accept array or {items}
         const arr = Array.isArray(data) ? data : (data as any)?.items ?? []
         // Reuse schema logic inside the main thread for preinstall only
@@ -72,9 +84,9 @@ export const App: React.FC = () => {
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
       <header style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <h1 style={{ marginRight: 'auto' }}>{t('appTitle')}</h1>
-        <button onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
-        <button onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
-        <button onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
+  <button data-testid={TID.nav.executive} onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
+  <button data-testid={TID.nav.qa} onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
+  <button data-testid={TID.nav.analytics} onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
         <ThemeSwitcher />
         <LangSwitcher />
       </header>

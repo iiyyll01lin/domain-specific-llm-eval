@@ -6,6 +6,8 @@ import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 
 export const AnalyticsDistribution: React.FC = () => {
   const run = usePortalStore((s) => s.run)
+  // Placeholder for multi-run datasets and legend toggles. For now, only current run is used.
+  const [showLegend, setShowLegend] = React.useState(false)
   const setFilters = usePortalStore((s) => s.setFilters)
   const ref = React.useRef<HTMLDivElement | null>(null)
   const [metric, setMetric] = React.useState('Faithfulness')
@@ -225,6 +227,9 @@ export const AnalyticsDistribution: React.FC = () => {
         <button onClick={onExportCsv} aria-label="export-analytics-csv">Export CSV</button>
         <button onClick={onExportXlsx} aria-label="export-analytics-xlsx">Export XLSX</button>
         <button onClick={onExportPng} aria-label="export-analytics-png">Export PNG</button>
+        <label style={{ marginLeft: 8 }}>
+          <input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} /> Legend
+        </label>
       </div>
       <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
     </section>
