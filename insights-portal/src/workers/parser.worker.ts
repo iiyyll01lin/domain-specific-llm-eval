@@ -93,6 +93,10 @@ async function parseCsvFile(file: File): Promise<EvaluationItem[]> {
   return items
 }
 
+// Simple coalescing for aggregate messages: keep last and process with a short micro-batch delay.
+let pendingAggregate: { items: EvaluationItem[]; filters: any } | null = null
+let aggregateTimer: number | undefined
+
 self.onmessage = async (ev: MessageEvent<InMsg>) => {
   const msg = ev.data
   try {
@@ -135,10 +139,18 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
       }
       postMessage({ type: 'scan', total: arr.length, metricsCoverage: coverage })
     } else if (msg.type === 'aggregate') {
-      const filtered = applyFilters(msg.items, msg.filters || {})
-      const kpis = aggregateKpisFiltered(filtered)
-      const lat = computeLatencyStats(filtered)
-      postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat })
+      pendingAggregate = { items: msg.items, filters: msg.filters || {} }
+      if (aggregateTimer) clearTimeout(aggregateTimer)
+      // 100ms window to coalesce rapid calls
+      aggregateTimer = setTimeout(() => {
+        if (!pendingAggregate) return
+        const { items, filters } = pendingAggregate
+        pendingAggregate = null
+        const filtered = applyFilters(items, filters)
+        const kpis = aggregateKpisFiltered(filtered)
+        const lat = computeLatencyStats(filtered)
+        postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat })
+      }, 100) as unknown as number
     }
   } catch (e: any) {
     postMessage({ type: 'error', message: e?.message ?? String(e) })

@@ -37,7 +37,18 @@ export default function QAFailureExplorer() {
   const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 5)
   const end = Math.min(filteredItems.length, start + Math.ceil(viewportHeight / rowHeight) + 10)
 
-  const [bookmarks, setBookmarks] = React.useState<Set<string>>(new Set())
+  // Persistent bookmarks
+  const [bookmarks, setBookmarks] = React.useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('portal.qa.bookmarks')
+      if (!raw) return new Set()
+      const arr: string[] = JSON.parse(raw)
+      return new Set(arr)
+    } catch { return new Set() }
+  })
+  React.useEffect(() => {
+  try { localStorage.setItem('portal.qa.bookmarks', JSON.stringify(Array.from(bookmarks))) } catch (e) { /* ignore persistence errors */ }
+  }, [bookmarks])
   const toggleBookmark = (id: string) => {
     setBookmarks((prev) => {
       const next = new Set(prev)
@@ -47,8 +58,22 @@ export default function QAFailureExplorer() {
     })
   }
 
+  // Selectable columns
+  const baseCols = ['question', 'answer', 'reference'] as const
+  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>({
+    question: true, answer: false, reference: false,
+  })
+  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>({})
+  React.useEffect(() => {
+    // Initialize metric visibility when keys change
+    const next: Record<string, boolean> = {}
+    metricKeys.forEach((k) => { next[k] = !!visibleMetrics[k] })
+    setVisibleMetrics((prev) => ({ ...next, ...prev }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricKeys.join(',')])
+
   const exportVisible = () => {
-    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
+  const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
     exportTableToCSV('qa_view.csv', rows, { timestamp: new Date().toISOString() })
   }
 
@@ -75,6 +100,26 @@ export default function QAFailureExplorer() {
           style={{ minWidth: 240 }}
           aria-label="qa-search-input"
         />
+        {/* Visible columns toggles */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {baseCols.map((c) => (
+            <label key={c} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+              <input type="checkbox" checked={!!visibleCols[c]} onChange={(e) => setVisibleCols((v) => ({ ...v, [c]: e.target.checked }))} />
+              {c}
+            </label>
+          ))}
+          <details>
+            <summary>Metrics</summary>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', maxWidth: 560 }}>
+              {metricKeys.map((m) => (
+                <label key={m} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                  <input type="checkbox" checked={!!visibleMetrics[m]} onChange={(e) => setVisibleMetrics((v) => ({ ...v, [m]: e.target.checked }))} />
+                  {m}
+                </label>
+              ))}
+            </div>
+          </details>
+        </div>
         <button onClick={exportVisible}>Export CSV</button>
         <button onClick={exportVisibleXlsx}>Export XLSX</button>
       </div>
@@ -104,10 +149,28 @@ export default function QAFailureExplorer() {
                 >
                   {isMarked ? '★' : '☆'}
                 </button>
-                <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {it.user_input || it.id}
-                </div>
+                {/* Dynamic columns */}
+                {visibleCols.question && (
+                  <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {it.user_input || it.id}
+                  </div>
+                )}
+                {visibleCols.answer && (
+                  <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {it.rag_answer || ''}
+                  </div>
+                )}
+                {visibleCols.reference && (
+                  <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {it.reference || ''}
+                  </div>
+                )}
+                {/* Selected metric quick column */}
                 <div style={{ width: 120, textAlign: 'right' }}>{selectedMetric ? (it.metrics?.[selectedMetric] ?? '').toString() : ''}</div>
+                {/* Additional metric columns as toggles */}
+                {metricKeys.filter((m) => visibleMetrics[m]).map((m) => (
+                  <div key={m} style={{ width: 120, textAlign: 'right' }}>{(it.metrics?.[m] ?? '').toString()}</div>
+                ))}
               </div>
             )
           })}

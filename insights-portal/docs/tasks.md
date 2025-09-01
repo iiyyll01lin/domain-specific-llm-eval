@@ -117,8 +117,8 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - EARS: Story 5, 11 (perf).
 - Status: In-Progress → Updated → UI Complete (MVP)
   - Implemented: Global filters (language, latency range, metric ranges) in store; worker-side aggregate with filters; Executive Overview/QA/Analytics respect filters.
-  - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview.
-  - Added: Debounced worker aggregation to improve responsiveness while adjusting sliders.
+  - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview; slider input debounced.
+  - Added: Debounced aggregation in Overview (~200ms) and worker-side coalescing of aggregate requests (~100ms) to reduce churn.
   - Tests: Added unit tests for metric range filter and chips clear behavior.
   - TODO: Performance tune for 20k+ (additional worker batching), polish labels and help texts.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
@@ -136,11 +136,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Quickly locate low-scoring samples; support bookmarking and export.
 - Deps/Res: T-040.
 - EARS: Story 8.
-- Status: In-Progress → Updated (virtualized + bookmarks)
+- Status: In-Progress → Updated (virtualized + bookmarks + columns/persist)
   - Implemented: Sort by low scores, keyword search (question), row details panel; Export CSV/XLSX of current table with metadata.
-  - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks.
-  - Tests: Added unit test for bookmark flag in exported rows.
-  - TODO: Configurable visible columns and persistent bookmarks across sessions.
+  - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks; persistent bookmarks (localStorage); selectable base columns and togglable metric columns.
+  - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure.
+  - TODO: Persist visible column preferences; row details performance SLA test.
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
 ### T-052 Analytics Distribution (hist/box/scatter)
@@ -148,11 +148,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Visualize distributions and relations; interactive filters stay in sync.
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
--,  - TODO: Box plot, scatter with brush to filter, range sliders.
-- Status: In-Progress → Updated (minimal histogram + CSV export)
-  - Implemented: Histogram with ECharts, metric selector; honors global filters; CSV export of current metric values.
-  - TODO: Box plot, scatter with brush to filter, range sliders.
-  - TODO: Box plot, scatter with brush to filter, range sliders.
+- Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG)
+  - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
+  - TODO: Scatter brush multi-selection merge and better hints; Box plot outliers and grouped comparison; two-way sync with range sliders.
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
@@ -169,8 +167,8 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-050, T-051, T-052.
 - EARS: Story 10.
 - Status: In-Progress → Updated
-  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV of histogram source values.
-  - TODO: Add XLSX export from Analytics view; style templates/back-matter; PDF/PNG snapshot in later milestone.
+  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV/XLSX of source values and front-end PNG snapshot.
+  - TODO: Styling templates and header/footer; PDF snapshot later or via Option B service.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -294,19 +292,19 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Dark mode switch with default dark and persistence (T-081).
   - Filters engine with UI (language/latency/metric sliders + chips) wired in Overview/QA/Analytics (T-040 UI complete, engine ongoing perf work).
   - QA Failure Explorer: virtualized list, bookmarks with export, sort/search/details, export CSV/XLSX (T-051/T-070 expanded).
-  - Analytics histogram MVP with ECharts and filter awareness (partial T-052). Analytics CSV export added (T-070 partial).
+  - Analytics: histogram/box/scatter with brush that updates global filters; honors filters; CSV/XLSX export and PNG snapshot (T-052/T-070).
   - Run discovery coverage tooltip and polished empty-state (T-011 update).
-  - Debounced worker aggregation for filters (T-040 update).
+  - Debounced sliders in FiltersBar, debounced Overview aggregation, and worker-side coalescing of aggregate requests (T-040 update).
   - Tooling solidified: ESLint/Prettier/Vitest configured; minimal unit tests added (T-002/T-120 partial).
 - Added:
   - Overview “sort by threshold gap” toggle with active sorting (T-050).
   - Dev autoload sample JSON via /@fs for quicker verification.
 - Next:
   - Optional polish for T-011: inline full metrics list beyond tooltip.
-  - Filters perf: debounce slider input and worker batching for 20k+ (T-040).
-  - QA Table: selectable columns and persistent bookmarks across sessions (T-051/T-070).
-  - Analytics: box plot and scatter with brush to filter (T-052).
-  - Export: Analytics XLSX, PDF/PNG snapshot later (T-070).
+  - Filters perf: tune debounce values and batching for 20k+; measure worker timings (T-040).
+  - QA Table: persist visible column preferences; row details perf SLA test (T-051/T-070).
+  - Analytics: scatter multi-area brush merge, box outliers/groups, slider sync polish (T-052).
+  - Export: styling templates and PDF option (Option B) (T-070/T-140).
   - Expand unit/integration/E2E tests (RTL/Playwright) (T-120).
 
 Note: All code comments must be in English.

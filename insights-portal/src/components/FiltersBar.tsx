@@ -9,27 +9,35 @@ interface Props {
 }
 
 // Lightweight slider component to avoid extra deps.
-function RangeInput({
+function RangeInputDebounced({
   value,
   min = 0,
   max = 1,
   step = 0.01,
+  delay = 150,
   onChange,
 }: {
   value: number | undefined;
   min?: number;
   max?: number;
   step?: number;
+  delay?: number;
   onChange: (v: number | undefined) => void;
 }) {
+  const [inner, setInner] = React.useState<number | undefined>(value)
+  React.useEffect(() => { setInner(value) }, [value])
+  React.useEffect(() => {
+    const h = setTimeout(() => onChange(inner), delay)
+    return () => clearTimeout(h)
+  }, [inner, delay, onChange])
   return (
     <input
       type="range"
       min={min}
       max={max}
       step={step}
-      value={value == null ? (min + max) / 2 : value}
-      onChange={(e) => onChange(Number(e.target.value))}
+      value={inner == null ? (min + max) / 2 : inner}
+      onChange={(e) => setInner(Number(e.target.value))}
       style={{ width: 120 }}
       aria-label="metric-range-slider"
     />
@@ -117,9 +125,9 @@ export function FiltersBar({ metrics, filters, onChange, locale = 'en-US' }: Pro
           return (
             <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ minWidth: 160 }}>{m}</div>
-              <RangeInput value={range.min} onChange={(v) => updateMetricRange(m, 'min', v)} />
+              <RangeInputDebounced value={range.min} onChange={(v) => updateMetricRange(m, 'min', v)} />
               <span>–</span>
-              <RangeInput value={range.max} onChange={(v) => updateMetricRange(m, 'max', v)} />
+              <RangeInputDebounced value={range.max} onChange={(v) => updateMetricRange(m, 'max', v)} />
               <input
                 type="number"
                 placeholder="min"
