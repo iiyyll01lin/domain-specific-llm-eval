@@ -58,17 +58,28 @@ export const AnalyticsDistribution: React.FC = () => {
         toolbox: { feature: { brush: {} } },
       })
       chart.off('brushselected')
-  chart.on('brushselected', (params: any) => {
-        const brushed = params.batch?.[0]
-        if (!brushed) return
-        const rangeX = brushed.areas?.[0]?.range?.[0]
-        const rangeY = brushed.areas?.[0]?.range?.[1]
-        if (!rangeX || !rangeY) return
-        // Update global metric filter range from brush
-        const metricRanges: Record<string, [number|null, number|null]> = {}
-        metricRanges[metric] = [rangeX[0], rangeX[1]]
-        metricRanges[scatterY] = [rangeY[0], rangeY[1]]
-        setFilters({ metricRanges })
+      chart.on('brushselected', (params: any) => {
+        const batch = params.batch?.[0]
+        if (!batch) return
+        const areas = Array.isArray(batch.areas) ? batch.areas : []
+        // Merge multiple brushed areas into a single min/max per axis
+        let xMin: number | null = null, xMax: number | null = null
+        let yMin: number | null = null, yMax: number | null = null
+        for (const a of areas) {
+          const rx = a?.range?.[0]
+          const ry = a?.range?.[1]
+          if (rx) {
+            xMin = xMin == null ? rx[0] : Math.min(xMin, rx[0])
+            xMax = xMax == null ? rx[1] : Math.max(xMax, rx[1])
+          }
+          if (ry) {
+            yMin = yMin == null ? ry[0] : Math.min(yMin, ry[0])
+            yMax = yMax == null ? ry[1] : Math.max(yMax, ry[1])
+          }
+        }
+        if (xMin == null || xMax == null || yMin == null || yMax == null) return
+        // Write back to global filters (metric ranges)
+        setFilters({ metricRanges: { [metric]: [xMin, xMax], [scatterY]: [yMin, yMax] } })
       })
     }
     const onResize = () => chart.resize()

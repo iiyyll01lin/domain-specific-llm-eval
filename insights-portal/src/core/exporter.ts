@@ -8,6 +8,7 @@ export type ExportMeta = {
   filters?: Record<string, unknown>
   thresholds?: Record<string, { warning: number; critical: number }>
   timestamp?: string
+  branding?: { brand?: string; title?: string; footer?: string }
 }
 
 export function exportTableToCSV(filename: string, rows: Array<Record<string, unknown>>, meta?: ExportMeta) {
@@ -17,7 +18,13 @@ export function exportTableToCSV(filename: string, rows: Array<Record<string, un
     if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
     return s
   }
-  const lines = [cols.join(',')]
+  const lines: string[] = []
+  // Optional branded header lines as comments to keep CSV shape intact
+  if (meta?.branding?.brand || meta?.branding?.title) {
+    if (meta.branding.brand) lines.push(`# brand: ${meta.branding.brand}`)
+    if (meta.branding.title) lines.push(`# title: ${meta.branding.title}`)
+  }
+  lines.push(cols.join(','))
   for (const r of rows) lines.push(cols.map((c) => esc(r[c])).join(','))
   if (meta) {
     lines.push('')
@@ -25,6 +32,7 @@ export function exportTableToCSV(filename: string, rows: Array<Record<string, un
     lines.push(`# timestamp: ${meta.timestamp || new Date().toISOString()}`)
     if (meta.filters) lines.push(`# filters: ${JSON.stringify(meta.filters)}`)
     if (meta.thresholds) lines.push(`# thresholds: ${JSON.stringify(meta.thresholds)}`)
+    if (meta.branding?.footer) lines.push(`# footer: ${meta.branding.footer}`)
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
   triggerDownloadBlob(filename, blob)
@@ -43,6 +51,15 @@ export async function exportTableToXLSX(filename: string, rows: Array<Record<str
       { key: 'thresholds', value: JSON.stringify(meta.thresholds || {}) },
     ])
     XLSX.utils.book_append_sheet(wb, metaSheet, 'meta')
+    if (meta.branding && (meta.branding.brand || meta.branding.title || meta.branding.footer)) {
+      const brandingRows = [
+        { key: 'brand', value: meta.branding.brand || '' },
+        { key: 'title', value: meta.branding.title || '' },
+        { key: 'footer', value: meta.branding.footer || '' },
+      ]
+      const brandSheet = XLSX.utils.json_to_sheet(brandingRows)
+      XLSX.utils.book_append_sheet(wb, brandSheet, 'branding')
+    }
   }
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })

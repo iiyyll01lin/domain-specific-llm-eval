@@ -60,10 +60,26 @@ export default function QAFailureExplorer() {
 
   // Selectable columns
   const baseCols = ['question', 'answer', 'reference'] as const
-  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>({
-    question: true, answer: false, reference: false,
+  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('portal.qa.visibleCols')
+      if (raw) return JSON.parse(raw)
+    } catch {/* ignore */}
+    return { question: true, answer: false, reference: false }
   })
-  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>({})
+  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('portal.qa.visibleMetrics')
+      if (raw) return JSON.parse(raw)
+    } catch {/* ignore */}
+    return {}
+  })
+  React.useEffect(() => {
+    try { localStorage.setItem('portal.qa.visibleCols', JSON.stringify(visibleCols)) } catch {/* ignore */}
+  }, [visibleCols])
+  React.useEffect(() => {
+    try { localStorage.setItem('portal.qa.visibleMetrics', JSON.stringify(visibleMetrics)) } catch {/* ignore */}
+  }, [visibleMetrics])
   React.useEffect(() => {
     // Initialize metric visibility when keys change
     const next: Record<string, boolean> = {}

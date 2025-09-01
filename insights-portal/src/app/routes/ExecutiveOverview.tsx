@@ -41,14 +41,16 @@ export default function ExecutiveOverview() {
     ;(async () => {
       const WM = (await import('@/workers/parser.worker.ts?worker')).default as unknown as { new(): Worker }
       const w = new WM()
-      w.onmessage = (ev: MessageEvent<any>) => {
+  w.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
         if (msg.type === 'aggregated' && !canceled) {
           setDerived({ kpis: msg.kpis, total: msg.total, latencies: msg.latencies })
           w.terminate()
         }
       }
-    w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters })
+  // For very large datasets, send a sampling hint; keep full-count in 'total'
+  const sampleHint = run.items.length > 20000 ? { pct: 0.25, method: 'random' as const } : undefined
+  w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters, sample: sampleHint })
     })()
     return () => { canceled = true }
   }, [run?.items, debouncedFilters])

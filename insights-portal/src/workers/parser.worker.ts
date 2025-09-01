@@ -5,12 +5,13 @@ import { applyFilters, aggregateKpisFiltered } from '@/core/analysis/filters'
 // PapaParse is used for chunked CSV parsing inside the worker
 // Typings are optional; declare module shim is provided to avoid hard dependency on @types
 import Papa from 'papaparse'
+import { sampleItems } from '@/core/analysis/sampling'
 
 type InMsg =
   | { type: 'parse-summary-json'; file: File }
   | { type: 'parse-csv'; file: File }
   | { type: 'fast-scan'; file: File; sample?: number }
-  | { type: 'aggregate'; items: EvaluationItem[]; filters: any }
+    | { type: 'aggregate'; items: EvaluationItem[]; filters: any; sample?: { count?: number; pct?: number; method?: 'first' | 'random' } }
 
 // Note: union type for outgoing messages is intentionally omitted to avoid unused type warnings in strict lint settings.
 
@@ -142,14 +143,19 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
       pendingAggregate = { items: msg.items, filters: msg.filters || {} }
       if (aggregateTimer) clearTimeout(aggregateTimer)
       // 100ms window to coalesce rapid calls
-      aggregateTimer = setTimeout(() => {
+        aggregateTimer = setTimeout(() => {
         if (!pendingAggregate) return
-        const { items, filters } = pendingAggregate
+          const { items, filters } = pendingAggregate
+          const t0 = Date.now()
         pendingAggregate = null
-        const filtered = applyFilters(items, filters)
-        const kpis = aggregateKpisFiltered(filtered)
-        const lat = computeLatencyStats(filtered)
-        postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat })
+          const filtered = applyFilters(items, filters)
+          const t1 = Date.now()
+          const sampled = msg.sample ? sampleItems(filtered, msg.sample) : filtered
+          const t2 = Date.now()
+          const kpis = aggregateKpisFiltered(sampled)
+          const lat = computeLatencyStats(sampled)
+          const t3 = Date.now()
+          postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat, timings: { filterMs: t1 - t0, sampleMs: t2 - t1, aggregateMs: t3 - t2 } })
       }, 100) as unknown as number
     }
   } catch (e: any) {
