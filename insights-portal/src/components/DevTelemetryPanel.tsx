@@ -23,6 +23,20 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
     if (!samples.length) return 0
     return samples.reduce((s, x) => s + (x[key] as number), 0) / samples.length
   }
+  const exportBenchCsv = () => {
+    if (!bench.length) return
+    const rows = ['size,samplePct,coalesceMs,filterMs,sampleMs,aggregateMs']
+    for (const r of bench) rows.push([r.size, r.samplePct ?? '', r.coalesceMs, r.filterMs, r.sampleMs, r.aggregateMs].join(','))
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'benchmarks.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  const sparkPoints = samples.slice(-40).map((s, i) => ({ x: i, y: s.filterMs + s.sampleMs + s.aggregateMs }))
+  const sparkMax = sparkPoints.reduce((m, p) => Math.max(m, p.y), 0) || 1
+  const sparkPath = sparkPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${i * 4} ${30 - Math.round((p.y / sparkMax) * 28)}`).join(' ')
   return (
     <details style={{ marginTop: 8 }}>
       <summary>Dev: Worker timings</summary>
@@ -32,6 +46,11 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
           <span>avg filter: {avg('filterMs').toFixed(1)}ms</span>
           <span>avg sample: {avg('sampleMs').toFixed(1)}ms</span>
           <span>avg aggregate: {avg('aggregateMs').toFixed(1)}ms</span>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <svg width={sparkPoints.length * 4} height={32} aria-label="timings-trend">
+            <path d={sparkPath} stroke="#4ea1ff" fill="none" strokeWidth={1.5} />
+          </svg>
         </div>
         <div style={{ marginTop: 6 }}>
           <label>
@@ -46,6 +65,7 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
         </div>
         <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={onRunBenchmarks} disabled={!onRunBenchmarks}>Run 5k/20k/100k benchmarks</button>
+          <button onClick={exportBenchCsv} disabled={!bench.length}>Export Benchmarks CSV</button>
         </div>
         {bench.length > 0 && (
           <div style={{ marginTop: 8 }}>

@@ -150,14 +150,85 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
           const { items, filters } = pendingAggregate
           const t0 = Date.now()
         pendingAggregate = null
-          const filtered = applyFilters(items, filters)
-          const t1 = Date.now()
-          const sampled = msg.sample ? sampleItems(filtered, msg.sample) : filtered
-          const t2 = Date.now()
-          const kpis = aggregateKpisFiltered(sampled)
-          const lat = computeLatencyStats(sampled)
-          const t3 = Date.now()
-          postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat, timings: { filterMs: t1 - t0, sampleMs: t2 - t1, aggregateMs: t3 - t2 } })
+          const BIG_N = 100_000
+          const useChunked = (items?.length || 0) > BIG_N && !msg.sample
+          if (!useChunked) {
+            const filtered = applyFilters(items, filters)
+            const t1 = Date.now()
+            const sampled = msg.sample ? sampleItems(filtered, msg.sample) : filtered
+            const t2 = Date.now()
+            const kpis = aggregateKpisFiltered(sampled)
+            const lat = computeLatencyStats(sampled)
+            const t3 = Date.now()
+            postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat, timings: { filterMs: t1 - t0, sampleMs: t2 - t1, aggregateMs: t3 - t2 } })
+            return
+          }
+          // Chunked pipeline for very large datasets to avoid long single-run loops
+          const CHUNK = 10_000
+          const sums: Record<string, number> = {}
+          const counts: Record<string, number> = {}
+          const latencies: number[] = []
+          let totalFiltered = 0
+          let i = 0
+          const t1Start = Date.now()
+          const step = () => {
+            const start = i
+            const end = Math.min(items.length, i + CHUNK)
+            for (let j = start; j < end; j++) {
+              const it = items[j] as any
+              // inline filter (language, latency, metric ranges)
+              if (filters?.language) {
+                const lang = (it.language || '').toLowerCase()
+                if (lang !== String(filters.language).toLowerCase()) continue
+              }
+              if (filters?.latencyRange) {
+                const [lo, hi] = filters.latencyRange
+                const v = it.latencyMs
+                if (lo != null && (v == null || v < lo)) continue
+                if (hi != null && (v == null || v > hi)) continue
+              }
+              if (filters?.metricRanges) {
+                let ok = true
+                for (const k in filters.metricRanges) {
+                  const r = filters.metricRanges[k]
+                  const lo = r?.[0]
+                  const hi = r?.[1]
+                  const v = (it.metrics || {})[k]
+                  if (lo != null && (v == null || v < lo)) { ok = false; break }
+                  if (hi != null && (v == null || v > hi)) { ok = false; break }
+                }
+                if (!ok) continue
+              }
+              totalFiltered++
+              if (typeof it.latencyMs === 'number') latencies.push(it.latencyMs)
+              const m = it.metrics || {}
+              for (const k in m) {
+                const v = m[k]
+                if (v == null || Number.isNaN(v)) continue
+                sums[k] = (sums[k] || 0) + v
+                counts[k] = (counts[k] || 0) + 1
+              }
+            }
+            i = end
+            if (i < items.length) {
+              // Yield back to event loop in worker to remain responsive
+              setTimeout(step, 0)
+            } else {
+              // No sampling in chunked path (already optimized); compute kpis
+              const kpis: Record<string, number> = {}
+              for (const k in sums) kpis[k] = counts[k] ? sums[k] / counts[k] : NaN
+              // Compute latency stats from collected latencies
+              const latSorted = latencies.slice().sort((a, b) => a - b)
+              const pick = (p: number) => latSorted.length ? latSorted[Math.max(0, Math.min(latSorted.length - 1, Math.floor(p * (latSorted.length - 1))))] : null
+              const lat = {
+                avg: latSorted.length ? latSorted.reduce((s, x) => s + x, 0) / latSorted.length : null,
+                p50: pick(0.5), p90: pick(0.9), p99: pick(0.99)
+              }
+              const t3 = Date.now()
+              postMessage({ type: 'aggregated', kpis, total: totalFiltered, latencies: lat, timings: { filterMs: t1Start - t0, sampleMs: 0, aggregateMs: t3 - t1Start } })
+            }
+          }
+          step()
       }, coalesceMs) as unknown as number
     } else if (msg.type === 'config') {
       if (typeof msg.coalesceMs === 'number' && Number.isFinite(msg.coalesceMs) && msg.coalesceMs >= 0) {

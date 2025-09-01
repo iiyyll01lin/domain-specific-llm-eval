@@ -11,6 +11,8 @@ export const AnalyticsDistribution: React.FC = () => {
   const [metric, setMetric] = React.useState('Faithfulness')
   const [mode, setMode] = React.useState<'hist'|'box'|'scatter'>('hist')
   const [scatterY, setScatterY] = React.useState('AnswerRelevancy')
+  const thresholds = usePortalStore((s) => s.thresholds)
+  const [cohort, setCohort] = React.useState<'language'|'success'>('language')
 
   // Recompute and draw chart when inputs change
   const stableFilters = usePortalStore((s) => s.filters)
@@ -37,13 +39,21 @@ export const AnalyticsDistribution: React.FC = () => {
       // Group by language cohort when available; otherwise single series
       const items = filtered
       const groups: Record<string, number[]> = {}
-      if (items.length && items.some((it) => !!it.language)) {
+      if (items.length) {
         for (const it of items) {
-          const key = (it.language || 'N/A') as string
           const v = (it.metrics as any)?.[metric]
-          if (typeof v === 'number') {
-            (groups[key] = groups[key] || []).push(v)
+          if (typeof v !== 'number') continue
+          let key = 'N/A'
+          if (cohort === 'language') key = (it.language || 'N/A') as string
+          else if (cohort === 'success') {
+            // derive simple success flag from thresholds: success if all metrics >= warning
+            const ok = Object.entries((it.metrics as any) || {}).every(([k, vv]) => {
+              const th = (thresholds as any)?.[k]
+              return th ? (typeof vv === 'number' ? vv >= th.warning : false) : true
+            })
+            key = ok ? 'success' : 'failure'
           }
+          ;(groups[key] = groups[key] || []).push(v)
         }
       }
       const groupKeys = Object.keys(groups)
@@ -136,7 +146,7 @@ export const AnalyticsDistribution: React.FC = () => {
     const onResize = () => chart.resize()
     window.addEventListener('resize', onResize)
     return () => { window.removeEventListener('resize', onResize); chart.dispose() }
-  }, [run, metric, scatterY, mode, stableFilters, setFilters])
+  }, [run, metric, scatterY, mode, stableFilters, setFilters, cohort, thresholds])
 
   const onExportCsv = () => {
     const filtered = applyFilters(run?.items || [], stableFilters)
@@ -170,6 +180,15 @@ export const AnalyticsDistribution: React.FC = () => {
             <option value="scatter">Scatter</option>
           </select>
         </label>
+        {mode === 'box' && (
+          <label>
+            Cohort
+            <select value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
+              <option value="language">Language</option>
+              <option value="success">Success/Failure</option>
+            </select>
+          </label>
+        )}
         <label>
           Metric
           <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>

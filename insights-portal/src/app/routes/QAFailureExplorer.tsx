@@ -203,14 +203,14 @@ export default function QAFailureExplorer() {
                   <div><strong>Reference:</strong> {it.reference || ''}</div>
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Contexts</div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {contexts.slice(0, 200).map((c, idx) => (
-                      <div key={idx} style={{ padding: 8, border: '1px solid var(--border, #333)', borderRadius: 6, background: 'var(--bg-muted, #1a1a1a)' }}>
-                        <div dangerouslySetInnerHTML={{ __html: highlight(c) }} />
-                      </div>
-                    ))}
-                  </div>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Contexts</div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {contexts.map((c, idx) => (
+                        <div key={idx} style={{ padding: 8, border: '1px solid var(--border, #333)', borderRadius: 6, background: 'var(--bg-muted, #1a1a1a)' }}>
+                          <div dangerouslySetInnerHTML={{ __html: highlight(c) }} />
+                        </div>
+                      ))}
+                    </div>
                 </div>
               </div>
             )
