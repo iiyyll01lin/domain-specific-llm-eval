@@ -10,6 +10,7 @@ import { FiltersBar } from '@/components/FiltersBar';
 import type { FiltersState as UIFilters } from '@/components/filters/chips';
 import { usePortalStore as useStore } from '@/app/store/usePortalStore'
 import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
+import DevTelemetryPanel from '@/components/DevTelemetryPanel'
 
 export default function ExecutiveOverview() {
   const { t } = useTranslation()
@@ -28,6 +29,8 @@ export default function ExecutiveOverview() {
   }), [filtersFromStore])
 
   const [derived, setDerived] = React.useState<{ kpis: any; total: number; latencies?: any } | null>(null)
+  const [timings, setTimings] = React.useState<Array<{ at: number; filterMs: number; sampleMs: number; aggregateMs: number; total: number }>>([])
+  const [coalesceMs, setCoalesceMs] = React.useState<number>(100)
   // Debounce filters to reduce worker churn on rapid slider input
   const [debouncedFilters, setDebouncedFilters] = React.useState(filters)
   React.useEffect(() => {
@@ -41,10 +44,15 @@ export default function ExecutiveOverview() {
     ;(async () => {
       const WM = (await import('@/workers/parser.worker.ts?worker')).default as unknown as { new(): Worker }
       const w = new WM()
+      // push worker runtime config
+      w.postMessage({ type: 'config', coalesceMs })
   w.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
         if (msg.type === 'aggregated' && !canceled) {
           setDerived({ kpis: msg.kpis, total: msg.total, latencies: msg.latencies })
+          if (msg.timings) {
+            setTimings((arr) => arr.concat([{ at: Date.now(), filterMs: msg.timings.filterMs, sampleMs: msg.timings.sampleMs, aggregateMs: msg.timings.aggregateMs, total: msg.total }]).slice(-200))
+          }
           w.terminate()
         }
       }
@@ -53,7 +61,7 @@ export default function ExecutiveOverview() {
   w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters, sample: sampleHint })
     })()
     return () => { canceled = true }
-  }, [run?.items, debouncedFilters])
+  }, [run?.items, debouncedFilters, coalesceMs])
 
   const exportKpis = () => {
     const data = Object.entries((derived?.kpis ?? run?.kpis) || {}).map(([k, v]) => ({ metric: k, value: v }))
@@ -103,6 +111,16 @@ export default function ExecutiveOverview() {
     <h2>{t('nav.executive')}</h2>
       <RunLoader />
   <RunDirectoryPicker />
+      {/* Dev-only timing panel; hidden in production if process.env.NODE_ENV === 'production' */}
+      {import.meta.env.DEV && (
+        <div style={{ marginTop: 8 }}>
+          <DevTelemetryPanel
+            samples={timings}
+            coalesceMs={coalesceMs}
+            onCoalesceChange={setCoalesceMs}
+          />
+        </div>
+      )}
       <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
         <button onClick={exportKpis}>Export KPIs (CSV)</button>
         <button onClick={exportKpisXlsx}>Export KPIs (XLSX)</button>

@@ -66,6 +66,24 @@ export async function exportTableToXLSX(filename: string, rows: Array<Record<str
   triggerDownloadBlob(filename, blob)
 }
 
+// PDF Option B (server or external worker) manifest builder.
+// This does not perform network or rendering; it only builds a document manifest
+// that a caller can send to a server-side renderer (e.g., headless Chrome service).
+export interface PdfSection {
+  title: string
+  type: 'table' | 'image' | 'text'
+  payload: any
+}
+
+export interface PdfManifest {
+  meta?: ExportMeta
+  sections: PdfSection[]
+}
+
+export function buildPdfManifest(sections: PdfSection[], meta?: ExportMeta): PdfManifest {
+  return { meta, sections }
+}
+
 export function buildRowsFromItems(items: EvaluationItem[], visibleCols: string[]): Array<Record<string, unknown>> {
   return items.map((it) => {
     const r: Record<string, unknown> = {}

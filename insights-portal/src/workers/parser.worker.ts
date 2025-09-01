@@ -12,6 +12,7 @@ type InMsg =
   | { type: 'parse-csv'; file: File }
   | { type: 'fast-scan'; file: File; sample?: number }
     | { type: 'aggregate'; items: EvaluationItem[]; filters: any; sample?: { count?: number; pct?: number; method?: 'first' | 'random' } }
+  | { type: 'config'; coalesceMs?: number }
 
 // Note: union type for outgoing messages is intentionally omitted to avoid unused type warnings in strict lint settings.
 
@@ -97,6 +98,7 @@ async function parseCsvFile(file: File): Promise<EvaluationItem[]> {
 // Simple coalescing for aggregate messages: keep last and process with a short micro-batch delay.
 let pendingAggregate: { items: EvaluationItem[]; filters: any } | null = null
 let aggregateTimer: number | undefined
+let coalesceMs = 100 // default window in ms; can be updated via 'config' message
 
 self.onmessage = async (ev: MessageEvent<InMsg>) => {
   const msg = ev.data
@@ -142,7 +144,7 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
     } else if (msg.type === 'aggregate') {
       pendingAggregate = { items: msg.items, filters: msg.filters || {} }
       if (aggregateTimer) clearTimeout(aggregateTimer)
-      // 100ms window to coalesce rapid calls
+      // Coalesce rapid calls within the configured window
         aggregateTimer = setTimeout(() => {
         if (!pendingAggregate) return
           const { items, filters } = pendingAggregate
@@ -156,7 +158,11 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
           const lat = computeLatencyStats(sampled)
           const t3 = Date.now()
           postMessage({ type: 'aggregated', kpis, total: filtered.length, latencies: lat, timings: { filterMs: t1 - t0, sampleMs: t2 - t1, aggregateMs: t3 - t2 } })
-      }, 100) as unknown as number
+      }, coalesceMs) as unknown as number
+    } else if (msg.type === 'config') {
+      if (typeof msg.coalesceMs === 'number' && Number.isFinite(msg.coalesceMs) && msg.coalesceMs >= 0) {
+        coalesceMs = msg.coalesceMs
+      }
     }
   } catch (e: any) {
     postMessage({ type: 'error', message: e?.message ?? String(e) })

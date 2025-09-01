@@ -4,6 +4,7 @@ import { applyFilters } from '@/core/analysis/filters'
 import { getMetricMeta } from '@/core/metrics/registry'
 import { buildRowsWithBookmarks, exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import { buildFilterChips } from '@/components/filters/chips'
+import { loadBookmarks, saveBookmarks, loadVisibleCols, saveVisibleCols, loadVisibleMetrics, saveVisibleMetrics } from '@/core/qa/prefs'
 
 export default function QAFailureExplorer() {
   const { run, filters } = usePortalStore((s) => ({ run: s.run, filters: s.filters }))
@@ -38,17 +39,8 @@ export default function QAFailureExplorer() {
   const end = Math.min(filteredItems.length, start + Math.ceil(viewportHeight / rowHeight) + 10)
 
   // Persistent bookmarks
-  const [bookmarks, setBookmarks] = React.useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem('portal.qa.bookmarks')
-      if (!raw) return new Set()
-      const arr: string[] = JSON.parse(raw)
-      return new Set(arr)
-    } catch { return new Set() }
-  })
-  React.useEffect(() => {
-  try { localStorage.setItem('portal.qa.bookmarks', JSON.stringify(Array.from(bookmarks))) } catch (e) { /* ignore persistence errors */ }
-  }, [bookmarks])
+  const [bookmarks, setBookmarks] = React.useState<Set<string>>(() => loadBookmarks())
+  React.useEffect(() => { saveBookmarks(bookmarks) }, [bookmarks])
   const toggleBookmark = (id: string) => {
     setBookmarks((prev) => {
       const next = new Set(prev)
@@ -60,26 +52,10 @@ export default function QAFailureExplorer() {
 
   // Selectable columns
   const baseCols = ['question', 'answer', 'reference'] as const
-  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>(() => {
-    try {
-      const raw = localStorage.getItem('portal.qa.visibleCols')
-      if (raw) return JSON.parse(raw)
-    } catch {/* ignore */}
-    return { question: true, answer: false, reference: false }
-  })
-  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>(() => {
-    try {
-      const raw = localStorage.getItem('portal.qa.visibleMetrics')
-      if (raw) return JSON.parse(raw)
-    } catch {/* ignore */}
-    return {}
-  })
-  React.useEffect(() => {
-    try { localStorage.setItem('portal.qa.visibleCols', JSON.stringify(visibleCols)) } catch {/* ignore */}
-  }, [visibleCols])
-  React.useEffect(() => {
-    try { localStorage.setItem('portal.qa.visibleMetrics', JSON.stringify(visibleMetrics)) } catch {/* ignore */}
-  }, [visibleMetrics])
+  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>(() => loadVisibleCols())
+  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>(() => loadVisibleMetrics())
+  React.useEffect(() => { saveVisibleCols(visibleCols) }, [visibleCols])
+  React.useEffect(() => { saveVisibleMetrics(visibleMetrics) }, [visibleMetrics])
   React.useEffect(() => {
     // Initialize metric visibility when keys change
     const next: Record<string, boolean> = {}
