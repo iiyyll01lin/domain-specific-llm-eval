@@ -8,13 +8,17 @@ export type TimingSample = {
   total: number
 }
 
+export type BenchResult = { size: number; samplePct: number | null; coalesceMs: number; filterMs: number; sampleMs: number; aggregateMs: number }
+
 interface Props {
   samples: TimingSample[]
   coalesceMs: number
   onCoalesceChange: (ms: number) => void
+  bench?: BenchResult[]
+  onRunBenchmarks?: () => void
 }
 
-export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoalesceChange }) => {
+export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoalesceChange, bench = [], onRunBenchmarks }) => {
   const avg = (key: keyof TimingSample) => {
     if (!samples.length) return 0
     return samples.reduce((s, x) => s + (x[key] as number), 0) / samples.length
@@ -40,6 +44,38 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
             />
           </label>
         </div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={onRunBenchmarks} disabled={!onRunBenchmarks}>Run 5k/20k/100k benchmarks</button>
+        </div>
+        {bench.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Benchmark summary</div>
+            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th align="right">size</th>
+                  <th align="right">sample%</th>
+                  <th align="right">coalesce</th>
+                  <th align="right">filter</th>
+                  <th align="right">sample</th>
+                  <th align="right">aggregate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bench.map((r, i) => (
+                  <tr key={i}>
+                    <td align="right">{r.size.toLocaleString()}</td>
+                    <td align="right">{r.samplePct == null ? '-' : Math.round(r.samplePct * 100) + '%'}</td>
+                    <td align="right">{r.coalesceMs}ms</td>
+                    <td align="right">{r.filterMs}ms</td>
+                    <td align="right">{r.sampleMs}ms</td>
+                    <td align="right">{r.aggregateMs}ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div style={{ maxHeight: 160, overflow: 'auto', marginTop: 8, border: '1px solid var(--border)', padding: 6 }}>
           <table style={{ width: '100%', fontSize: 12 }}>
             <thead>

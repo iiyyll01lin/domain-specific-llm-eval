@@ -34,24 +34,65 @@ export const AnalyticsDistribution: React.FC = () => {
         tooltip: { trigger: 'axis' },
       })
     } else if (mode === 'box') {
-      // Simple box: compute quartiles
-      const vals = xVals.slice().sort((a, b) => a - b)
+      // Group by language cohort when available; otherwise single series
+      const items = filtered
+      const groups: Record<string, number[]> = {}
+      if (items.length && items.some((it) => !!it.language)) {
+        for (const it of items) {
+          const key = (it.language || 'N/A') as string
+          const v = (it.metrics as any)?.[metric]
+          if (typeof v === 'number') {
+            (groups[key] = groups[key] || []).push(v)
+          }
+        }
+      }
+      const groupKeys = Object.keys(groups)
+      const isGrouped = groupKeys.length > 0
+      const vals = isGrouped ? [] : xVals.slice().sort((a, b) => a - b)
       const q = (p: number) => vals.length ? vals[Math.max(0, Math.min(vals.length - 1, Math.floor(p * (vals.length - 1))))] : null
-      const min = vals[0] ?? null, q1 = q(0.25), med = q(0.5), q3 = q(0.75), max = vals[vals.length - 1] ?? null
-      // Identify outliers using 1.5*IQR rule
-      const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
-      const lowerFence = iqr != null ? (q1 as number) - 1.5 * iqr : null
-      const upperFence = iqr != null ? (q3 as number) + 1.5 * iqr : null
-      const outliers = (iqr != null) ? vals.filter((v) => v < (lowerFence as number) || v > (upperFence as number)).map((v) => [0, v]) : []
-      chart.setOption({
-        xAxis: { type: 'category', data: [metric] },
-        yAxis: { type: 'value', min: 0, max: 1 },
-        series: [
-          { type: 'boxplot', data: [[min, q1, med, q3, max]] },
-          { type: 'scatter', data: outliers, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
-        ],
-        tooltip: { trigger: 'item' },
-      })
+      if (!isGrouped) {
+        const min = vals[0] ?? null, q1 = q(0.25), med = q(0.5), q3 = q(0.75), max = vals[vals.length - 1] ?? null
+        const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
+        const lowerFence = iqr != null ? (q1 as number) - 1.5 * iqr : null
+        const upperFence = iqr != null ? (q3 as number) + 1.5 * iqr : null
+        const outliers = (iqr != null) ? (vals as number[]).filter((v) => v < (lowerFence as number) || v > (upperFence as number)).map((v) => [0, v]) : []
+        chart.setOption({
+          xAxis: { type: 'category', data: [metric] },
+          yAxis: { type: 'value', min: 0, max: 1 },
+          series: [
+            { type: 'boxplot', data: [[min, q1, med, q3, max]] },
+            { type: 'scatter', data: outliers, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
+          ],
+          tooltip: { trigger: 'item' },
+        })
+      } else {
+        const xs = groupKeys
+        const boxData: Array<[number | null, number | null, number | null, number | null, number | null]> = []
+        const outlierData: Array<[number, number]> = []
+        xs.forEach((gk, i) => {
+          const arr = (groups[gk] || []).slice().sort((a, b) => a - b)
+          const pick = (p: number) => arr.length ? arr[Math.max(0, Math.min(arr.length - 1, Math.floor(p * (arr.length - 1))))] : null
+          const min = arr[0] ?? null, q1 = pick(0.25), med = pick(0.5), q3 = pick(0.75), max = arr[arr.length - 1] ?? null
+          boxData.push([min, q1, med, q3, max])
+          const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
+          const lowerFence = iqr != null ? (q1 as number) - 1.5 * iqr : null
+          const upperFence = iqr != null ? (q3 as number) + 1.5 * iqr : null
+          if (iqr != null) {
+            for (const v of arr) {
+              if (v < (lowerFence as number) || v > (upperFence as number)) outlierData.push([i, v])
+            }
+          }
+        })
+        chart.setOption({
+          xAxis: { type: 'category', data: xs },
+          yAxis: { type: 'value', min: 0, max: 1 },
+          series: [
+            { type: 'boxplot', data: boxData },
+            { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
+          ],
+          tooltip: { trigger: 'item' },
+        })
+      }
     } else if (mode === 'scatter') {
       const yVals = filtered.map((it) => (it.metrics as any)?.[scatterY]).filter((v) => typeof v === 'number') as number[]
       const data = xVals.map((x, i) => [x, yVals[i] ?? null]).filter((p) => typeof p[1] === 'number') as Array<[number, number]>

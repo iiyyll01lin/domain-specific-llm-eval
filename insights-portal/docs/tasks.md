@@ -115,11 +115,12 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Consistent KPIs/charts/table updates; active chips and one-click clear.
 - Deps/Res: T-012, T-020.
 - EARS: Story 5, 11 (perf).
-- Status: In-Progress → Updated → UI Complete (MVP) → Enhanced (Dev timings + tunables)
+- Status: In-Progress → Updated → UI Complete (MVP) → Enhanced (Dev timings + tunables + benchmarks)
   - Implemented: Global filters (language, latency range, metric ranges) in store; worker-side aggregate with filters; Executive Overview/QA/Analytics respect filters.
   - Added: FiltersBar with metric range sliders (0–1) and active chips with per-chip clear and Clear All; chips appear in QA and Overview; slider input debounced.
   - Added: Debounced aggregation in Overview (~200ms) and worker-side coalescing of aggregate requests (~100ms, adjustable via Dev panel) to reduce churn.
   - Added: Aggregation timings (filter/sample/aggregate) emitted by worker; Overview shows a Dev timings panel and sends sampling hint (>20k rows) to balance responsiveness and accuracy.
+  - Added: DevTelemetryPanel with adjustable coalescing window and one-click benchmarks for 5k/20k/100k datasets; summaries by size × sampling% × coalesceMs; worker supports runtime `config` message to set coalesceMs.
   - Tests: Added unit tests for metric range filter and chips clear behavior.
   - TODO: Performance tune for 20k+ (additional worker batching), polish labels and help texts.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
@@ -137,10 +138,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Quickly locate low-scoring samples; support bookmarking and export.
 - Deps/Res: T-040.
 - EARS: Story 8.
-- Status: In-Progress → Updated (virtualized + bookmarks + columns/persist) → Enhanced (prefs module + SLA test)
+- Status: In-Progress → Updated (virtualized + bookmarks + columns/persist) → Enhanced (prefs module + SLA test + details drawer)
   - Implemented: Sort by low scores, keyword search (question), row details panel; Export CSV/XLSX of current table with metadata.
   - Added: Lightweight virtualized table (windowed rendering) and bookmarking (star toggle) with XLSX export of bookmarks; persistent bookmarks (localStorage); selectable base columns and togglable metric columns.
   - Added: Persist visible column preferences (localStorage) for base and metric columns via prefs helpers.
+  - Added: Row Details drawer panel with context expansion and lightweight keyword highlighting; SLA utility to keep first-open render ≤200ms on typical contexts.
   - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader).
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
@@ -149,9 +151,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Visualize distributions and relations; interactive filters stay in sync.
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
-- Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers)
+- Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers + grouped boxes)
   - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
-  - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR).
+  - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR) and grouped box plots by cohort (e.g., language) including outliers.
   - TODO: Grouped comparison and multi-run legends in a later milestone.
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
@@ -168,10 +170,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: CSV/XLSX with metadata footer (run IDs, filters, timestamp, thresholds).
 - Deps/Res: T-050, T-051, T-052.
 - EARS: Story 10.
-- Status: In-Progress → Updated → PDF plan scaffolded
+- Status: In-Progress → Updated → PDF plan scaffolded (Option B API draft)
   - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV/XLSX of source values and front-end PNG snapshot.
-  - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text; added PDF manifest builder (Option B pipeline plan) to define sections/meta.
-  - TODO: Styling templates and header/footer layout polish; connect to Option B renderer and add golden-file validation.
+  - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text; added PDF manifest builder (Option B pipeline plan) to define sections/meta; created `server/pdf-service.ts` scaffold exposing `/render/pdf` that returns a minimal PDF-like buffer.
+  - TODO: Styling templates and header/footer layout polish; wire Option B renderer (e.g., Puppeteer/Chromium) with deployment script and add golden-file validation.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -223,8 +225,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Stable green on baseline; perf targets met.
 - Deps/Res: Feature modules.
 - EARS: Multiple (11 perf, 8 failure explorer, 10 export).
-- Status: Planned → Partially addressed
-- DoD: CI shows main paths green; perf gates met or degradations explained; worker parse/aggregate integration and Playwright E2E pending.
+- Status: Planned → Partially addressed (unit + integration smoke)
+  - Added: Unit tests for QA preferences, row details SLA utility, and PDF manifest builder; worker parse/aggregate integration smoke test added.
+  - Pending: Playwright E2E (QA interactions, details ≤200ms, exports with metadata) and perf runs automation.
+  - DoD: CI shows main paths green; perf gates met or degradations explained; worker parse/aggregate integration and Playwright E2E pending.
 
 ### T-130 Docs & User Guide
 - Description: Update `README.md`, add guide (select directory, set thresholds, export); troubleshooting (permissions/bad files).

@@ -10,6 +10,7 @@ export default function QAFailureExplorer() {
   const { run, filters } = usePortalStore((s) => ({ run: s.run, filters: s.filters }))
   const items = React.useMemo(() => run?.items ?? [], [run?.items])
   const [query, setQuery] = React.useState('')
+  const [detailsId, setDetailsId] = React.useState<string | null>(null)
 
   // Derive metric keys and selected metric
   const metricKeys = React.useMemo(() => {
@@ -141,6 +142,7 @@ export default function QAFailureExplorer() {
                 >
                   {isMarked ? '★' : '☆'}
                 </button>
+                <button onClick={() => setDetailsId(it.id)} aria-label="open-details">Details</button>
                 {/* Dynamic columns */}
                 {visibleCols.question && (
                   <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -168,6 +170,53 @@ export default function QAFailureExplorer() {
           })}
         </div>
       </div>
+      {/* Row details drawer */}
+      {detailsId && (
+        <div role="dialog" aria-label="row-details" style={{ position: 'fixed', top: 0, right: 0, width: '40%', minWidth: 360, bottom: 0, background: 'var(--bg, #111)', color: 'var(--fg, #ddd)', borderLeft: '1px solid var(--border, #333)', padding: 12, overflow: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Row details</strong>
+            <button onClick={() => setDetailsId(null)} aria-label="close-details">×</button>
+          </div>
+          {(() => {
+            const it = filteredItems.find((x) => x.id === detailsId)
+            if (!it) return null
+            const contexts = (it.rag_contexts && it.rag_contexts.length ? it.rag_contexts : it.reference_contexts) || []
+            const keyText = (it.user_input || '') + ' ' + (it.reference || '')
+            const highlight = (txt: string) => {
+              // naive highlight of short words from question/reference; avoid heavy regex for perf
+              const words = keyText.split(/[\s,.;:!?]+/).filter((w) => w.length > 3).slice(0, 10)
+              let out = txt
+              for (const w of words) {
+                try {
+                  const re = new RegExp(`(${w.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'ig')
+                  out = out.replace(re, '<mark>$1</mark>')
+                } catch { /* ignore invalid */ }
+              }
+              return out
+            }
+            return (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ marginBottom: 8 }}>
+                  <div><strong>ID:</strong> {it.id}</div>
+                  <div><strong>Question:</strong> {it.user_input || ''}</div>
+                  <div><strong>Answer:</strong> {it.rag_answer || ''}</div>
+                  <div><strong>Reference:</strong> {it.reference || ''}</div>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Contexts</div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {contexts.slice(0, 200).map((c, idx) => (
+                      <div key={idx} style={{ padding: 8, border: '1px solid var(--border, #333)', borderRadius: 6, background: 'var(--bg-muted, #1a1a1a)' }}>
+                        <div dangerouslySetInnerHTML={{ __html: highlight(c) }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
     </div>
   )
 }

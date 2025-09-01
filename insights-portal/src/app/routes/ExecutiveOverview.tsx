@@ -31,6 +31,7 @@ export default function ExecutiveOverview() {
   const [derived, setDerived] = React.useState<{ kpis: any; total: number; latencies?: any } | null>(null)
   const [timings, setTimings] = React.useState<Array<{ at: number; filterMs: number; sampleMs: number; aggregateMs: number; total: number }>>([])
   const [coalesceMs, setCoalesceMs] = React.useState<number>(100)
+  const [bench, setBench] = React.useState<Array<{ size: number; samplePct: number | null; coalesceMs: number; filterMs: number; sampleMs: number; aggregateMs: number }>>([])
   // Debounce filters to reduce worker churn on rapid slider input
   const [debouncedFilters, setDebouncedFilters] = React.useState(filters)
   React.useEffect(() => {
@@ -61,6 +62,41 @@ export default function ExecutiveOverview() {
   w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters, sample: sampleHint })
     })()
     return () => { canceled = true }
+  }, [run?.items, debouncedFilters, coalesceMs])
+
+  const runBenchmarks = React.useCallback(async () => {
+    if (!run?.items?.length) return
+    // Build synthetic pools by reusing current items (repeat if shorter than target)
+    const base = run.items
+    const makeSize = (n: number) => {
+      if (base.length >= n) return base.slice(0, n)
+      const arr: typeof base = []
+      while (arr.length < n) {
+        const need = Math.min(base.length, n - arr.length)
+        arr.push(...base.slice(0, need))
+      }
+      return arr
+    }
+    const targets = [5000, 20000, 100000]
+    const samplePcts: Array<number | null> = [null, 0.25, 0.1]
+    const results: typeof bench = []
+    for (let i = 0; i < targets.length; i++) {
+      const size = targets[i]
+      const items = makeSize(size)
+      const pct = samplePcts[i]
+      const WM = (await import('@/workers/parser.worker.ts?worker')).default as unknown as { new(): Worker }
+      const w = new WM()
+      w.postMessage({ type: 'config', coalesceMs })
+      const res = await new Promise<any>((resolve) => {
+        w.onmessage = (ev: MessageEvent<any>) => {
+          if (ev.data?.type === 'aggregated') { resolve(ev.data); w.terminate() }
+        }
+      w.postMessage({ type: 'aggregate', items, filters: debouncedFilters, sample: pct == null ? undefined : { pct, method: 'random' as const } })
+      })
+      const t = res?.timings || { filterMs: 0, sampleMs: 0, aggregateMs: 0 }
+      results.push({ size, samplePct: pct, coalesceMs, filterMs: t.filterMs, sampleMs: t.sampleMs, aggregateMs: t.aggregateMs })
+    }
+    setBench(results)
   }, [run?.items, debouncedFilters, coalesceMs])
 
   const exportKpis = () => {
@@ -118,6 +154,8 @@ export default function ExecutiveOverview() {
             samples={timings}
             coalesceMs={coalesceMs}
             onCoalesceChange={setCoalesceMs}
+            bench={bench}
+            onRunBenchmarks={runBenchmarks}
           />
         </div>
       )}
