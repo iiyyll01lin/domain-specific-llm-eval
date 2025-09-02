@@ -17,6 +17,10 @@ interface PortalState {
   setTheme: (m: ThemeMode) => void
   toggleTheme: () => void
   run?: RunParsed
+  runs?: Record<string, RunParsed>
+  selectedRuns?: string[]
+  setRuns: (runs: Record<string, RunParsed>) => void
+  setSelectedRuns: (ids: string[]) => void
   setRunData: (run: RunParsed) => void
   filters: FiltersState
   setFilters: (f: Partial<FiltersState>) => void
@@ -49,6 +53,10 @@ export const usePortalStore = create<PortalState>((set) => ({
     set({ theme: next })
   },
   run: undefined,
+  runs: {},
+  selectedRuns: [],
+  setRuns: (runs) => set({ runs }),
+  setSelectedRuns: (ids) => set({ selectedRuns: ids }),
   setRunData: (run) => set({ run }),
   filters: { language: null, latencyRange: [null, null], metricRanges: {} },
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f, metricRanges: { ...(s.filters.metricRanges||{}), ...(f.metricRanges||{}) } } })),

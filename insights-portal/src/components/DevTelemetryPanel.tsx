@@ -140,10 +140,27 @@ export const DevTelemetryPanel: React.FC<Props> = ({ samples, coalesceMs, onCoal
             })}
           </div>
         )}
-        {/* Simple matrix placeholder for combinations visualization */}
         {bench.length > 0 && (
-          <div aria-label="bench-matrix" style={{ marginTop: 8, fontSize: 12 }}>
-            Matrix: size × sample × coalesce (placeholder)
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Matrix: size × sample × coalesce</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(120px, 1fr))', gap: 6 }} data-testid="dev-bench-matrix">
+              <div style={{ fontWeight: 600 }}>Size</div>
+              <div style={{ fontWeight: 600 }}>Sample</div>
+              <div style={{ fontWeight: 600 }}>Coalesce</div>
+              <div style={{ fontWeight: 600 }}>Filter(ms)</div>
+              <div style={{ fontWeight: 600 }}>Aggregate(ms)</div>
+              <div style={{ fontWeight: 600 }}>Total(ms)</div>
+              {bench.map((r, idx) => (
+                <React.Fragment key={idx}>
+                  <div>{r.size.toLocaleString()}</div>
+                  <div>{r.samplePct == null ? 'full' : Math.round(r.samplePct * 100) + '%'}</div>
+                  <div>{r.coalesceMs} ms</div>
+                  <div>{Math.round(r.filterMs)}</div>
+                  <div>{Math.round(r.aggregateMs)}</div>
+                  <div>{Math.round(r.filterMs + r.sampleMs + r.aggregateMs)}</div>
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         )}
       </div>

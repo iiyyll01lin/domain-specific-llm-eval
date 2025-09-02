@@ -2,6 +2,7 @@ import React from 'react'
 import { iterateDir } from '@/core/fs'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { parseSimpleYAML, extractThresholdsFromConfig } from '@/core/yaml'
+import WorkerModule from '../workers/parser.worker.ts?worker'
 
 interface DetectedRun {
   runPath: string
@@ -110,6 +111,32 @@ export const RunDirectoryPicker: React.FC = () => {
     }
   }
 
+  const addToCompare = async (r: DetectedRun) => {
+    if (!r.summaryJson) return
+    // Parse via worker then add to runs map in store for multi-run compare
+    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    await new Promise<void>((resolve, reject) => {
+      worker.onmessage = (ev: MessageEvent<any>) => {
+        const msg = ev.data
+        if (msg.type === 'parsed') {
+          const runs = usePortalStore.getState().runs || {}
+          const setRuns = usePortalStore.getState().setRuns
+          const setSelectedRuns = usePortalStore.getState().setSelectedRuns
+          const id = r.runPath
+          setRuns({ ...runs, [id]: { items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies } })
+          const sel = new Set(usePortalStore.getState().selectedRuns || [])
+          sel.add(id)
+          setSelectedRuns(Array.from(sel))
+          worker.terminate()
+          resolve()
+        } else if (msg.type === 'error') {
+          worker.terminate(); reject(new Error(String(msg.message)))
+        }
+      }
+      worker.postMessage({ type: 'parse-summary-json', file: r.summaryJson })
+    })
+  }
+
   return (
     <div style={{ marginTop: 12 }}>
       <button onClick={onPickDir} disabled={busy}>{busy ? '掃描中…' : '選擇資料夾並掃描 runs'}</button>
@@ -144,6 +171,7 @@ export const RunDirectoryPicker: React.FC = () => {
                   </span>
                 )}
                 <button onClick={() => loadRun(r)} disabled={!r.summaryJson}>載入</button>
+                <button onClick={() => addToCompare(r)} disabled={!r.summaryJson}>加入比較</button>
               </li>
             ))}
           </ul>

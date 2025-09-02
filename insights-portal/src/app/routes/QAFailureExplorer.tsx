@@ -8,7 +8,7 @@ import { loadBookmarks, saveBookmarks, loadVisibleCols, saveVisibleCols, loadVis
 import { TID } from '@/testing/testids'
 
 export default function QAFailureExplorer() {
-  const { run, filters } = usePortalStore((s) => ({ run: s.run, filters: s.filters }))
+  const { run, filters, thresholds } = usePortalStore((s) => ({ run: s.run, filters: s.filters, thresholds: s.thresholds }))
   const items = React.useMemo(() => run?.items ?? [], [run?.items])
   const [query, setQuery] = React.useState('')
   const [detailsId, setDetailsId] = React.useState<string | null>(null)
@@ -67,13 +67,25 @@ export default function QAFailureExplorer() {
   }, [metricKeys.join(',')])
 
   const exportVisible = () => {
-  const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
-    exportTableToCSV('qa_view.csv', rows, { timestamp: new Date().toISOString() })
+    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
+    exportTableToCSV('qa_view.csv', rows, {
+      runId: 'local-run',
+      filters: filters as any,
+      thresholds: thresholds as any,
+      timestamp: new Date().toISOString(),
+      branding: { brand: 'Insights Portal', title: 'QA Failure Explorer', footer: 'Generated locally — offline mode' },
+    })
   }
 
   const exportVisibleXlsx = async () => {
     const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
-    await exportTableToXLSX('qa_view.xlsx', rows, { timestamp: new Date().toISOString() })
+    await exportTableToXLSX('qa_view.xlsx', rows, {
+      runId: 'local-run',
+      filters: filters as any,
+      thresholds: thresholds as any,
+      timestamp: new Date().toISOString(),
+      branding: { brand: 'Insights Portal', title: 'QA Failure Explorer', footer: 'Generated locally — offline mode' },
+    })
   }
 
   return (
@@ -115,8 +127,8 @@ export default function QAFailureExplorer() {
             </div>
           </details>
         </div>
-        <button onClick={exportVisible}>Export CSV</button>
-        <button onClick={exportVisibleXlsx}>Export XLSX</button>
+  <button onClick={exportVisible} data-testid="qa-export-csv">Export CSV</button>
+  <button onClick={exportVisibleXlsx} data-testid="qa-export-xlsx">Export XLSX</button>
       </div>
       {/* Active filter chips */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>

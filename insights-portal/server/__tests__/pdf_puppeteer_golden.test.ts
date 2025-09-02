@@ -16,7 +16,8 @@ describe('pdf-service puppeteer golden (env-gated)', () => {
       body: JSON.stringify({
         title: 'Golden',
         manifest: {
-          sections: [
+      meta: { branding: { title: 'Executive Overview', footer: 'Confidential' } },
+      sections: [
             { title: 'Intro', type: 'text', payload: 'hello' },
             { title: 'KPIs', type: 'table', payload: [{ k: 'Faithfulness', v: 0.7 }] },
           ],
@@ -26,7 +27,15 @@ describe('pdf-service puppeteer golden (env-gated)', () => {
     const buf = new Uint8Array(await res.arrayBuffer())
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('application/pdf')
-    expect(buf.length).toBeGreaterThan(2000) // should be larger than dummy
+    // Read meta header to assert content
+    const metaRaw = res.headers.get('x-pdf-info')
+    if (!metaRaw) throw new Error('Missing X-PDF-Info header')
+    const meta = JSON.parse(metaRaw)
+    expect(meta.header).toContain('Executive Overview')
+    expect(meta.footer).toContain('Confidential')
+    expect(meta.tableRows).toBeGreaterThan(0)
+    // size should be non-trivial
+    expect(buf.length).toBeGreaterThan(2000)
     srv.close()
   }, 30000)
 })

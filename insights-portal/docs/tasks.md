@@ -121,11 +121,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Added: Debounced aggregation in Overview (~200ms) and worker-side coalescing of aggregate requests (~100ms, adjustable via Dev panel) to reduce churn.
   - Added: Aggregation timings (filter/sample/aggregate) emitted by worker; Overview shows a Dev timings panel and sends sampling hint (>20k rows) to balance responsiveness and accuracy.
   - Added: DevTelemetryPanel with adjustable coalescing window and one-click benchmarks for 5k/20k/100k datasets; summaries by size × sampling% × coalesceMs; worker supports runtime `config` message to set coalesceMs. Added inline trend sparkline and grouped box summaries per dataset size; CSV export of benchmark results.
+  - New: Bench “matrix” visualization (size × sample × coalesce) with totals and basic stats; export consolidated CSV. Baseline Save/Compare integrated for quick regressions checks.
   - Added: For 100k+ datasets (no sampling), worker switches to chunked aggregation (10k slices) to keep UI responsive; timing stats still reported.
   - Tests: Added unit tests for metric range filter and chips clear behavior.
   - TODO: Performance tune for 20k+ (additional worker batching), polish labels and help texts.
-  - TODO (next): Batch-run multiple coalesce×sample×size combinations and render comparison matrix (box/median lines), then export a consolidated report.
-  - Added (placeholder): Matrix area in Dev panel to visualize combinations; Save/Compare baseline utilities for quick regressions check.
+  - TODO (next): Add box/median overlays to matrix cells and optional XLSX export template for consolidated report.
 - DoD: ≤5k rows update within 300ms; 20k within 1s.
 
 ### T-050 Executive Overview
@@ -147,7 +147,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Added: Persist visible column preferences (localStorage) for base and metric columns via prefs helpers.
   - Added: Row Details drawer panel with context expansion and lightweight highlighting; for long contexts, use chunked slicing (500 characters per slice) with a "Show more" progressive loading strategy to avoid excessive DOM; the SLA utility validates first open ≤200ms (typical contexts).
   - New: Stable data-testid selectors for QA table, rows, controls, and details drawer; Playwright E2E SLA spec gated by env; long-context sample fixture under `public/samples/run_minimal/outputs/long_context_sample.json`; App supports `?sample=` param for autoload.
-  - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader). E2E SLA spec now passes locally with `PW_E2E_ENABLED=1`; Playwright is configured with `webServer` to auto-start Vite dev server and uses stable `data-testid` selectors.
+  - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader). E2E specs expanded (env-gated) to cover navigation → QA, search filtering, and CSV/XLSX export with download capture; Playwright uses stable `data-testid` selectors. E2E SLA spec and export spec pass locally with `PW_E2E_ENABLED=1`.
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
 ### T-052 Analytics Distribution (hist/box/scatter)
@@ -155,11 +155,12 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Visualize distributions and relations; interactive filters stay in sync.
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
-- Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers + grouped boxes)
+- Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers + grouped boxes) → Enhanced (multi-run overlays for box/scatter)
   - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
   - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR) and grouped box plots by cohort (language, success/failure, or failing metric bucket), including outliers.
-  - TODO: Grouped comparison and multi-run legends in a later milestone.
-  - Added (placeholder): Legend toggle and reserved structure for multi-run datasets (UI only; data plumbing pending).
+  - New: Multi-run overlay pipeline and legend toggles. Directory Picker now supports “加入比較” to accumulate runs; Analytics histograms render grouped overlays with per-run legend checkboxes; brush/filters remain in sync.
+  - Update: Multi-run overlays added for Box and Scatter modes (one series per run), legend toggle respected; a simple Compare summary table shows per-run mean/std and deltas vs baseline run.
+  - TODO: Cohort-based multi-run compare and export of compare table (CSV/XLSX).
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
@@ -167,7 +168,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Quickly identify improvements/regressions.
 - Deps/Res: T-011, T-040.
 - EARS: Story 6.
-- Status: Planned
+- Status: In-Progress (overlay in Analytics done; initial compare summary in Analytics added; full delta tables pending)
 - DoD: Two-run comparison correctly shows differences and warnings.
 
 ### T-070 Export (CSV/XLSX)
@@ -177,8 +178,9 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - EARS: Story 10.
 - Status: In-Progress → Updated → PDF plan scaffolded (Option B API draft)
   - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV/XLSX of source values and front-end PNG snapshot.
-  - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text; added PDF manifest builder (Option B pipeline plan) to define sections/meta; created `server/pdf-service.js` scaffold exposing `/render/pdf`, returning a tiny dummy PDF (with %PDF header). Added a lightweight golden test to check the header (`server/__tests__/pdf_service.test.ts`). Added Dockerfile and simple deploy script for the PDF service scaffold.
-  - Updated: Optional Puppeteer rendering path (dynamic import; env `PDF_RENDERER=puppeteer`) with environment-gated golden (`server/__tests__/pdf_puppeteer_golden.test.ts`); Dockerfile switched to Debian base with required system dependencies and preinstalled puppeteer for consistent rendering in container.
+  - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text and thresholds; QA export (CSV/XLSX) now includes branding and threshold metadata.
+  - Added: PDF manifest builder (Option B plan) and service. PDF service supports two modes: stub and Puppeteer (env `PDF_RENDERER=puppeteer`). In Puppeteer mode, content validation exposed via `X-PDF-Info` header (header/footer text, page format, table rows).
+  - Tests: Lightweight stub golden (`server/__tests__/pdf_service.test.ts`) and env-gated Puppeteer golden (`server/__tests__/pdf_puppeteer_golden.test.ts`) asserting header/footer/rows.
   - TODO: Styling templates and header/footer layout polish; richer content assertions.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
@@ -233,7 +235,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - EARS: Multiple (11 perf, 8 failure explorer, 10 export).
 - Status: Planned → Partially addressed (unit + integration smoke)
   - Added: Unit tests for QA preferences, row details SLA utility, and PDF manifest builder; worker parse/aggregate integration smoke test; PDF service golden header test.
-  - Pending: Playwright E2E (QA interactions, row details ≤200ms, exports with branding/threshold metadata). Added `npm run test:e2e` and `npm run test:e2e:sla` (env-gated) scripts. Dev panel now supports one-click benchmarks → Save Baseline → Compare with tolerance.
+  - Added: Playwright E2E spec for QA navigation/search/export (env-gated); `npm run test:e2e` and `npm run test:e2e:sla` (env-gated) scripts. Dev panel supports one-click benchmarks → Save Baseline → Compare with tolerance and matrix export.
   - Update (2025-09-01):
     - Vitest config updated to explicitly exclude `node_modules`, `dist/build`, e2e folders, and reports to prevent third-party tests from running under Vitest.
     - Playwright `playwright.config.ts` now uses `webServer` to launch Vite automatically; E2E is gated by `PW_E2E_ENABLED=1` and a single SLA spec passes locally.
@@ -258,6 +260,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - DoD: Minimal health and export draft API docs.
 
 ---
+
+## CI Deployment
+- Implemented: GitHub Actions workflow with conditional E2E and Puppeteer jobs gated by `PW_E2E_ENABLED` and `PDF_TEST_PUPPETEER` env/vars. Browser binaries cached via `npx playwright install --with-deps chromium`. Base job runs lint and unit tests.
+- Outcome: Faster CI by skipping heavy E2E unless explicitly enabled; stable caching for Chromium.
+
 
 ## 3) Requirements Mapping
 - Story 1: T-010, T-011, T-012
@@ -300,7 +307,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 
 ---
 
-## Progress Update — Current (2025-08-31)
+## Progress Update — Current (2025-09-02)
 - Done:
   - Verdict engine v1 (T-031); Executive Overview MVP shows KPIs, verdict, counts and latency p50/p90 (partial T-050).
   - Directory scan detects runs, artifact type counts, and items/metrics fast-scan (partial T-011).
@@ -315,14 +322,16 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Debounced sliders in FiltersBar, debounced Overview aggregation, and worker-side coalescing of aggregate requests (T-040 update).
   - Tooling solidified: ESLint/Prettier/Vitest configured; minimal unit tests added (T-002/T-120 partial).
 - Added:
-  - Overview “sort by threshold gap” toggle with active sorting (T-050).
-  - Dev autoload sample JSON via /@fs for quicker verification.
+  - QA export now carries branding/threshold metadata (CSV/XLSX), covered by new E2E spec gated by PW_E2E_ENABLED.
+  - Analytics multi-run overlay with legend toggles; Directory Picker adds runs to compare set.
+  - Dev panel benchmark matrix visualization and consolidated CSV export; baseline save/compare utilities.
+  - PDF service Puppeteer mode with golden validations (env-gated).
 - Next:
   - Optional polish for T-011: inline full metrics list beyond tooltip.
   - Filters perf: tune debounce values and batching for 20k+; measure worker timings (T-040).
-  - QA Table: persist visible column preferences; row details perf SLA test (T-051/T-070).
-  - Analytics: scatter multi-area brush merge, box outliers/groups, slider sync polish (T-052).
-  - Export: styling templates and PDF option (Option B) (T-070/T-140).
+  - Multi-run delta tables (abs/%), regression highlighting, and N/A handling in Compare view (T-060).
+  - Analytics: grouped box/scatter overlays across runs, legend polish (T-052).
+  - Export: styling templates and polished PDFs; optional XLSX consolidated matrix (T-070/T-040).
   - Expand unit/integration/E2E tests (RTL/Playwright) (T-120).
 
 Note: All code comments must be in English.

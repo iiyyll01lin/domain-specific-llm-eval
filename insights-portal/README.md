@@ -68,3 +68,38 @@ Expected
 ## CI suggestion (optional)
 - Add a validation step to assert the emitted summary JSON parses and yields non-zero items for supported metrics.
 
+---
+
+## How to Test (UI / E2E / Unit)
+
+1) Manual UI smoke
+- Start dev server, then open `http://localhost:5173/?sample=run_minimal` to auto-load a sample.
+- Navigate to QA view; confirm the table renders and opening the first row Details is responsive (target ≤200ms on typical datasets).
+- Try filters (language/metric ranges), threshold edits, and exports on each page.
+
+2) Unit/Integration (Vitest)
+```bash
+npm test
+```
+
+3) End-to-End (Playwright, gated)
+- Install browsers (first time):
+```bash
+npx playwright install --with-deps
+```
+- Run all E2E (gated by env):
+```bash
+export PW_E2E_ENABLED=1
+npm run test:e2e
+```
+- Run SLA-only spec (≤200ms details open):
+```bash
+export PW_E2E_ENABLED=1
+npm run test:e2e:sla
+```
+
+Tips
+- If SLA is flaky, run headed/debug: `npx playwright test e2e/qa-sla.spec.ts --headed --debug`.
+- For production-like perf, use preview: `npm run build && npm run preview`, then point Playwright baseURL to the preview port.
+- Stable UI selectors are exposed via `data-testid` (e.g., `qa-table`, `qa-row-<idx>`, `qa-details`).
+
