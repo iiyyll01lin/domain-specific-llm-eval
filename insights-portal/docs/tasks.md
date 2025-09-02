@@ -164,7 +164,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
-• T-060 Compare view: CompareView added (baseline switch, mean/median/p50/p90, Δ abs/%, CSV/XLSX export, threshold coloring). Bonus: data-testids and a minimal RTL test. Next: refine threshold direction and color coding, aggregate/export NA handling, cohort-based compare, and deep-link to Analytics.
+• CompareView delivered: baseline switch, mean/median/p50/p90, Δ abs/% vs baseline, threshold-aware coloring with metric direction from registry (default higher-is-better; supports lower-is-better), N/A handling, and deep-link to Analytics per metric.
+• Export: CSV/XLSX includes per-run mean/median/p50/p90, deltaAbs/deltaPct, plus samples (n) and naPct; metadata includes filters, thresholds, timestamp, and branding (branding sheet in XLSX).
+• Cohort compare: collapsible panel to compare means by cohort (language/success/failing metric bucket) across selected runs; includes CSV/XLSX export with metadata and delta vs baseline.
+• Tests: RTL smoke for CompareView and export tests asserting schema (including samples/naPct) and branding metadata; all unit tests PASS.
 ### T-070 Export (CSV/XLSX)
 - Description: Export current view table (visible columns, filters, row count); overview exports KPIs/thresholds/verdict.
 - Outcomes: CSV/XLSX with metadata footer (run IDs, filters, timestamp, thresholds).

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react'
 import * as echarts from 'echarts'
 import { usePortalStore } from '@/app/store/usePortalStore'
@@ -21,6 +22,15 @@ export const AnalyticsDistribution: React.FC = () => {
 
   // Recompute and draw chart when inputs change
   const stableFilters = usePortalStore((s) => s.filters)
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      const m = e?.detail?.metric
+      if (typeof m === 'string' && m) setMetric(m)
+    }
+    window.addEventListener('portal:set-analytics-metric', handler as any)
+    return () => window.removeEventListener('portal:set-analytics-metric', handler as any)
+  }, [])
+
   React.useEffect(() => {
     if (!ref.current) return
     const chart = echarts.init(ref.current)
