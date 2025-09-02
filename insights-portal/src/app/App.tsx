@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import ExecutiveOverview from './routes/ExecutiveOverview'
 import QAFailureExplorer from './routes/QAFailureExplorer'
 import { AnalyticsDistribution } from './routes/AnalyticsDistribution'
+import CompareView from './routes/CompareView'
 import { LangSwitcher } from '@/components/LangSwitcher'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { ThemeSwitcher } from './ThemeSwitcher'
@@ -10,7 +11,7 @@ import { TID } from '@/testing/testids'
 
 export const App: React.FC = () => {
   const { t } = useTranslation()
-  const [route, setRoute] = React.useState<'executive'|'qa'|'analytics'>('executive')
+  const [route, setRoute] = React.useState<'executive'|'qa'|'analytics'|'compare'>('executive')
   const setThresholds = usePortalStore((s) => s.setThresholds)
   const setDefaultThresholds = usePortalStore((s) => s.setDefaultThresholds)
   const setRunData = usePortalStore((s) => s.setRunData)
@@ -87,13 +88,15 @@ export const App: React.FC = () => {
   <button data-testid={TID.nav.executive} onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
   <button data-testid={TID.nav.qa} onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
   <button data-testid={TID.nav.analytics} onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
+  <button data-testid="nav-compare" onClick={() => setRoute('compare')}>Compare</button>
         <ThemeSwitcher />
         <LangSwitcher />
       </header>
       <main style={{ marginTop: 16 }}>
         {route === 'executive' && <ExecutiveOverview />}
         {route === 'qa' && <QAFailureExplorer />}
-        {route === 'analytics' && <AnalyticsDistribution />}
+  {route === 'analytics' && <AnalyticsDistribution />}
+  {route === 'compare' && <CompareView />}
       </main>
     </div>
   )

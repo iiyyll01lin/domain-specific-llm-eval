@@ -158,19 +158,13 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers + grouped boxes) → Enhanced (multi-run overlays for box/scatter)
   - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
   - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR) and grouped box plots by cohort (language, success/failure, or failing metric bucket), including outliers.
-  - New: Multi-run overlay pipeline and legend toggles. Directory Picker now supports “加入比較” to accumulate runs; Analytics histograms render grouped overlays with per-run legend checkboxes; brush/filters remain in sync.
+  - New: Multi-run overlay pipeline and legend toggles. Directory Picker now supports "Add to Compare" to accumulate runs; Analytics histograms render grouped overlays with per-run legend checkboxes; brush/filters remain in sync.
   - Update: Multi-run overlays added for Box and Scatter modes (one series per run), legend toggle respected; a simple Compare summary table shows per-run mean/std and deltas vs baseline run.
   - TODO: Cohort-based multi-run compare and export of compare table (CSV/XLSX).
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
-- Description: Select 2–5 runs; show metric deltas (abs/%), highlight regressions over thresholds; missing metrics show N/A.
-- Outcomes: Quickly identify improvements/regressions.
-- Deps/Res: T-011, T-040.
-- EARS: Story 6.
-- Status: In-Progress (overlay in Analytics done; initial compare summary in Analytics added; full delta tables pending)
-- DoD: Two-run comparison correctly shows differences and warnings.
-
+• T-060 Compare view: CompareView added (baseline switch, mean/median/p50/p90, Δ abs/%, CSV/XLSX export, threshold coloring). Bonus: data-testids and a minimal RTL test. Next: refine threshold direction and color coding, aggregate/export NA handling, cohort-based compare, and deep-link to Analytics.
 ### T-070 Export (CSV/XLSX)
 - Description: Export current view table (visible columns, filters, row count); overview exports KPIs/thresholds/verdict.
 - Outcomes: CSV/XLSX with metadata footer (run IDs, filters, timestamp, thresholds).
