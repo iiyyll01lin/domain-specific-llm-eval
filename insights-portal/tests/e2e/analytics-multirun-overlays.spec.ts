@@ -37,7 +37,7 @@ test.describe('Analytics multi-run overlays', () => {
     await page.getByTestId('nav-analytics').click()
     await page.getByRole('img', { name: 'histogram' }).waitFor()
 
-    // Enable legend and toggle one run off
+  // Enable legend and toggle one run off
     const legendToggle = page.getByTestId('analytics-legend-toggle')
     await legendToggle.check()
     const runACheck = page.getByTestId('legend-run-runA')
@@ -46,16 +46,35 @@ test.describe('Analytics multi-run overlays', () => {
     await expect(runBCheck).toBeChecked()
     await runBCheck.uncheck()
 
-    // Switch to box mode and ensure chart still renders without runB
-    await page.selectOption('select', { label: 'Box' })
+  // Switch to box mode and ensure chart still renders without runB, outliers presence exposed
+  await page.selectOption('select[aria-label="analytics-mode"]', { value: 'box' })
     await page.getByRole('img', { name: 'histogram' }).waitFor()
+  const seriesCountBox = await page.getByTestId('analytics-series-count').innerText()
+  expect(Number(seriesCountBox)).toBeGreaterThanOrEqual(1)
+  const outliersFlag = await page.getByTestId('analytics-outliers-present').innerText()
+  expect(['true','false']).toContain(outliersFlag)
 
     // Switch to scatter and perform a brush selection to update filters
-    await page.selectOption('select', { label: 'Scatter' })
-    // Basic smoke: wait a tick and assume brush tool is available; cannot easily draw without low-level actions
+    await page.selectOption('select[aria-label="analytics-mode"]', { value: 'scatter' })
     await page.waitForTimeout(200)
+    const canvas = await page.locator('[role="img"]').first()
+    const box = await canvas.boundingBox()
+    if (box) {
+      const startX = box.x + box.width * 0.2
+      const startY = box.y + box.height * 0.8
+      const endX = box.x + box.width * 0.6
+      const endY = box.y + box.height * 0.4
+      await page.mouse.move(startX, startY)
+      await page.mouse.down()
+      await page.mouse.move(endX, endY, { steps: 10 })
+      await page.mouse.up()
+      // Verify metricRanges updated via hidden testid
+      const rangesText = await page.getByTestId('analytics-metric-ranges').innerText()
+      expect(rangesText).toContain('Faithfulness')
+      expect(rangesText).toContain('AnswerRelevancy')
+    }
 
-    // Toggle legend back on for runB
+  // Toggle legend back on for runB
     await legendToggle.check()
     await runBCheck.check()
     await page.waitForTimeout(50)

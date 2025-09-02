@@ -156,9 +156,10 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-040.
 - EARS: Story 4 (DA view).
 - Status: In-Progress → Updated (hist + box + scatter + CSV/XLSX/PNG) → Improved (two-way sync + outliers + grouped boxes) → Enhanced (multi-run overlays for box/scatter)
-  - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV/XLSX of source values and PNG snapshot.
+  - Implemented: Histogram, Box plot, and Scatter with brush selection that updates global metric ranges; respects global filters; exports CSV and multi-sheet XLSX (data + overview) and PNG snapshot.
   - Added: Scatter brush supports merging multiple areas (union of min/max) before updating global filters; axes reflect current metric range filters (two-way sync). Box plot displays outliers (1.5×IQR) and grouped box plots by cohort (language, success/failure, or failing metric bucket), including outliers.
   - New: Multi-run overlay pipeline and legend toggles. Directory Picker now supports "Add to Compare" to accumulate runs; Analytics histograms render grouped overlays with per-run legend checkboxes; brush/filters remain in sync.
+  - Tests: Added unit test 'analytics_export.test.tsx' to validate CSV branding/meta and that XLSX uses multi-sheet helper; E2E spec 'analytics-multirun-overlays.spec.ts' performs real mouse drag brush and asserts metricRanges sync; in Box mode asserts series count and outliers flag; legend toggle impacts series count. Env-gated by PW_E2E_ENABLED.
   - Update: Multi-run overlays added for Box and Scatter modes (one series per run), legend toggle respected; a simple Compare summary table shows per-run mean/std and deltas vs baseline run.
   - TODO: Cohort-based multi-run compare and export of compare table (CSV/XLSX).
   - New: E2E spec planned (analytics-multirun-overlays.spec) to cover multi-run overlays legend toggles and scatter brush → filters sync (env-gated by PW_E2E_ENABLED).
@@ -176,12 +177,12 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-050, T-051, T-052.
 - EARS: Story 10.
 - Status: In-Progress → Updated → PDF plan scaffolded (Option B API draft)
-  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV/XLSX of source values and front-end PNG snapshot.
+  - Implemented: Exporter utility (CSV/XLSX via SheetJS); Executive Overview exports KPIs (CSV/XLSX, with metadata); QA Failure Explorer exports visible table (CSV/XLSX) with metadata; Analytics view exports CSV and multi-sheet XLSX (data + overview) with branding/meta, plus PNG snapshot.
   - Added: Branding/meta support in exports (CSV commented header/footer, XLSX 'branding' sheet) for title/brand/footer text and thresholds; QA export (CSV/XLSX) now includes branding and threshold metadata.
   - Added: PDF manifest builder (Option B plan) and service. PDF service supports two modes: stub and Puppeteer (env `PDF_RENDERER=puppeteer`). In Puppeteer mode, content validation exposed via `X-PDF-Info` header (header/footer text, page format, table rows).
   - Tests: Lightweight stub golden (`server/__tests__/pdf_service.test.ts`) and env-gated Puppeteer golden (`server/__tests__/pdf_puppeteer_golden.test.ts`) asserting header/footer/rows.
   - TODO: Styling templates and header/footer layout polish; richer content assertions.
-  - Added: PDF service enhanced header/footer templates with page numbers and optional cover page indicator in meta; golden test extended (env-gated via PDF_TEST_PUPPETEER) to assert header/footer flags, cover presence, and sections count.
+  - Added: PDF service enhanced header/footer templates with page numbers and optional cover page indicator in meta; now includes DOM markers (data-testid) and meta.minPages; golden test extended (env-gated via PDF_TEST_PUPPETEER) to assert header/footer flags, cover presence, sections count, and min page lower bound.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -189,7 +190,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Live language switch; charts and key components provide alt text or summary.
 - Deps/Res: Global UI; LangSwitcher.
 - EARS: Story 12.
-- Status: In-Progress (i18n wired with LangSwitcher and persisted locale; added aria/alt on charts and controls; more a11y pending)
+- Status: In-Progress (i18n wired with LangSwitcher and persisted locale; added aria/alt and data-testid on Analytics/Compare controls; more a11y pending)
 - DoD: No reload on language switch; RTL out of scope.
 
 ### T-081 Dark mode switch (default dark)

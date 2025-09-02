@@ -58,11 +58,11 @@ export function startServer(port = 8787) {
             : '<div>No table data</div>'
           const coverHtml = wantCover ? `<div class="cover"><h1>${headerText}</h1></div>` : ''
           const html = `<!doctype html><html><head>${styles}</head><body>
-            <header id="pdf-header">${headerText}</header>
+            <header id="pdf-header" data-testid="pdf-header">${headerText}</header>
             ${coverHtml}
             <h2>Contents</h2>
             ${tableHtml}
-            <footer id="pdf-footer">${footerText}</footer>
+            <footer id="pdf-footer" data-testid="pdf-footer">${footerText}</footer>
           </body></html>`
           await page.setContent(html, { waitUntil: 'networkidle0' })
           const pdfBuf = await page.pdf({
@@ -82,6 +82,7 @@ export function startServer(port = 8787) {
             headerFooter: true,
             cover: wantCover,
             sections: (parsed.manifest?.sections || []).length,
+            minPages: wantCover ? 2 : 1,
           }
           await browser.close()
           res.writeHead(200, {

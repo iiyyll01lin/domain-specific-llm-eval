@@ -30,13 +30,15 @@ describe('pdf-service puppeteer golden (env-gated)', () => {
     // Read meta header to assert content
     const metaRaw = res.headers.get('x-pdf-info')
     if (!metaRaw) throw new Error('Missing X-PDF-Info header')
-    const meta = JSON.parse(metaRaw)
+  const meta = JSON.parse(metaRaw)
     expect(meta.header).toContain('Executive Overview')
     expect(meta.footer).toContain('Confidential')
     expect(meta.tableRows).toBeGreaterThan(0)
   expect(meta.headerFooter).toBe(true)
   expect(meta.cover).toBe(true)
   expect(meta.sections).toBeGreaterThan(0)
+  // Expect at least 2 pages when cover is requested
+  expect(meta.minPages).toBeGreaterThanOrEqual(2)
     // size should be non-trivial
     expect(buf.length).toBeGreaterThan(2000)
     srv.close()

@@ -3,7 +3,7 @@ import React from 'react'
 import * as echarts from 'echarts'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
-import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
+import { exportTableToCSV, exportMultipleSheetsXLSX } from '@/core/exporter'
 
 export const AnalyticsDistribution: React.FC = () => {
   const run = usePortalStore((s) => s.run)
@@ -19,6 +19,7 @@ export const AnalyticsDistribution: React.FC = () => {
   const [scatterY, setScatterY] = React.useState('AnswerRelevancy')
   const thresholds = usePortalStore((s) => s.thresholds)
   const [cohort, setCohort] = React.useState<'language'|'success'|'failingMetric'>('language')
+  const [seriesInfo, setSeriesInfo] = React.useState<{ names: string[]; count: number; outliers: boolean }>({ names: [], count: 0, outliers: false })
 
   // Recompute and draw chart when inputs change
   const stableFilters = usePortalStore((s) => s.filters)
@@ -63,7 +64,7 @@ export const AnalyticsDistribution: React.FC = () => {
         }
         series.push({ name: ds.label, type: 'bar', data: hist, itemStyle: { color: ds.color } })
       })
-      chart.setOption({
+  chart.setOption({
         grid: { left: 40, right: 20, top: 30, bottom: 30 },
         xAxis: { type: 'category', data: xCats },
         yAxis: { type: 'value' },
@@ -71,6 +72,7 @@ export const AnalyticsDistribution: React.FC = () => {
         legend: showLegend ? {} : undefined,
         tooltip: { trigger: 'axis' },
       })
+  setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
     } else if (mode === 'box') {
       // If multiple runs are selected, render one box per run (overlay by category position).
       if (datasetEntries.length >= 2) {
@@ -92,7 +94,7 @@ export const AnalyticsDistribution: React.FC = () => {
             }
           }
         })
-        chart.setOption({
+  chart.setOption({
           xAxis: { type: 'category', data: xs },
           yAxis: { type: 'value', min: 0, max: 1 },
           legend: showLegend ? {} : undefined,
@@ -102,6 +104,7 @@ export const AnalyticsDistribution: React.FC = () => {
           ],
           tooltip: { trigger: 'item' },
         })
+  setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
       } else {
         // Single-run: group by selected cohort (language/success/failingMetric)
         const items = datasetEntries[0]?.items || []
@@ -152,6 +155,7 @@ export const AnalyticsDistribution: React.FC = () => {
             ],
             tooltip: { trigger: 'item' },
           })
+          setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outliers.length > 0 })
         } else {
           const xs = groupKeys
           const boxData: Array<[number | null, number | null, number | null, number | null, number | null]> = []
@@ -179,6 +183,7 @@ export const AnalyticsDistribution: React.FC = () => {
             ],
             tooltip: { trigger: 'item' },
           })
+          setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
         }
       }
     } else if (mode === 'scatter') {
@@ -194,7 +199,7 @@ export const AnalyticsDistribution: React.FC = () => {
         const data = xs.map((x, i) => [x, ys[i] ?? null]).filter((p) => typeof p[1] === 'number')
         series.push({ type: 'scatter', name: ds.label, data, itemStyle: { color: ds.color } })
       })
-      chart.setOption({
+  chart.setOption({
         xAxis: { type: 'value', min: (xr?.[0] ?? 0), max: (xr?.[1] ?? 1) },
         yAxis: { type: 'value', min: (yr?.[0] ?? 0), max: (yr?.[1] ?? 1) },
         series,
@@ -203,6 +208,7 @@ export const AnalyticsDistribution: React.FC = () => {
         brush: { toolbox: ['rect', 'polygon', 'clear'], xAxisIndex: 'all', yAxisIndex: 'all' },
         toolbox: { feature: { brush: {} } },
       })
+  setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
       chart.off('brushselected')
       chart.on('brushselected', (params: any) => {
         const batch = params.batch?.[0]
@@ -236,12 +242,30 @@ export const AnalyticsDistribution: React.FC = () => {
   const onExportCsv = () => {
     const filtered = applyFilters(run?.items || [], stableFilters)
     const rows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
-    exportTableToCSV(`analytics_hist_${metric}.csv`, rows, { timestamp: new Date().toISOString() })
+    exportTableToCSV(`analytics_${mode}_${metric}.csv`, rows, {
+      timestamp: new Date().toISOString(),
+      filters: stableFilters as any,
+      branding: { brand: 'Insights Portal', title: 'Analytics Export', footer: 'Generated locally — offline mode' }
+    })
   }
   const onExportXlsx = async () => {
     const filtered = applyFilters(run?.items || [], stableFilters)
-    const rows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
-    await exportTableToXLSX(`analytics_${metric}.xlsx`, rows, { timestamp: new Date().toISOString() })
+    const detailRows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
+    const overview = [
+      { metric, n: detailRows.length, mode }
+    ]
+    await exportMultipleSheetsXLSX(
+      `analytics_${mode}_${metric}.xlsx`,
+      [
+        { name: 'data', rows: detailRows },
+        { name: 'overview', rows: overview },
+      ],
+      {
+        timestamp: new Date().toISOString(),
+        filters: stableFilters as any,
+        branding: { brand: 'Insights Portal', title: 'Analytics Export', footer: 'Generated locally — offline mode' }
+      }
+    )
   }
   const onExportPng = () => {
     const inst = echarts.getInstanceByDom(ref.current!)
@@ -259,7 +283,7 @@ export const AnalyticsDistribution: React.FC = () => {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <label>
           Mode
-          <select value={mode} onChange={(e) => setMode(e.target.value as any)} style={{ marginLeft: 6 }}>
+          <select aria-label="analytics-mode" value={mode} onChange={(e) => setMode(e.target.value as any)} style={{ marginLeft: 6 }}>
             <option value="hist">Histogram</option>
             <option value="box">Box</option>
             <option value="scatter">Scatter</option>
@@ -268,7 +292,7 @@ export const AnalyticsDistribution: React.FC = () => {
     {mode === 'box' && (
           <label>
             Cohort
-            <select value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
+            <select aria-label="analytics-cohort" value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
               <option value="language">Language</option>
               <option value="success">Success/Failure</option>
       <option value="failingMetric">Failing Metric</option>
@@ -277,7 +301,7 @@ export const AnalyticsDistribution: React.FC = () => {
         )}
         <label>
           Metric
-          <select value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>
+          <select aria-label="analytics-metric-x" value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>
             {Object.keys(run?.kpis || {}).map((k) => (
               <option key={k} value={k}>{k}</option>
             ))}
@@ -286,7 +310,7 @@ export const AnalyticsDistribution: React.FC = () => {
         {mode === 'scatter' && (
           <label>
             Y
-            <select value={scatterY} onChange={(e) => setScatterY(e.target.value)} style={{ marginLeft: 6 }}>
+            <select aria-label="analytics-metric-y" value={scatterY} onChange={(e) => setScatterY(e.target.value)} style={{ marginLeft: 6 }}>
               {Object.keys(run?.kpis || {}).map((k) => (
                 <option key={k} value={k}>{k}</option>
               ))}
@@ -316,6 +340,12 @@ export const AnalyticsDistribution: React.FC = () => {
         )}
       </div>
       <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
+      {/* Test-only diagnostics to support E2E assertions without poking into ECharts internals */}
+      <div style={{ display: 'none' }}>
+        <span data-testid="analytics-series-count">{seriesInfo.count}</span>
+        <span data-testid="analytics-outliers-present">{String(seriesInfo.outliers)}</span>
+        <span data-testid="analytics-metric-ranges">{JSON.stringify((usePortalStore.getState().filters as any)?.metricRanges || {})}</span>
+      </div>
       {selectedRuns.length >= 2 && (
         <div style={{ marginTop: 12 }}>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Compare (metric: {metric})</div>
