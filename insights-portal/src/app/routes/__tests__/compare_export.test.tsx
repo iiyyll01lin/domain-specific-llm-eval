@@ -8,11 +8,11 @@ import { usePortalStore } from '@/app/store/usePortalStore'
 
 describe('CompareView exports', () => {
   const exportCsvSpy = vi.spyOn(exporter, 'exportTableToCSV').mockImplementation(() => {})
-  const exportXlsxSpy = vi.spyOn(exporter, 'exportTableToXLSX').mockResolvedValue()
+  const exportMultiXlsxSpy = vi.spyOn(exporter, 'exportMultipleSheetsXLSX').mockResolvedValue()
 
   beforeEach(() => {
     exportCsvSpy.mockClear()
-    exportXlsxSpy.mockClear()
+  exportMultiXlsxSpy.mockClear()
     const set = usePortalStore.getState()
     set.setRuns({
       a: { items: [
@@ -47,13 +47,18 @@ describe('CompareView exports', () => {
     expect(meta?.branding?.title).toBe('Compare Report')
   })
 
-  it('exports XLSX with same schema', async () => {
+  it('exports XLSX with same schema (multi-sheet)', async () => {
     render(<CompareView />)
     await fireEvent.click(screen.getByLabelText('export-compare-xlsx'))
-    expect(exportXlsxSpy).toHaveBeenCalled()
-    const [filename, rows, meta] = exportXlsxSpy.mock.calls[0]
+    expect(exportMultiXlsxSpy).toHaveBeenCalled()
+    const [filename, sheets, meta] = exportMultiXlsxSpy.mock.calls[0]
     expect(filename).toBe('compare.xlsx')
-    const faith = (rows as any[]).find((r) => r.metric === 'Faithfulness')
+    // Ensure sheets contain data and overview
+    const dataSheet = (sheets as any[]).find((s) => s.name === 'data')
+    const overviewSheet = (sheets as any[]).find((s) => s.name === 'overview')
+    expect(dataSheet).toBeTruthy()
+    expect(overviewSheet).toBeTruthy()
+    const faith = (dataSheet.rows as any[]).find((r) => r.metric === 'Faithfulness')
     expect(faith).toBeTruthy()
     expect(meta?.branding?.brand).toBe('Insights Portal')
   })

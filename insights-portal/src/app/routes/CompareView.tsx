@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
-import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
+import { exportTableToCSV, exportTableToXLSX, exportMultipleSheetsXLSX } from '@/core/exporter'
 import { getMetricMeta } from '@/core/metrics/registry'
 
 // Shared coloring helper using metric direction from registry
@@ -120,11 +120,13 @@ export default function CompareView() {
   }
 
   const onExportXlsx = async () => {
-    const rows: Array<Record<string, unknown>> = []
+    const detailRows: Array<Record<string, unknown>> = []
+    const overviewRows: Array<Record<string, unknown>> = []
     for (const r of table.rows) {
       const rec: Record<string, unknown> = { metric: r.metric }
+      const ov: Record<string, unknown> = { metric: r.metric }
       for (const id of selectedRuns) {
-  const label = id.split('/').slice(-1)[0]
+        const label = id.split('/').slice(-1)[0]
         const st = (r.cells as any)[id] as StatRow & { deltaAbs?: number|null; deltaPct?: number|null }
         rec[`${label}.mean`] = st?.mean ?? null
         rec[`${label}.median`] = st?.median ?? null
@@ -132,12 +134,22 @@ export default function CompareView() {
         rec[`${label}.p90`] = st?.p90 ?? null
         rec[`${label}.deltaAbs`] = st?.deltaAbs ?? null
         rec[`${label}.deltaPct`] = st?.deltaPct ?? null
-  rec[`${label}.samples`] = (st as any)?.n ?? null
-  rec[`${label}.naPct`] = (st as any)?.naPct ?? null
+        rec[`${label}.samples`] = (st as any)?.n ?? null
+        rec[`${label}.naPct`] = (st as any)?.naPct ?? null
+        ov[`${label}.n`] = (st as any)?.n ?? null
+        ov[`${label}.naPct`] = (st as any)?.naPct ?? null
       }
-      rows.push(rec)
+      detailRows.push(rec)
+      overviewRows.push(ov)
     }
-  await exportTableToXLSX('compare.xlsx', rows, { timestamp: new Date().toISOString(), filters, thresholds, branding: { brand: 'Insights Portal', title: 'Compare Report', footer: 'Generated locally — offline mode' } })
+    await exportMultipleSheetsXLSX(
+      'compare.xlsx',
+      [
+        { name: 'data', rows: detailRows },
+        { name: 'overview', rows: overviewRows },
+      ],
+      { timestamp: new Date().toISOString(), filters, thresholds, branding: { brand: 'Insights Portal', title: 'Compare Report', footer: 'Generated locally — offline mode' } }
+    )
   }
 
   if (selectedRuns.length < 2) {
@@ -172,12 +184,23 @@ export default function CompareView() {
         {table.rows.map((r: CompareRow) => (
           <React.Fragment key={`row-${r.metric}`}>
             <div>
-              <button onClick={() => onMetricClick(r.metric)} style={{ all: 'unset', cursor: 'pointer', color: '#1976d2' }} title="Open in Analytics">{r.metric}</button>
               {(() => {
+                const meta = getMetricMeta(r.metric as any)
                 const th = (thresholds as any)?.[r.metric]
-                const dir = getMetricMeta(r.metric as any).direction || 'higher'
-                if (!th) return null
-                return <span style={{ marginLeft: 6, color: '#888' }}>target {dir === 'lower' ? '≤' : '≥'} {typeof th.warning === 'number' ? th.warning.toFixed(2) : th.warning}</span>
+                const dir = meta.direction || 'higher'
+                const tip = th
+                  ? `Metric: ${r.metric}\nDirection: ${dir} is better\nTargets: warning ${dir === 'lower' ? '≤' : '≥'} ${typeof th.warning === 'number' ? th.warning.toFixed(2) : th.warning}, critical ${dir === 'lower' ? '≤' : '≥'} ${typeof th.critical === 'number' ? th.critical.toFixed(2) : th.critical}`
+                  : `Metric: ${r.metric}\nDirection: ${dir} is better`
+                return (
+                  <>
+                    <button onClick={() => onMetricClick(r.metric)} style={{ all: 'unset', cursor: 'pointer', color: '#1976d2' }} title={tip}>{r.metric}</button>
+                    {th && (
+                      <span style={{ marginLeft: 6, color: '#888' }} title={tip}>
+                        target {dir === 'lower' ? '≤' : '≥'} {typeof th.warning === 'number' ? th.warning.toFixed(2) : th.warning}
+                      </span>
+                    )}
+                  </>
+                )
               })()}
             </div>
       {selectedRuns.map((rid: string) => {

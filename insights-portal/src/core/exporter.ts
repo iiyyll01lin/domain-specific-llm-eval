@@ -66,6 +66,41 @@ export async function exportTableToXLSX(filename: string, rows: Array<Record<str
   triggerDownloadBlob(filename, blob)
 }
 
+// Multi-sheet XLSX export: first sheet is 'data', followed by additional named sheets, plus meta/branding sheets when provided.
+export async function exportMultipleSheetsXLSX(
+  filename: string,
+  sheets: Array<{ name: string; rows: Array<Record<string, unknown>> }>,
+  meta?: ExportMeta,
+) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  for (const s of sheets) {
+    const ws = (XLSX.utils as any).json_to_sheet(s.rows)
+    XLSX.utils.book_append_sheet(wb, ws, s.name || 'data')
+  }
+  if (meta) {
+    const metaSheet = XLSX.utils.json_to_sheet([
+      { key: 'runId', value: meta.runId || '' },
+      { key: 'timestamp', value: meta.timestamp || new Date().toISOString() },
+      { key: 'filters', value: JSON.stringify(meta.filters || {}) },
+      { key: 'thresholds', value: JSON.stringify(meta.thresholds || {}) },
+    ])
+    XLSX.utils.book_append_sheet(wb, metaSheet, 'meta')
+    if (meta.branding && (meta.branding.brand || meta.branding.title || meta.branding.footer)) {
+      const brandingRows = [
+        { key: 'brand', value: meta.branding.brand || '' },
+        { key: 'title', value: meta.branding.title || '' },
+        { key: 'footer', value: meta.branding.footer || '' },
+      ]
+      const brandSheet = XLSX.utils.json_to_sheet(brandingRows)
+      XLSX.utils.book_append_sheet(wb, brandSheet, 'branding')
+    }
+  }
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  triggerDownloadBlob(filename, blob)
+}
+
 // PDF Option B (server or external worker) manifest builder.
 // This does not perform network or rendering; it only builds a document manifest
 // that a caller can send to a server-side renderer (e.g., headless Chrome service).
@@ -124,6 +159,10 @@ export function buildRowsWithBookmarks(items: any[], metricKeys: string[], bookm
 }
 
 function triggerDownloadBlob(filename: string, blob: Blob) {
+  // In non-browser or test environments, silently no-op
+  const hasDOM = typeof document !== 'undefined' && typeof document.createElement === 'function'
+  const hasURL = typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+  if (!hasDOM || !hasURL) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
