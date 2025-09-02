@@ -53,6 +53,25 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('portal:navigate', onNav as any)
   }, [])
 
+  // Test-only helper: allow E2E to seed runs and selectedRuns without file dialogs
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      const detail = e?.detail || {}
+      const runs = detail.runs as Record<string, any> | undefined
+      const selectedRuns = detail.selectedRuns as string[] | undefined
+      const route = detail.route as 'executive'|'qa'|'analytics'|'compare' | undefined
+      if (runs && typeof usePortalStore.getState().setRuns === 'function') {
+        usePortalStore.getState().setRuns(runs)
+      }
+      if (Array.isArray(selectedRuns) && typeof usePortalStore.getState().setSelectedRuns === 'function') {
+        usePortalStore.getState().setSelectedRuns(selectedRuns)
+      }
+      if (route) setRoute(route)
+    }
+    window.addEventListener('portal:test:set-runs', handler as any)
+    return () => window.removeEventListener('portal:test:set-runs', handler as any)
+  }, [])
+
   React.useEffect(() => {
     // In dev, auto-load a fixed JSON so reviewers don't need to pick a file.
     // Also allow ?sample= URL param to load from public/samples.

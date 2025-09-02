@@ -101,6 +101,64 @@ export async function exportMultipleSheetsXLSX(
   triggerDownloadBlob(filename, blob)
 }
 
+// Internal: build XLSX bytes for tests without triggering download
+export async function buildXlsxArray(rows: Array<Record<string, unknown>>, meta?: ExportMeta): Promise<Uint8Array> {
+  const XLSX = await import('xlsx')
+  const ws = (XLSX.utils as any).json_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'data')
+  if (meta) {
+    const metaSheet = XLSX.utils.json_to_sheet([
+      { key: 'runId', value: meta.runId || '' },
+      { key: 'timestamp', value: meta.timestamp || new Date().toISOString() },
+      { key: 'filters', value: JSON.stringify(meta.filters || {}) },
+      { key: 'thresholds', value: JSON.stringify(meta.thresholds || {}) },
+    ])
+    XLSX.utils.book_append_sheet(wb, metaSheet, 'meta')
+    if (meta.branding && (meta.branding.brand || meta.branding.title || meta.branding.footer)) {
+      const brandingRows = [
+        { key: 'brand', value: meta.branding.brand || '' },
+        { key: 'title', value: meta.branding.title || '' },
+        { key: 'footer', value: meta.branding.footer || '' },
+      ]
+      const brandSheet = XLSX.utils.json_to_sheet(brandingRows)
+      XLSX.utils.book_append_sheet(wb, brandSheet, 'branding')
+    }
+  }
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as any
+}
+
+export async function buildMultipleSheetsXlsxArray(
+  sheets: Array<{ name: string; rows: Array<Record<string, unknown>> }>,
+  meta?: ExportMeta,
+): Promise<Uint8Array> {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  for (const s of sheets) {
+    const ws = (XLSX.utils as any).json_to_sheet(s.rows)
+    XLSX.utils.book_append_sheet(wb, ws, s.name || 'data')
+  }
+  if (meta) {
+    const metaSheet = XLSX.utils.json_to_sheet([
+      { key: 'runId', value: meta.runId || '' },
+      { key: 'timestamp', value: meta.timestamp || new Date().toISOString() },
+      { key: 'filters', value: JSON.stringify(meta.filters || {}) },
+      { key: 'thresholds', value: JSON.stringify(meta.thresholds || {}) },
+    ])
+    XLSX.utils.book_append_sheet(wb, metaSheet, 'meta')
+    if (meta.branding && (meta.branding.brand || meta.branding.title || meta.branding.footer)) {
+      const brandingRows = [
+        { key: 'brand', value: meta.branding.brand || '' },
+        { key: 'title', value: meta.branding.title || '' },
+        { key: 'footer', value: meta.branding.footer || '' },
+      ]
+      const brandSheet = XLSX.utils.json_to_sheet(brandingRows)
+      XLSX.utils.book_append_sheet(wb, brandSheet, 'branding')
+    }
+  }
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as any
+}
+
 // PDF Option B (server or external worker) manifest builder.
 // This does not perform network or rendering; it only builds a document manifest
 // that a caller can send to a server-side renderer (e.g., headless Chrome service).

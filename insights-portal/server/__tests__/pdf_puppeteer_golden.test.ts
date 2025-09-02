@@ -16,7 +16,7 @@ describe('pdf-service puppeteer golden (env-gated)', () => {
       body: JSON.stringify({
         title: 'Golden',
         manifest: {
-      meta: { branding: { title: 'Executive Overview', footer: 'Confidential' } },
+      meta: { branding: { title: 'Executive Overview', footer: 'Confidential' }, cover: true },
       sections: [
             { title: 'Intro', type: 'text', payload: 'hello' },
             { title: 'KPIs', type: 'table', payload: [{ k: 'Faithfulness', v: 0.7 }] },
@@ -34,6 +34,9 @@ describe('pdf-service puppeteer golden (env-gated)', () => {
     expect(meta.header).toContain('Executive Overview')
     expect(meta.footer).toContain('Confidential')
     expect(meta.tableRows).toBeGreaterThan(0)
+  expect(meta.headerFooter).toBe(true)
+  expect(meta.cover).toBe(true)
+  expect(meta.sections).toBeGreaterThan(0)
     // size should be non-trivial
     expect(buf.length).toBeGreaterThan(2000)
     srv.close()

@@ -161,6 +161,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - New: Multi-run overlay pipeline and legend toggles. Directory Picker now supports "Add to Compare" to accumulate runs; Analytics histograms render grouped overlays with per-run legend checkboxes; brush/filters remain in sync.
   - Update: Multi-run overlays added for Box and Scatter modes (one series per run), legend toggle respected; a simple Compare summary table shows per-run mean/std and deltas vs baseline run.
   - TODO: Cohort-based multi-run compare and export of compare table (CSV/XLSX).
+  - New: E2E spec planned (analytics-multirun-overlays.spec) to cover multi-run overlays legend toggles and scatter brush → filters sync (env-gated by PW_E2E_ENABLED).
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
@@ -168,6 +169,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 • Export: CSV/XLSX includes per-run mean/median/p50/p90, deltaAbs/deltaPct, plus samples (n) and naPct; metadata includes filters, thresholds, timestamp, and branding (branding sheet in XLSX).
 • Cohort compare: collapsible panel to compare means by cohort (language/success/failing metric bucket) across selected runs; includes CSV/XLSX export with metadata and delta vs baseline.
 • Tests: RTL smoke for CompareView and export tests asserting schema (including samples/naPct) and branding metadata; all unit tests PASS.
+• XLSX real read-back: Added unit test `xlsx_readback.test.ts` to parse generated workbook (data/overview/meta/branding) using SheetJS, ensuring schema and branding metadata embedded.
 ### T-070 Export (CSV/XLSX)
 - Description: Export current view table (visible columns, filters, row count); overview exports KPIs/thresholds/verdict.
 - Outcomes: CSV/XLSX with metadata footer (run IDs, filters, timestamp, thresholds).
@@ -179,6 +181,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Added: PDF manifest builder (Option B plan) and service. PDF service supports two modes: stub and Puppeteer (env `PDF_RENDERER=puppeteer`). In Puppeteer mode, content validation exposed via `X-PDF-Info` header (header/footer text, page format, table rows).
   - Tests: Lightweight stub golden (`server/__tests__/pdf_service.test.ts`) and env-gated Puppeteer golden (`server/__tests__/pdf_puppeteer_golden.test.ts`) asserting header/footer/rows.
   - TODO: Styling templates and header/footer layout polish; richer content assertions.
+  - Added: PDF service enhanced header/footer templates with page numbers and optional cover page indicator in meta; golden test extended (env-gated via PDF_TEST_PUPPETEER) to assert header/footer flags, cover presence, and sections count.
 - DoD: CSV/XLSX are consumable with complete columns and metadata.
 
 ### T-080 i18n & a11y
@@ -261,6 +264,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 ## CI Deployment
 - Implemented: GitHub Actions workflow with conditional E2E and Puppeteer jobs gated by `PW_E2E_ENABLED` and `PDF_TEST_PUPPETEER` env/vars. Browser binaries cached via `npx playwright install --with-deps chromium`. Base job runs lint and unit tests.
 - Outcome: Faster CI by skipping heavy E2E unless explicitly enabled; stable caching for Chromium.
+ - Note: New Analytics multi-run E2E spec is gated by PW_E2E_ENABLED and uses a test-only event hook to seed runs; won’t affect default CI runs.
 
 
 ## 3) Requirements Mapping
