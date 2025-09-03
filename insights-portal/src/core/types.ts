@@ -26,10 +26,14 @@ export interface RunArtifacts {
 }
 
 export interface RunParsed {
+  /** Optional identifier for the run (e.g., file name or directory path) */
+  id?: string
   items: EvaluationItem[]
   kpis: Partial<Record<MetricKey, number>>
   counts: { total: number }
   latencies?: { avg?: number; p50?: number; p90?: number; p99?: number }
+  /** Optional artifacts used to build this run in the UI (for provenance/KPI info) */
+  artifacts?: RunArtifacts
 }
 
 export interface ThresholdLevel {

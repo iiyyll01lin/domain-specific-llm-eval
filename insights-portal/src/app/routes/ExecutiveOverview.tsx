@@ -11,6 +11,38 @@ import type { FiltersState as UIFilters } from '@/components/filters/chips';
 import { usePortalStore as useStore } from '@/app/store/usePortalStore'
 import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import DevTelemetryPanel from '@/components/DevTelemetryPanel'
+import type { Thresholds } from '@/core/types'
+
+function KpiInfoPopover(props: { metricKey: string; value: number | undefined; runId?: string; total?: number; latencies?: { p50?: number|null, p90?: number|null }; sources?: string[]; filters?: any; thresholds?: any; locale?: string }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = React.useState(false)
+  const fmt = (v: any) => (v == null || Number.isNaN(v) ? 'N/A' : typeof v === 'number' ? v.toFixed(3) : String(v))
+  return (
+    <span style={{ marginLeft: 6, position: 'relative', display: 'inline-block' }}>
+      <button aria-label={`info-${props.metricKey}`} onClick={() => setOpen((o) => !o)} style={{ fontSize: 12 }}>i</button>
+      {open && (
+        <div role="dialog" aria-label="kpi-info" style={{ position: 'absolute', zIndex: 10, top: '120%', right: 0, minWidth: 260, maxWidth: 360, background: 'var(--bg, #111)', color: 'var(--text, #eee)', border: '1px solid var(--border, #333)', borderRadius: 8, padding: 8, boxShadow: '0 2px 12px rgba(0,0,0,0.4)' }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t(getMetricMeta(props.metricKey as any).labelKey as any)}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>{t(getMetricMeta(props.metricKey as any).helpKey as any)}</div>
+          <div style={{ fontSize: 12 }}>
+            <div>n: {props.total ?? '—'}</div>
+            {props.latencies && (
+              <div>latency p50/p90: {fmt(props.latencies.p50)} ms / {fmt(props.latencies.p90)} ms</div>
+            )}
+            {props.sources?.length ? (
+              <div title={props.sources.join('\n')}>sources: {props.sources.map((s, i) => <span key={i}><code>{s}</code>{i < props.sources!.length - 1 ? ', ' : ''}</span>)}</div>
+            ) : null}
+            {props.filters ? <div>filters: <code style={{ fontSize: 10 }}>{JSON.stringify(props.filters)}</code></div> : null}
+            {props.thresholds ? <div>thresholds: <code style={{ fontSize: 10 }}>{JSON.stringify(props.thresholds)}</code></div> : null}
+          </div>
+          <div style={{ textAlign: 'right', marginTop: 6 }}>
+            <button onClick={() => setOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
 
 export default function ExecutiveOverview() {
   const { t } = useTranslation()
@@ -120,6 +152,48 @@ export default function ExecutiveOverview() {
     })
   }
 
+  // Simple Session Save/Load (schemaVersion: 1)
+  const saveSession = async () => {
+    if (!run) return
+    const state = useStore.getState()
+    const session = {
+      schemaVersion: 1,
+      runId: run.id || 'default',
+      thresholds: state.thresholds as Thresholds,
+      filters: state.filters,
+      locale: state.locale,
+      persona: undefined,
+    }
+    const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `session_${session.runId}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  const loadSession = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'application/json,.json'
+    const file: File = await new Promise((resolve, reject) => {
+      input.onchange = () => {
+        const f = input.files?.[0]
+        if (f) resolve(f)
+        else reject(new Error('未選取檔案'))
+      }
+      input.click()
+    })
+    const text = await file.text()
+    const data = JSON.parse(text)
+    if (!data || (data.schemaVersion !== 1)) throw new Error('Unsupported session schemaVersion')
+    const setLocale = useStore.getState().setLocale
+    const setThresholds = useStore.getState().setThresholds
+    const setFilters = useStore.getState().setFilters
+    if (data.locale) setLocale(data.locale)
+    if (data.thresholds) setThresholds(data.thresholds)
+    if (data.filters) setFilters(data.filters)
+  }
+
   const availableMetricKeys = useMemo(() => {
     const source = (derived && derived.kpis) || (run ? run.kpis : undefined) || {}
     return Object.keys(source)
@@ -144,6 +218,10 @@ export default function ExecutiveOverview() {
 
   // entries replaced by derived aggregation flow
 
+  const runId = run?.id || 'default'
+  const panelMap = useStore((s) => s.overviewPanels)
+  const setPanelExpanded = useStore((s) => s.setPanelExpanded)
+
   return (
     <section>
     <h2>{t('nav.executive')}</h2>
@@ -164,8 +242,10 @@ export default function ExecutiveOverview() {
       <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
         <button onClick={exportKpis}>Export KPIs (CSV)</button>
         <button onClick={exportKpisXlsx}>Export KPIs (XLSX)</button>
+  <button onClick={saveSession}>Save Session</button>
+  <button onClick={loadSession}>Load Session</button>
       </div>
-      <section style={{ marginBottom: 16 }}>
+  <section style={{ marginBottom: 16 }}>
         <FiltersBar
           metrics={availableMetricKeys}
           filters={filters}
@@ -195,25 +275,19 @@ export default function ExecutiveOverview() {
     {!run && <p style={{ marginTop: 12 }}>{t('overview.pickHint')}</p>}
   {run && (
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          <div
-            style={{
-              gridColumn: '1 / -1',
-              padding: 12,
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: 'var(--bg-muted)',
-              color: 'var(--text)'
-            }}
-          >
-      <strong>Verdict:</strong> {verdict?.verdict ?? '—'}
-            {verdict?.failingMetrics?.length ? (
-              <span style={{ marginLeft: 8 }}>↓ {verdict.failingMetrics.join(', ')}</span>
-            ) : null}
-            <span style={{ marginLeft: 16, opacity: 0.8 }}>Items: {derived?.total ?? run.counts.total}</span>
-            {(derived?.latencies || run.latencies) && (
-              <span style={{ marginLeft: 16, opacity: 0.8 }}>latency p50/p90: {formatNum((derived?.latencies ?? run.latencies)?.p50)} ms / {formatNum((derived?.latencies ?? run.latencies)?.p90)} ms</span>
-            )}
-          </div>
+          <details open={(panelMap?.[runId]?.['verdict'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'verdict', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>
+            <summary style={{ cursor: 'pointer', userSelect: 'none', padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>Verdict</summary>
+            <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none', background: 'var(--bg-muted)', color: 'var(--text)' }}>
+              <strong>Verdict:</strong> {verdict?.verdict ?? '—'}
+              {verdict?.failingMetrics?.length ? (
+                <span style={{ marginLeft: 8 }}>↓ {verdict.failingMetrics.join(', ')}</span>
+              ) : null}
+              <span style={{ marginLeft: 16, opacity: 0.8 }}>Items: {derived?.total ?? run.counts.total}</span>
+              {(derived?.latencies || run.latencies) && (
+                <span style={{ marginLeft: 16, opacity: 0.8 }}>latency p50/p90: {formatNum((derived?.latencies ?? run.latencies)?.p50)} ms / {formatNum((derived?.latencies ?? run.latencies)?.p90)} ms</span>
+              )}
+            </div>
+          </details>
           {/* Use derived kpis when filtered */}
           {kpiEntries.map((pair) => {
             const k = pair[0]
@@ -222,6 +296,17 @@ export default function ExecutiveOverview() {
               <div key={k} style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>
                 <div style={{ fontWeight: 600 }} title={getMetricMeta(k).helpKey ? t(getMetricMeta(k).helpKey as any) : ''}>
                   {t(getMetricMeta(k).labelKey as any)} {getMetricMeta(k).key !== k ? <span className="small-muted">({k})</span> : null}
+                  <KpiInfoPopover
+                    metricKey={k}
+                    value={v}
+                    runId={run.id}
+                    total={derived?.total ?? run.counts.total}
+                    latencies={derived?.latencies ?? run.latencies}
+                    sources={[run.artifacts?.summaryJson?.name || 'summary.json', run.artifacts?.configYaml?.name || 'config.yaml'].filter(Boolean) as string[]}
+                    filters={filters}
+                    thresholds={thresholds}
+                    locale={locale}
+                  />
                 </div>
                 <div style={{ fontSize: 24 }}>{getMetricMeta(k).format?.(v, locale)}</div>
                 {renderGap(k, v ?? NaN, thresholds)}

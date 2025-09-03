@@ -22,6 +22,9 @@ interface PortalState {
   setRuns: (runs: Record<string, RunParsed>) => void
   setSelectedRuns: (ids: string[]) => void
   setRunData: (run: RunParsed) => void
+  /** Executive Overview panel expanded map scoped per run: map<runId, Record<panelId, expanded>> */
+  overviewPanels: Record<string, Record<string, boolean>>
+  setPanelExpanded: (runId: string, panelId: string, expanded: boolean) => void
   filters: FiltersState
   setFilters: (f: Partial<FiltersState>) => void
   clearFilters: () => void
@@ -58,6 +61,21 @@ export const usePortalStore = create<PortalState>((set) => ({
   setRuns: (runs) => set({ runs }),
   setSelectedRuns: (ids) => set({ selectedRuns: ids }),
   setRunData: (run) => set({ run }),
+  overviewPanels: (() => {
+    try {
+      const raw = localStorage.getItem('portal.overviewPanels')
+      return raw ? (JSON.parse(raw) as Record<string, Record<string, boolean>>) : {}
+    } catch {
+      return {}
+    }
+  })(),
+  setPanelExpanded: (runId, panelId, expanded) => set((s) => {
+    const map = { ...(s.overviewPanels || {}) }
+    const rid = runId || 'default'
+    map[rid] = { ...(map[rid] || {}), [panelId]: expanded }
+    try { localStorage.setItem('portal.overviewPanels', JSON.stringify(map)) } catch {}
+    return { overviewPanels: map }
+  }),
   filters: { language: null, latencyRange: [null, null], metricRanges: {} },
   setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f, metricRanges: { ...(s.filters.metricRanges||{}), ...(f.metricRanges||{}) } } })),
   clearFilters: () => set({ filters: { language: null, latencyRange: [null, null], metricRanges: {} } }),

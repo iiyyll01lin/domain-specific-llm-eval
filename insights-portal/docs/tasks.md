@@ -92,7 +92,16 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-013; i18n.
 - EARS: Story 9.
 - Status: In-Progress (default visuals/help texts pending; generic card for unknown keys WIP)
+- Added: Generic fallback meta and default metric direction (higher-is-better) for unknown keys; unknown metrics render with default label/help/format.
 - DoD: Unseen metric keys auto-render as KPI card and histogram (generic style).
+
+### T-021 Persona Import/Export (JSON v1)
+- Description: Import/Export persona profiles as a single JSON format with schemaVersion: 1; validate via Zod; apply dashboards visibility, default filters, and optional threshold template; persist active persona for the session.
+- Outcomes: Persona Switcher supports Import/Export; schema versioning and forward-compatibility (unknown fields preserved); active persona selection persists within session.
+- Deps/Res: T-020 (registry/i18n), T-100 (session, optional).
+- EARS: Story 4 (persona views), Story 15 (reproducibility).
+- Status: Planned
+- DoD: Import a valid JSON (schemaVersion: 1) applies persona immediately; invalid file shows validation errors with filename; Export produces a JSON including schemaVersion and metadata; active persona persists for the session.
 
 ### T-030 Threshold profile load & edit
 - Description: Load `profiles/thresholds.standard.json`; allow editing `warning/critical` in UI.
@@ -133,7 +142,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: One screen to judge release readiness and gaps.
 - Deps/Res: T-031, T-040.
 - EARS: Story 2.
-- Status: In-Progress (wired to RunLoader/DirectoryPicker; KPI cards + Verdict banner + counts + latency p50/p90; “sort by threshold gap” now sorts KPI cards by severity)
+- Status: In-Progress → Updated (wired to RunLoader/DirectoryPicker; KPI cards + Verdict banner + counts + latency p50/p90; “sort by threshold gap” now sorts KPI cards by severity; persisted collapsible panel state per run; KPI Info popover shows label/help, n, sources, filters, and thresholds)
 - DoD: With default thresholds, verdict renders; sub-threshold metrics show colors and gaps.
 
 ### T-051 QA Failure Explorer
@@ -148,6 +157,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Added: Row Details drawer panel with context expansion and lightweight highlighting; for long contexts, use chunked slicing (500 characters per slice) with a "Show more" progressive loading strategy to avoid excessive DOM; the SLA utility validates first open ≤200ms (typical contexts).
   - New: Stable data-testid selectors for QA table, rows, controls, and details drawer; Playwright E2E SLA spec gated by env; long-context sample fixture under `public/samples/run_minimal/outputs/long_context_sample.json`; App supports `?sample=` param for autoload.
   - Tests: Added unit test for bookmark flag in exported rows; unit test for bookmarks persistence structure; added SLA utility/test for row details (≤200ms for immediate loader). E2E specs expanded (env-gated) to cover navigation → QA, search filtering, and CSV/XLSX export with download capture; Playwright uses stable `data-testid` selectors. E2E SLA spec and export spec pass locally with `PW_E2E_ENABLED=1`.
+  - Added: Safe external link/image preview in details (confirm before open; new tab with noopener/noreferrer; images load on demand with placeholder fallback).
 - DoD: Details show user_input/reference/rag_answer/contexts/metrics; bookmarks exported to CSV.
 
 ### T-052 Analytics Distribution (hist/box/scatter)
@@ -166,6 +176,8 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - DoD: Range sliders reflect immediately; scatter enables brush to filter.
 
 ### T-060 Multi-run compare
+- Status: Done
+- DoD: Baseline switch, mean/median/p50/p90, Δ abs/% with directional coloring, N/A handling, deep-link to Analytics per metric; CSV/XLSX export includes samples (n) and naPct with metadata/branding; XLSX read-back tests pass.
 • CompareView delivered: baseline switch, mean/median/p50/p90, Δ abs/% vs baseline, threshold-aware coloring with metric direction from registry (default higher-is-better; supports lower-is-better), N/A handling, and deep-link to Analytics per metric.
 • Export: CSV/XLSX includes per-run mean/median/p50/p90, deltaAbs/deltaPct, plus samples (n) and naPct; metadata includes filters, thresholds, timestamp, and branding (branding sheet in XLSX).
 • Cohort compare: collapsible panel to compare means by cohort (language/success/failing metric bucket) across selected runs; includes CSV/XLSX export with metadata and delta vs baseline.
@@ -183,7 +195,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Tests: Lightweight stub golden (`server/__tests__/pdf_service.test.ts`) and env-gated Puppeteer golden (`server/__tests__/pdf_puppeteer_golden.test.ts`) asserting header/footer/rows.
   - TODO: Styling templates and header/footer layout polish; richer content assertions.
   - Added: PDF service enhanced header/footer templates with page numbers and optional cover page indicator in meta; now includes DOM markers (data-testid) and meta.minPages; golden test extended (env-gated via PDF_TEST_PUPPETEER) to assert header/footer flags, cover presence, sections count, and min page lower bound.
-- DoD: CSV/XLSX are consumable with complete columns and metadata.
+ - DoD: CSV/XLSX are consumable with complete columns and metadata; Executive Overview export includes verdict and triggered rule summary.
 
 ### T-080 i18n & a11y
 - Description: zh-TW/en-US text and number/date localization; basic a11y (keyboard nav/contrast/alt text).
@@ -207,6 +219,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Deps/Res: T-012; UI notifications.
 - EARS: Story 1, 13, 14.
 - Status: In-Progress (RunLoader/Worker/DirectoryPicker show errors; richer offsets/recovery and memory detection to add)
+- Added: Worker error messages enriched with filename and row/offset for JSON/CSV parse paths.
 - DoD: Broken files reproducibly yield clear messages; N/A doesn’t break layout.
 
 ### T-100 Session save/load
@@ -214,7 +227,7 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes: Reproduce same KPIs, filters, and verdict.
 - Deps/Res: Global state.
 - EARS: Story 15.
-- Status: Planned
+- Status: In-Progress (schemaVersion: 1; Executive Overview provides Save/Load for thresholds, filters, and locale; runs/persona restore pending)
 - DoD: After load, UI and numbers match.
 
 ### T-110 Insights (rules-based Top 3)
@@ -304,12 +317,13 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 
 ## 6) Open Questions
 - Baseline run for regression thresholds? (ties to T-060/T-031)
-- Persona overrides import/export needed? (T-020 extensions)
+- Resolved (2025-09-02): Persona Import/Export format = JSON only, schemaVersion: 1. Add versioning and forward-compat policy (tracked in T-021).
+- Resolved (2025-09-02): External links/images policy — default no auto-fetch; first click shows a confirmation with destination URL; open in new tab with rel="noopener noreferrer" (tracked in T-051/T-090).
 - Export style requirements (branding header/footer templates)? (T-070)
 
 ---
 
-## Progress Update — Current (2025-09-02)
+## Progress Update — Current (2025-09-03)
 - Done:
   - Verdict engine v1 (T-031); Executive Overview MVP shows KPIs, verdict, counts and latency p50/p90 (partial T-050).
   - Directory scan detects runs, artifact type counts, and items/metrics fast-scan (partial T-011).
@@ -323,6 +337,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - Run discovery coverage tooltip and polished empty-state (T-011 update).
   - Debounced sliders in FiltersBar, debounced Overview aggregation, and worker-side coalescing of aggregate requests (T-040 update).
   - Tooling solidified: ESLint/Prettier/Vitest configured; minimal unit tests added (T-002/T-120 partial).
+  - Executive Overview enhancements: persisted collapsible panel state per run and KPI Info popover (n/formula/sources/filters/thresholds) (T-050 update).
+  - Worker error reporting now includes filename and row/offset for JSON/CSV (T-012/T-090 updates).
+  - QA details safe preview: confirm-on-first-click for external links, open in new tab with noopener/noreferrer; images preview on demand with placeholder fallback (T-051/T-090 updates).
+  - Metrics Registry: generic fallback meta and default direction for unknown metrics (T-020 update).
+  - Threshold Editor: inline validation (0–1 range, finite, critical ≤ warning) with inline error messaging (T-030 UX improvement).
 - Added:
   - QA export now carries branding/threshold metadata (CSV/XLSX), covered by new E2E spec gated by PW_E2E_ENABLED.
   - Analytics multi-run overlay with legend toggles; Directory Picker adds runs to compare set.
@@ -330,10 +349,11 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
   - PDF service Puppeteer mode with golden validations (env-gated).
 - Next:
   - Optional polish for T-011: inline full metrics list beyond tooltip.
-  - Filters perf: tune debounce values and batching for 20k+; measure worker timings (T-040).
-  - Multi-run delta tables (abs/%), regression highlighting, and N/A handling in Compare view (T-060).
+  - Metrics Registry: finalize generic card + histogram + help texts for unknown metrics (T-020).
+  - Filters perf: tune debounce values and batching for 20k+; measure worker timings (T-040/T-120).
   - Analytics: grouped box/scatter overlays across runs, legend polish (T-052).
   - Export: styling templates and polished PDFs; optional XLSX consolidated matrix (T-070/T-040).
+  - Session Save/Load: add runs/persona to JSON (schemaVersion: 1), and restore fully (T-100).
   - Expand unit/integration/E2E tests (RTL/Playwright) (T-120).
 
 Note: All code comments must be in English.

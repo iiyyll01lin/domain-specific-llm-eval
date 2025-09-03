@@ -30,5 +30,13 @@ const known: Record<string, MetricMeta> = {
 }
 
 export function getMetricMeta(key: MetricKey): MetricMeta {
-  return known[key] || { key, labelKey: `metrics.${key}.label`, helpKey: `metrics.${key}.help`, format: defaultFormat, direction: 'higher' }
+  if (known[key]) return known[key]
+  // Generic fallback: construct reasonable defaults for unseen metric keys
+  return {
+    key,
+    labelKey: `metrics.${key}.label`,
+    helpKey: `metrics.${key}.help`,
+    format: defaultFormat,
+    direction: 'higher',
+  }
 }

@@ -46,7 +46,12 @@ async function parseFile(file: File): Promise<EvaluationItem[]> {
   try {
     data = JSON.parse(text)
   } catch (e: any) {
-    throw new Error(`JSON 解析失敗: ${e?.message ?? e}`)
+  const msg = String(e?.message ?? e)
+  // Best-effort offset/position extraction from error message if available
+  // e.g., Unexpected token } in JSON at position 1234
+  const m = /position\s+(\d+)/i.exec(msg)
+  const pos = m ? Number(m[1]) : undefined
+  throw new Error(`JSON 解析失敗: ${file.name}${pos != null ? ` @ offset ${pos}` : ''}: ${msg}`)
   }
   const arr = extractArrayFromJson(data)
   const items: EvaluationItem[] = []
@@ -89,7 +94,17 @@ async function parseCsvFile(file: File): Promise<EvaluationItem[]> {
         postMessage({ type: 'progress', phase: 'parse-csv', current: processed, total: processed })
       },
       complete: () => resolve(),
-      error: (err: any) => reject(err),
+      error: (err: any, fileArg?: any, inputElem?: any, reason?: any) => {
+        try {
+          const row = (err && (err.row ?? err.code ?? undefined)) as number | undefined
+          // PapaParse puts cursor/bytes into meta when possible; not always exposed here
+          const metaCursor = (err && (err.meta?.cursor ?? undefined)) as number | undefined
+          const msg = String(err?.message ?? reason ?? err)
+          reject(new Error(`CSV 解析失敗: ${file.name}${row != null ? ` @ row ${row}` : ''}${metaCursor != null ? `, offset ${metaCursor}` : ''}: ${msg}`))
+        } catch (e) {
+          reject(err)
+        }
+      },
     })
   })
   return items

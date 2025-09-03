@@ -77,7 +77,7 @@ export const RunLoader: React.FC = () => {
         const msg = ev.data
         if (msg.type === 'progress') setProgress(`${msg.phase}: ${msg.current}/${msg.total}`)
         else if (msg.type === 'parsed') {
-          setRunData({ items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies })
+          setRunData({ id: file.name, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: file } })
           setProgress('完成')
           worker.terminate()
         } else if (msg.type === 'error') {
@@ -114,7 +114,7 @@ export function defaultParseSummary(
     if (msg.type === 'progress') {
       onProgress?.(`${msg.phase}: ${msg.current}/${msg.total}`)
     } else if (msg.type === 'parsed') {
-  setRunData({ items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies })
+  setRunData({ id: file.name, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: file } })
       onProgress?.('完成')
       worker.terminate()
     } else if (msg.type === 'error') {

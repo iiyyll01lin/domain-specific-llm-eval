@@ -1,16 +1,19 @@
 import React from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import type { Thresholds } from '@/core/types'
+import { validateThresholdValue, validateThresholdsShape } from '@/core/verdict'
 
 export const ThresholdEditor: React.FC = () => {
   const thresholds = usePortalStore((s) => s.thresholds)
   const setThresholds = usePortalStore((s) => s.setThresholds)
 
   const onChange = (k: string, field: 'warning' | 'critical', v: string) => {
-    const num = Number(v)
-    if (Number.isNaN(num)) return
-    const next = { ...thresholds, [k]: { ...(thresholds as any)[k], [field]: num } } as any
-    setThresholds(next)
+  const num = Number(v)
+  if (!validateThresholdValue(num)) return
+  const next = { ...thresholds, [k]: { ...(thresholds as any)[k], [field]: num } } as any
+  const chk = validateThresholdsShape(next)
+  if (!chk.ok) return
+  setThresholds(next)
   }
 
   const onReset = async () => {
@@ -49,6 +52,7 @@ export const ThresholdEditor: React.FC = () => {
                 value={lv?.warning ?? ''}
                 onChange={(e) => onChange(k, 'warning', e.target.value)}
                 style={{ marginLeft: 6, width: 90 }}
+                aria-label={`threshold-${k}-warning`}
               />
             </label>
             <label style={{ marginLeft: 12 }}>
@@ -61,8 +65,17 @@ export const ThresholdEditor: React.FC = () => {
                 value={lv?.critical ?? ''}
                 onChange={(e) => onChange(k, 'critical', e.target.value)}
                 style={{ marginLeft: 6, width: 90 }}
+                aria-label={`threshold-${k}-critical`}
               />
             </label>
+            {(() => {
+              const chk = validateThresholdsShape({ [k]: lv } as any)
+              return chk.ok ? null : (
+                <div style={{ color: 'crimson', marginTop: 4, fontSize: 12 }} aria-live="polite">
+                  {chk.errors.join(', ')}
+                </div>
+              )
+            })()}
           </div>
         ))}
       </div>

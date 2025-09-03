@@ -91,7 +91,7 @@ export const RunDirectoryPicker: React.FC = () => {
     // lazy import worker-based parser already in RunLoader; reuse via direct Worker postMessage
     const mod = await import('./RunLoader')
     // re-use hidden method through a small shim to avoid duplication
-    ;(mod as any).defaultParseSummary?.(r.summaryJson, setRunData, console.error)
+    ;(mod as any).defaultParseSummary?.(r.summaryJson, (data: any) => setRunData({ ...data, id: r.runPath, artifacts: { summaryJson: r.summaryJson, configYaml: r.configYaml } }), console.error)
 
     // Load thresholds overrides from config.yaml if present
     try {
@@ -123,7 +123,7 @@ export const RunDirectoryPicker: React.FC = () => {
           const setRuns = usePortalStore.getState().setRuns
           const setSelectedRuns = usePortalStore.getState().setSelectedRuns
           const id = r.runPath
-          setRuns({ ...runs, [id]: { items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies } })
+          setRuns({ ...runs, [id]: { id, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: r.summaryJson, configYaml: r.configYaml } } })
           const sel = new Set(usePortalStore.getState().selectedRuns || [])
           sel.add(id)
           setSelectedRuns(Array.from(sel))
