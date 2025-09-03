@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React from 'react'
 import * as echarts from 'echarts'
 import { usePortalStore } from '@/app/store/usePortalStore'

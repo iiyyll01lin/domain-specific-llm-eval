@@ -212,7 +212,7 @@ export default function QAFailureExplorer() {
                               <img src={loaded} alt={`image-${k}`} style={{ maxWidth: 160, maxHeight: 120, objectFit: 'cover', background: '#222' }}
                                 onError={(e) => {
                                   const el = e.currentTarget as HTMLImageElement
-                                  el.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"160\" height=\"120\"><rect width=\"100%\" height=\"100%\" fill=\"#222\"/><text x=\"50%\" y=\"50%\" dominant-baseline=\"middle\" text-anchor=\"middle\" fill=\"#aaa\" font-size=\"12\">No preview</text></svg>`)
+                                  el.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="100%" height="100%" fill="#222"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#aaa" font-size="12">No preview</text></svg>`)
                                 }} />
                             )}
                           </div>

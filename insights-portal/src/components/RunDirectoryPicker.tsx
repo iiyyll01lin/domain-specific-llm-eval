@@ -8,6 +8,8 @@ interface DetectedRun {
   runPath: string
   summaryJson?: File
   configYaml?: File
+  /** First discovered CSV file under this run (best-effort) */
+  csvFile?: File
   totalItems?: number
   metricsCoverage?: Record<string, number>
   artifactCounts?: { resultJson: number; csv: number; otherJson: number }
@@ -43,6 +45,11 @@ export const RunDirectoryPicker: React.FC = () => {
             found[runPath].configYaml = file
           } else if (lower.endsWith('.csv')) {
             found[runPath].artifactCounts!.csv += 1
+            // Capture the first CSV file for loading comparison when no JSON summary exists
+            if (!found[runPath].csvFile) {
+              const file = await (handle as any).getFile()
+              found[runPath].csvFile = file
+            }
           } else if (lower.endsWith('.json')) {
             found[runPath].artifactCounts!.otherJson += 1
           }
@@ -111,6 +118,40 @@ export const RunDirectoryPicker: React.FC = () => {
     }
   }
 
+  const loadRunCsv = async (r: DetectedRun) => {
+    if (!r.csvFile) return
+    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    await new Promise<void>((resolve, reject) => {
+      worker.onmessage = (ev: MessageEvent<any>) => {
+        const msg = ev.data
+        if (msg.type === 'parsed') {
+          setRunData({ id: r.runPath, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: r.csvFile, configYaml: r.configYaml } })
+          worker.terminate()
+          resolve()
+        } else if (msg.type === 'error') {
+          worker.terminate(); reject(new Error(String(msg.message)))
+        }
+      }
+      worker.postMessage({ type: 'parse-csv', file: r.csvFile })
+    })
+
+    // Load thresholds overrides from config.yaml if present (same as JSON path)
+    try {
+      if (r.configYaml) {
+        const text = await r.configYaml.text()
+        const cfg = parseSimpleYAML(text)
+        const th = extractThresholdsFromConfig(cfg)
+        if (th) {
+          const setThresholds = usePortalStore.getState().setThresholds
+          const prev = usePortalStore.getState().thresholds
+          setThresholds({ ...prev, ...th })
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse config.yaml thresholds:', e)
+    }
+  }
+
   const addToCompare = async (r: DetectedRun) => {
     if (!r.summaryJson) return
     // Parse via worker then add to runs map in store for multi-run compare
@@ -134,6 +175,31 @@ export const RunDirectoryPicker: React.FC = () => {
         }
       }
       worker.postMessage({ type: 'parse-summary-json', file: r.summaryJson })
+    })
+  }
+
+  const addToCompareCsv = async (r: DetectedRun) => {
+    if (!r.csvFile) return
+    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    await new Promise<void>((resolve, reject) => {
+      worker.onmessage = (ev: MessageEvent<any>) => {
+        const msg = ev.data
+        if (msg.type === 'parsed') {
+          const runs = usePortalStore.getState().runs || {}
+          const setRuns = usePortalStore.getState().setRuns
+          const setSelectedRuns = usePortalStore.getState().setSelectedRuns
+          const id = r.runPath
+          setRuns({ ...runs, [id]: { id, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: r.csvFile, configYaml: r.configYaml } } })
+          const sel = new Set(usePortalStore.getState().selectedRuns || [])
+          sel.add(id)
+          setSelectedRuns(Array.from(sel))
+          worker.terminate()
+          resolve()
+        } else if (msg.type === 'error') {
+          worker.terminate(); reject(new Error(String(msg.message)))
+        }
+      }
+      worker.postMessage({ type: 'parse-csv', file: r.csvFile })
     })
   }
 
@@ -171,7 +237,13 @@ export const RunDirectoryPicker: React.FC = () => {
                   </span>
                 )}
                 <button onClick={() => loadRun(r)} disabled={!r.summaryJson}>載入</button>
+                {!r.summaryJson && (
+                  <button onClick={() => loadRunCsv(r)} disabled={!r.csvFile}>載入 CSV</button>
+                )}
                 <button onClick={() => addToCompare(r)} disabled={!r.summaryJson}>加入比較</button>
+                {!r.summaryJson && (
+                  <button onClick={() => addToCompareCsv(r)} disabled={!r.csvFile}>加入比較 CSV</button>
+                )}
               </li>
             ))}
           </ul>
@@ -179,7 +251,7 @@ export const RunDirectoryPicker: React.FC = () => {
       )}
       {!busy && scannedOnce && runs.length === 0 && (
         <div style={{ marginTop: 8, opacity: 0.85 }}>
-          沒有找到相容的檔案（需要 ragas_enhanced_evaluation_results_*.json 或 portal summary）。
+          沒有找到相容的檔案（需要 ragas_enhanced_evaluation_results_*.json、portal summary，或 CSV）。
         </div>
       )}
     </div>

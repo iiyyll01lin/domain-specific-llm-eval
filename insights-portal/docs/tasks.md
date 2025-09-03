@@ -67,16 +67,23 @@ This document tracks the implementation plan for Option A (Local-first SPA, Reac
 - Outcomes:
   - Worker supports `parse-summary-json` and `parse-csv` and returns `latencies` (avg/p50/p90/p99).
   - `normalizeItem/aggregateKpis/computeLatencyStats` implemented; Executive Overview shows p50/p90.
-- Status: In-Progress (CSV pipeline parses and computes; UI entry is still JSON-first and CSV flow not fully wired into UI)
-- DoD: Can load `testset_with_rag_responses_*.csv`, show KPIs and latency stats; error messages include filename and row offsets (follow-up).
+- Status: Done
+  - Implemented: CSV end-to-end path wired into UI via `RunDirectoryPicker` — auto-detects first CSV per run; adds “載入 CSV/加入比較 CSV”; invokes Worker `parse-csv`; store updated with items/kpis/latencies.
+  - Implemented: Worker CSV parser uses PapaParse (chunked) inside Web Worker; Zod `RawItemSchema` + `normalizeItem` unify fields and latency aliases; `computeLatencyStats` returns avg/p50/p90/p99.
+  - Implemented: Executive Overview reads `run.latencies` and derived latencies to render p50/p90 consistently (CSV or JSON source).
+  - Error handling: CSV parse errors include filename and row and/or byte offset when available; JSON parse errors include filename and offset when available.
+- DoD: Able to load `testset_with_rag_responses_*.csv`, show KPIs and latency stats in Overview; errors include filename and row/offset.
 
 ### T-012 Parser Worker & Zod schema validation
 - Description: Web Worker performs parsing (JSON/CSV via PapaParse chunked), validates with Zod, outputs normalized structures.
 - Outcomes: Emits `RunMeta` and `EvaluationItem[]`; incremental progress; clearer errors with filename/offset.
 - Deps/Res: T-011; `design.md` models; `requirements.md` file patterns.
 - EARS: Story 1, 13 (error details).
-- Status: In-Progress (JSON worker, normalization, KPI aggregation done; supports `{items:[]}` or array input)
-- DoD: ~5k rows within acceptable time on sample; broken file yields clear error messages.
+- Status: Done
+  - Implemented: `RawItemSchema` + `normalizeItem` cover id fallbacks, metric key aliases, latency aliases; supports array or `{ items: [] }` JSON.
+  - Implemented: Worker emits progress for parse/parse-csv and aggregate; errors include filename and offset/row when available.
+  - Performance: ≤5k rows parse and aggregate within acceptable timings in local tests; aggregation coalescing window configurable via Dev panel.
+- DoD: ~5k rows within acceptable time on sample; broken file yields clear error messages with filename and position when available.
 
 ### T-013 Metric normalization & missing-value policy
 - Description: Unify metric keys and decimals; use null/N.A for missing; keep extended fields in `extra`.

@@ -9,7 +9,7 @@ vi.mock('xlsx', () => {
       book_new: () => ({ __sheets: [] }),
       book_append_sheet: (wb: any, ws: any, name: string) => { appended.push({ name, rows: ws.__rows || [] }) },
     },
-    write: (wb: any, opts: any) => new Uint8Array([1,2,3]),
+  write: () => new Uint8Array([1,2,3]),
   }
 })
 

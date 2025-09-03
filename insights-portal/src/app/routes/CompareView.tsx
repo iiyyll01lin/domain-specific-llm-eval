@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useMemo, useState } from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'

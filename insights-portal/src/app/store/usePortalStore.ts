@@ -73,7 +73,9 @@ export const usePortalStore = create<PortalState>((set) => ({
     const map = { ...(s.overviewPanels || {}) }
     const rid = runId || 'default'
     map[rid] = { ...(map[rid] || {}), [panelId]: expanded }
-    try { localStorage.setItem('portal.overviewPanels', JSON.stringify(map)) } catch {}
+    try { localStorage.setItem('portal.overviewPanels', JSON.stringify(map)) } catch {
+      // ignore persistence error
+    }
     return { overviewPanels: map }
   }),
   filters: { language: null, latencyRange: [null, null], metricRanges: {} },
