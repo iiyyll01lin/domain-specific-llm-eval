@@ -295,15 +295,30 @@ export default function ExecutiveOverview() {
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <details open={(panelMap?.[runId]?.['verdict'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'verdict', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>
             <summary style={{ cursor: 'pointer', userSelect: 'none', padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>Verdict</summary>
-            <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none', background: 'var(--bg-muted)', color: 'var(--text)' }}>
-              <strong>Verdict:</strong> {verdict?.verdict ?? '—'}
+            <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none', background: 'var(--bg-muted)', color: 'var(--text)', fontSize: 14 }}>
+              <div><strong>Verdict:</strong> {verdict?.verdict ?? '—'} <span style={{ marginLeft: 8, opacity: 0.8 }}>rule: {verdict?.triggeredRuleId || '—'}</span></div>
               {verdict?.failingMetrics?.length ? (
-                <span style={{ marginLeft: 8 }}>↓ {verdict.failingMetrics.join(', ')}</span>
+                <div style={{ marginTop: 4 }}>
+                  <strong>Failing:</strong>{' '}
+                  {verdict.failingMetrics.map((m, i) => {
+                    const th = (thresholds as any)[m]
+                    const val = (derived?.kpis ?? run.kpis)?.[m]
+                    let gapInfo = ''
+                    if (th && typeof val === 'number') {
+                      if (val < th.critical) gapInfo = `critical gap ${(100 * (th.critical - val) / th.critical).toFixed(1)}%`
+                      else if (val < th.warning) gapInfo = `warning gap ${(100 * (th.warning - val) / th.warning).toFixed(1)}%`
+                    }
+                    const totalFail = verdict?.failingMetrics ? verdict.failingMetrics.length : 0
+                    return <span key={m} style={{ marginRight: 8 }}>{m}{gapInfo ? ` (${gapInfo})` : ''}{i < totalFail - 1 ? ',' : ''}</span>
+                  })}
+                </div>
               ) : null}
-              <span style={{ marginLeft: 16, opacity: 0.8 }}>Items: {derived?.total ?? run.counts.total}</span>
-              {(derived?.latencies || run.latencies) && (
-                <span style={{ marginLeft: 16, opacity: 0.8 }}>latency p50/p90: {formatNum((derived?.latencies ?? run.latencies)?.p50)} ms / {formatNum((derived?.latencies ?? run.latencies)?.p90)} ms</span>
-              )}
+              <div style={{ marginTop: 4 }}>
+                <span style={{ marginRight: 16, opacity: 0.8 }}>Items: {derived?.total ?? run.counts.total}</span>
+                {(derived?.latencies || run.latencies) && (
+                  <span style={{ opacity: 0.8 }}>latency p50/p90: {formatNum((derived?.latencies ?? run.latencies)?.p50)} ms / {formatNum((derived?.latencies ?? run.latencies)?.p90)} ms</span>
+                )}
+              </div>
             </div>
           </details>
           <details open={(panelMap?.[runId]?.['insights'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'insights', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>

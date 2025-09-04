@@ -117,7 +117,7 @@ export const App: React.FC = () => {
   <button data-testid={TID.nav.executive} onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
   <button data-testid={TID.nav.qa} onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
   <button data-testid={TID.nav.analytics} onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
-  <button data-testid="nav-compare" onClick={() => setRoute('compare')}>Compare</button>
+  <button data-testid="nav-compare" onClick={() => setRoute('compare')}>{t('nav.compare')}</button>
         <ThemeSwitcher />
   <PersonaManager />
         <LangSwitcher />

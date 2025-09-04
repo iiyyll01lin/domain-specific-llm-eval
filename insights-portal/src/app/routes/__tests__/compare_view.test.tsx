@@ -18,7 +18,8 @@ describe('CompareView', () => {
   it('renders baseline selector and exports', () => {
     render(<CompareView />)
   // Basic smoke: elements are queryable
-  screen.getByText('Compare Runs')
+  // Heading uses i18n; query by role heading
+  screen.getByRole('heading', { level: 2 })
   screen.getByTestId('compare-baseline')
   screen.getByLabelText('export-compare-csv')
   screen.getByLabelText('export-compare-xlsx')

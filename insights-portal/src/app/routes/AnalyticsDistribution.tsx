@@ -1,10 +1,12 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import * as echarts from 'echarts'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
 import { exportTableToCSV, exportMultipleSheetsXLSX } from '@/core/exporter'
 
 export const AnalyticsDistribution: React.FC = () => {
+  const { t } = useTranslation()
   const run = usePortalStore((s) => s.run)
   const runs = usePortalStore((s) => s.runs || {})
   const selectedRuns = usePortalStore((s) => s.selectedRuns || [])
@@ -277,20 +279,20 @@ export const AnalyticsDistribution: React.FC = () => {
   }
 
   return (
-    <section>
-      <h2>Analytics Distribution</h2>
+    <section aria-labelledby="analytics-title">
+      <h2 id="analytics-title">{t('analytics.title')}</h2>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <label>
-          Mode
+          {t('analytics.mode')}
           <select aria-label="analytics-mode" value={mode} onChange={(e) => setMode(e.target.value as any)} style={{ marginLeft: 6 }}>
             <option value="hist">Histogram</option>
             <option value="box">Box</option>
             <option value="scatter">Scatter</option>
           </select>
         </label>
-    {mode === 'box' && (
+  {mode === 'box' && (
           <label>
-            Cohort
+      {t('analytics.cohort')}
             <select aria-label="analytics-cohort" value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
               <option value="language">Language</option>
               <option value="success">Success/Failure</option>
@@ -299,7 +301,7 @@ export const AnalyticsDistribution: React.FC = () => {
           </label>
         )}
         <label>
-          Metric
+          {t('analytics.metric')}
           <select aria-label="analytics-metric-x" value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>
             {Object.keys(run?.kpis || {}).map((k) => (
               <option key={k} value={k}>{k}</option>
@@ -316,11 +318,11 @@ export const AnalyticsDistribution: React.FC = () => {
             </select>
           </label>
         )}
-        <button onClick={onExportCsv} aria-label="export-analytics-csv">Export CSV</button>
-        <button onClick={onExportXlsx} aria-label="export-analytics-xlsx">Export XLSX</button>
-        <button onClick={onExportPng} aria-label="export-analytics-png">Export PNG</button>
+  <button onClick={onExportCsv} aria-label="export-analytics-csv">{t('analytics.exportCsv')}</button>
+  <button onClick={onExportXlsx} aria-label="export-analytics-xlsx">{t('analytics.exportXlsx')}</button>
+  <button onClick={onExportPng} aria-label="export-analytics-png">{t('analytics.exportPng')}</button>
         <label style={{ marginLeft: 8 }}>
-          <input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} data-testid="analytics-legend-toggle" /> Legend
+          <input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} data-testid="analytics-legend-toggle" /> {t('analytics.legend')}
         </label>
         {showLegend && (selectedRuns.length >= 2) && (
           <div style={{ display: 'inline-flex', gap: 8, marginLeft: 8 }}>
@@ -338,7 +340,7 @@ export const AnalyticsDistribution: React.FC = () => {
           </div>
         )}
       </div>
-      <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
+  <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label={t('analytics.title')} role="img" />
       {/* Test-only diagnostics to support E2E assertions without poking into ECharts internals */}
       <div style={{ display: 'none' }}>
         <span data-testid="analytics-series-count">{seriesInfo.count}</span>
@@ -347,7 +349,7 @@ export const AnalyticsDistribution: React.FC = () => {
       </div>
       {selectedRuns.length >= 2 && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Compare (metric: {metric})</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('analytics.compareTable', { metric })}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(120px, 1fr))', gap: 6 }}>
             <div style={{ fontWeight: 600 }}>Run</div>
             <div style={{ fontWeight: 600 }}>Mean</div>

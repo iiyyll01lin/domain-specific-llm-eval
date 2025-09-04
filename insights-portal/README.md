@@ -6,6 +6,23 @@
 2. Start the dev server
 3. Open http://localhost:5173 in your browser
 
+Key concepts:
+- Executive Overview: KPIs + Verdict + Insights
+- QA Explorer: Low-scoring items, details, bookmarks
+- Analytics: Distributions (hist/box/scatter) + brush-to-filter
+- Compare: Multi-run statistical deltas & cohort comparison
+
+Primary actions:
+1. Select Directory → scan runs → Load
+2. Adjust Thresholds → verdict & KPI gaps update immediately
+3. Apply Filters (language / latency / metric ranges) → all views recompute via worker
+4. Bookmark failing items in QA → Export bookmarks
+5. Use Analytics brush to constrain metric ranges interactively
+6. Add additional runs (Directory Picker “Add to Compare”) → open Compare to analyze deltas
+7. Generate exports (CSV/XLSX/PNG) with metadata (run IDs, filters, thresholds, timestamp)
+8. Save Session → later Load Session to restore filters, thresholds, locale, persona, selected runs
+9. Review Insights panel for rule-based actions (hallucination risk, relevancy vs faithfulness gap, keyword issues)
+
 ## Provide sample data
 
 - Use the sample folder in this repo:
@@ -59,11 +76,16 @@ Expected
 - Verdict banner shows Ready/At Risk/Blocked; Items > 0
 - KPI cards render metric values; latency p50/p90 shows N/A if latency is not provided
 - Sorting by threshold gap works; editing thresholds updates verdict/gaps instantly
+- Insights panel lists top triggered insights with evidence and actions when rules match.
+- Session save/load JSON reproduces thresholds, filters, persona, selected runs.
 
 ## Troubleshooting
 - 0 items: The source file may be a report-type JSON without per-item metrics. Use the converter against `ragas_enhanced_detailed_calculations_*.json` or adjust the pipeline to emit the summary.
 - Missing metrics: Only supported keys are aggregated; add mapping if your pipeline uses different names.
 - Latency: Add a `latencyMs` (or alias) field per item if you want latency stats in the UI.
+- i18n: If text appears as translation keys (e.g., `compare.title`) ensure `i18n/index.ts` initializes before rendering (check console for init warnings in custom integrations/tests).
+- Compare empty: Need ≥2 runs added (Directory Picker “Add to Compare”).
+- High memory warning: Consider filtering, sampling (auto for >20k), or limiting heavy charts.
 
 ## CI suggestion (optional)
 - Add a validation step to assert the emitted summary JSON parses and yields non-zero items for supported metrics.
@@ -102,4 +124,36 @@ Tips
 - If SLA is flaky, run headed/debug: `npx playwright test e2e/qa-sla.spec.ts --headed --debug`.
 - For production-like perf, use preview: `npm run build && npm run preview`, then point Playwright baseURL to the preview port.
 - Stable UI selectors are exposed via `data-testid` (e.g., `qa-table`, `qa-row-<idx>`, `qa-details`).
+
+## Session Management
+
+Buttons in Executive Overview:
+- Save Session → downloads JSON: { schemaVersion, runId, thresholds, filters, locale, persona, selectedRuns }
+- Load Session → restore identical KPI calculations & verdict (deterministic for given inputs)
+
+## Insights Engine (Rules-Based)
+Current heuristics derive plain-language suggestions (English) referencing metric patterns. Example triggers:
+- High ContextPrecision/Recall with low Faithfulness → hallucination risk
+- Low ContextualKeywordMean variance → keyword coverage issue
+- Large AnswerRelevancy vs Faithfulness gap → grounding consistency actions
+
+## Accessibility & i18n
+- zh-TW & en-US; toggle persists to localStorage key `portal.lang`.
+- Chart containers expose `role="img"` and localized aria-labels.
+
+## Export Metadata
+All exports embed (where format permits):
+- Timestamp, filters, thresholds, branding block (brand/title/footer)
+- Multi-run compare: per-metric deltaAbs/deltaPct + sample counts + NA %
+
+## Performance Targets
+- ≤5k rows: filter recompute ≤300ms
+- ≤20k rows: ≤1s with sampling hints
+- >20k: adaptive sampling (25%) unless disabled; memory pressure warning if usage elevated.
+
+## Roadmap (Excerpt)
+- PDF/PNG high-fidelity (Option B service) — partial stub in `server/`
+- Advanced correlation/regression analytics
+- PWA/Electron packaging
+- Optional LLM rationale generation (off by default; privacy-first design)
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
 import { exportTableToCSV, exportTableToXLSX, exportMultipleSheetsXLSX } from '@/core/exporter'
@@ -34,6 +35,7 @@ function statsFor(values: number[]): StatRow {
 function fmt(v: number | null) { return v == null ? 'N/A' : v.toFixed(3) }
 
 export default function CompareView() {
+  const { t } = useTranslation()
   const runs = usePortalStore((s: any) => s.runs || {})
   const selectedRuns = usePortalStore((s: any) => s.selectedRuns || [])
   const thresholds = usePortalStore((s: any) => s.thresholds)
@@ -152,23 +154,23 @@ export default function CompareView() {
   }
 
   if (selectedRuns.length < 2) {
-    return <div>Please add 2 or more runs to compare via Directory Picker.</div>
+  return <div>{t('compare.title')} – {t('overview.pickHint')}</div>
   }
 
   return (
-    <section>
-      <h2>Compare Runs</h2>
+    <section aria-labelledby="compare-title">
+      <h2 id="compare-title">{t('compare.title')}</h2>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <label>
-          Baseline
+          {t('compare.baseline')}
           <select value={effectiveBaseline || ''} onChange={(e) => setBaseline((e.target as HTMLSelectElement).value)} style={{ marginLeft: 6 }} data-testid="compare-baseline">
             {selectedRuns.map((rid: string) => (
               <option key={rid} value={rid}>{rid.split('/').slice(-1)[0]}</option>
             ))}
           </select>
         </label>
-        <button onClick={onExportCsv} aria-label="export-compare-csv">Export CSV</button>
-        <button onClick={onExportXlsx} aria-label="export-compare-xlsx">Export XLSX</button>
+  <button onClick={onExportCsv} aria-label="export-compare-csv">{t('compare.exportCsv')}</button>
+  <button onClick={onExportXlsx} aria-label="export-compare-xlsx">{t('compare.exportXlsx')}</button>
       </div>
   {/* Cohort-based multi-run compare (focused on one metric) */}
   <CohortCompare selectedRuns={selectedRuns} runs={runs} thresholds={thresholds} filters={filters} />
