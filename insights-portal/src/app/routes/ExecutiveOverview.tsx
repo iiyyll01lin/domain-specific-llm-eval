@@ -12,6 +12,8 @@ import { usePortalStore as useStore } from '@/app/store/usePortalStore'
 import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import DevTelemetryPanel from '@/components/DevTelemetryPanel'
 import type { Thresholds } from '@/core/types'
+import { generateInsights } from '@/core/insights/engine'
+import { sampleMemory } from '@/utils/memory'
 
 function KpiInfoPopover(props: { metricKey: string; value: number | undefined; runId?: string; total?: number; latencies?: { p50?: number|null, p90?: number|null }; sources?: string[]; filters?: any; thresholds?: any; locale?: string }) {
   const { t } = useTranslation()
@@ -162,7 +164,8 @@ export default function ExecutiveOverview() {
       thresholds: state.thresholds as Thresholds,
       filters: state.filters,
       locale: state.locale,
-      persona: undefined,
+      persona: state.personaId,
+      selectedRuns: state.selectedRuns,
     }
     const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
@@ -186,12 +189,12 @@ export default function ExecutiveOverview() {
     const text = await file.text()
     const data = JSON.parse(text)
     if (!data || (data.schemaVersion !== 1)) throw new Error('Unsupported session schemaVersion')
-    const setLocale = useStore.getState().setLocale
-    const setThresholds = useStore.getState().setThresholds
-    const setFilters = useStore.getState().setFilters
-    if (data.locale) setLocale(data.locale)
-    if (data.thresholds) setThresholds(data.thresholds)
-    if (data.filters) setFilters(data.filters)
+  const { setLocale, setThresholds, setFilters, setSelectedRuns, setPersonaId } = useStore.getState() as any
+  if (data.locale) setLocale(data.locale)
+  if (data.thresholds) setThresholds(data.thresholds)
+  if (data.filters) setFilters(data.filters)
+  if (data.selectedRuns) setSelectedRuns(data.selectedRuns)
+  if (data.persona) setPersonaId(data.persona)
   }
 
   const availableMetricKeys = useMemo(() => {
@@ -221,6 +224,16 @@ export default function ExecutiveOverview() {
   const runId = run?.id || 'default'
   const panelMap = useStore((s) => s.overviewPanels)
   const setPanelExpanded = useStore((s) => s.setPanelExpanded)
+  const insights = React.useMemo(() => {
+    if (!run) return []
+    return generateInsights({ kpis: (derived?.kpis ?? run.kpis) as any, thresholds })
+  }, [run, derived?.kpis, thresholds])
+  const [mem, setMem] = React.useState<any>()
+  React.useEffect(() => {
+    const id = setInterval(() => { setMem(sampleMemory()) }, 5000)
+    setMem(sampleMemory())
+    return () => clearInterval(id)
+  }, [])
 
   return (
     <section>
@@ -271,6 +284,11 @@ export default function ExecutiveOverview() {
         <label>
       <input type="checkbox" checked={sortByGap} onChange={(e) => setSortByGap(e.target.checked)} /> {t('overview.sortByGap')}
         </label>
+        {mem?.pressure && mem.pressure !== 'low' && (
+          <span style={{ marginLeft: 16, color: mem.pressure === 'high' ? 'var(--status-error)' : 'var(--status-warn)', fontSize: 12 }}>
+            Memory usage {mem.usedMB.toFixed(0)}MB{mem.totalMB ? ` / ${mem.totalMB.toFixed(0)}MB` : ''} — {mem.pressure === 'high' ? 'consider limiting rows or disabling heavy charts' : 'moderate usage'}
+          </span>
+        )}
       </div>
     {!run && <p style={{ marginTop: 12 }}>{t('overview.pickHint')}</p>}
   {run && (
@@ -286,6 +304,30 @@ export default function ExecutiveOverview() {
               {(derived?.latencies || run.latencies) && (
                 <span style={{ marginLeft: 16, opacity: 0.8 }}>latency p50/p90: {formatNum((derived?.latencies ?? run.latencies)?.p50)} ms / {formatNum((derived?.latencies ?? run.latencies)?.p90)} ms</span>
               )}
+            </div>
+          </details>
+          <details open={(panelMap?.[runId]?.['insights'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'insights', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>
+            <summary style={{ cursor: 'pointer', userSelect: 'none', padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>Insights</summary>
+            <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none', background: 'var(--bg-muted)', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {!insights.length && <div style={{ fontSize: 12, opacity: 0.8 }}>No insights triggered.</div>}
+              {insights.map(ins => (
+                <div key={ins.id} style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{ins.title}</div>
+                  <div style={{ fontSize: 12, marginBottom: 4 }}>{ins.description}</div>
+                  <div style={{ fontSize: 11, marginBottom: 4 }}>
+                    <strong>Evidence:</strong>
+                    <ul style={{ margin: '4px 0 0 16px' }}>
+                      {ins.evidence.map((e,i)=><li key={i}>{e}</li>)}
+                    </ul>
+                  </div>
+                  <div style={{ fontSize: 11 }}>
+                    <strong>Actions:</strong>
+                    <ul style={{ margin: '4px 0 0 16px' }}>
+                      {ins.actions.map((a,i)=><li key={i}>{a}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              ))}
             </div>
           </details>
           {/* Use derived kpis when filtered */}

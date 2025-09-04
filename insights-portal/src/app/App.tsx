@@ -8,6 +8,7 @@ import { LangSwitcher } from '@/components/LangSwitcher'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TID } from '@/testing/testids'
+import PersonaManager from '@/components/PersonaManager'
 
 export const App: React.FC = () => {
   const { t } = useTranslation()
@@ -118,6 +119,7 @@ export const App: React.FC = () => {
   <button data-testid={TID.nav.analytics} onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
   <button data-testid="nav-compare" onClick={() => setRoute('compare')}>Compare</button>
         <ThemeSwitcher />
+  <PersonaManager />
         <LangSwitcher />
       </header>
       <main style={{ marginTop: 16 }}>

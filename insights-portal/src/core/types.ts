@@ -61,3 +61,19 @@ export interface ThresholdProfile {
     verdict: Verdict
   }>
 }
+
+// Persona profile (schemaVersion:1)
+export interface PersonaProfileV1 {
+  schemaVersion: 1
+  id: string
+  name: string
+  locale: 'zh-TW' | 'en-US'
+  dashboards: Array<'executive'|'qa'|'analytics'|'compare'>
+  defaults?: {
+    filters?: Record<string, unknown>
+    thresholdTemplate?: string
+  }
+  [k: string]: unknown
+}
+
+export type PersonaProfile = PersonaProfileV1

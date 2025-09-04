@@ -355,7 +355,7 @@ graph LR
     API[REST API]
     Ingest[Ingestion & Parsing Workers]
     Cache[(Cache/DB)]
-    Export[Export Service (PDF/PNG)]
+    Export[Export Service PDF/PNG]
   end
 
   Storage[(Runs Volume - read-only)]:::data

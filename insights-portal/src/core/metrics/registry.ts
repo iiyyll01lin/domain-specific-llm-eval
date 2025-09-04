@@ -31,7 +31,8 @@ const known: Record<string, MetricMeta> = {
 
 export function getMetricMeta(key: MetricKey): MetricMeta {
   if (known[key]) return known[key]
-  // Generic fallback: construct reasonable defaults for unseen metric keys
+  // Generic fallback: construct reasonable defaults for unseen metric keys.
+  // Allow i18n layer to decide if translation exists; UI should fallback to key when missing.
   return {
     key,
     labelKey: `metrics.${key}.label`,
@@ -39,4 +40,8 @@ export function getMetricMeta(key: MetricKey): MetricMeta {
     format: defaultFormat,
     direction: 'higher',
   }
+}
+
+export function metricDirection(key: MetricKey): 'higher'|'lower' {
+  return getMetricMeta(key).direction || 'higher'
 }

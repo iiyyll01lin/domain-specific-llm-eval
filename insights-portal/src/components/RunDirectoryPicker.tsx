@@ -3,6 +3,7 @@ import { iterateDir } from '@/core/fs'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { parseSimpleYAML, extractThresholdsFromConfig } from '@/core/yaml'
 import WorkerModule from '../workers/parser.worker.ts?worker'
+import { defaultParseSummary } from './runloader.parse'
 
 interface DetectedRun {
   runPath: string
@@ -95,10 +96,12 @@ export const RunDirectoryPicker: React.FC = () => {
 
   const loadRun = async (r: DetectedRun) => {
     if (!r.summaryJson) return
-    // lazy import worker-based parser already in RunLoader; reuse via direct Worker postMessage
-    const mod = await import('./RunLoader')
-    // re-use hidden method through a small shim to avoid duplication
-    ;(mod as any).defaultParseSummary?.(r.summaryJson, (data: any) => setRunData({ ...data, id: r.runPath, artifacts: { summaryJson: r.summaryJson, configYaml: r.configYaml } }), console.error)
+    // Use extracted helper shared with RunLoader to parse JSON summary
+    defaultParseSummary(
+      r.summaryJson,
+      (data: any) => setRunData({ ...data, id: r.runPath, artifacts: { summaryJson: r.summaryJson, configYaml: r.configYaml } }),
+      console.error,
+    )
 
     // Load thresholds overrides from config.yaml if present
     try {

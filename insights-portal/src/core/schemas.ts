@@ -68,6 +68,24 @@ export function normalizeItem(input: RawItem): EvaluationItem {
     }
   }
 
+  // merge nested metrics container objects (e.g., { metrics: { Faithfulness: 0.4, ... } } or { scores: {...} })
+  // Accept common container key names
+  const nestedMetricContainers = ['metrics', 'scores', 'kpis'] as const
+  for (const key of nestedMetricContainers) {
+    const bucket: any = (input as any)[key]
+    if (bucket && typeof bucket === 'object' && !Array.isArray(bucket)) {
+      for (const [mk, mv] of Object.entries(bucket)) {
+        if (metrics[mk as any] != null) continue
+        if (typeof mv === 'number' && Number.isFinite(mv) && mv >= 0 && mv <= 1) {
+          metrics[mk as any] = mv
+        } else if (typeof mv === 'string') {
+          const n = Number(mv)
+          if (!Number.isNaN(n) && n >= 0 && n <= 1) metrics[mk as any] = n
+        }
+      }
+    }
+  }
+
   // Normalize latency using common alternative field names
   const latencyCandidates = [
     (input as any).latencyMs,
@@ -86,14 +104,17 @@ export function normalizeItem(input: RawItem): EvaluationItem {
     }
   }
 
+  // Map alternative answer/reference keys
+  const referenceAnswer = (input as any).reference_answer ?? (input as any).gold_answer
+
   return {
     id: String(idCandidate ?? ''),
     language: (input as any).language ?? null,
     latencyMs: latency,
     metrics,
     user_input: (input as any).user_input,
-    reference: (input as any).reference,
-    rag_answer: (input as any).rag_answer,
+    reference: (input as any).reference ?? referenceAnswer ?? null,
+    rag_answer: (input as any).rag_answer ?? (input as any).answer ?? null,
     reference_contexts: (input as any).reference_contexts,
     rag_contexts: (input as any).rag_contexts,
     extra: input,

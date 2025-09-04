@@ -13,6 +13,8 @@ export type ThemeMode = 'dark'|'light'
 interface PortalState {
   locale: Locale
   setLocale: (l: Locale) => void
+  personaId?: string
+  setPersonaId: (id: string | undefined) => void
   theme: ThemeMode
   setTheme: (m: ThemeMode) => void
   toggleTheme: () => void
@@ -40,6 +42,12 @@ export const usePortalStore = create<PortalState>((set) => ({
   setLocale: (l) => {
     localStorage.setItem('portal.lang', l)
     set({ locale: l })
+  },
+  personaId: undefined,
+  setPersonaId: (id) => {
+    if (id) localStorage.setItem('portal.persona', id)
+    else localStorage.removeItem('portal.persona')
+    set({ personaId: id })
   },
   theme: (localStorage.getItem('portal.theme') as ThemeMode) || 'dark',
   setTheme: (m) => {
