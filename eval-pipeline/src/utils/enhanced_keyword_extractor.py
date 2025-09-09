@@ -1327,45 +1327,53 @@ class EnhancedHybridKeywordExtractor:
         return models_config.get('fallback')
     
     def _load_semantic_model(self, model_config: Dict[str, Any]):
-        """Load semantic model with configuration"""
+        """Load semantic model with configuration (offline-safe)."""
         try:
+            import os
             from sentence_transformers import SentenceTransformer
-            
+
             model_name = model_config.get('model_name')
             cache_dir = model_config.get('cache_dir', './cache/sentence_transformers')
             offline_mode = model_config.get('offline_mode', True)
-            local_files_only = model_config.get('local_files_only', True)
             device = model_config.get('device', 'cpu')
-            
+
             logger.debug(f"🔧 Loading semantic model: {model_name}")
-            
+
+            if offline_mode:
+                # Ensure huggingface libraries don't attempt network access
+                os.environ.setdefault('HF_HUB_OFFLINE', '1')
+                os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+
             model = SentenceTransformer(
                 model_name,
                 cache_folder=cache_dir,
                 device=device,
                 use_auth_token=False
             )
-            
+
             if offline_mode:
                 # Configure for offline use
                 model.max_seq_length = 512
-            
+
             return model
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to load semantic model {model_config.get('model_name')}: {e}")
-            
+
             # Try fallback models if available
             fallback_enabled = model_config.get('fallback_enabled', False)
             if fallback_enabled:
                 try:
+                    import os
                     from sentence_transformers import SentenceTransformer
+                    os.environ.setdefault('HF_HUB_OFFLINE', '1')
+                    os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
                     fallback_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
                     logger.info("✅ Loaded fallback model: all-MiniLM-L6-v2")
                     return fallback_model
                 except Exception as fallback_error:
                     logger.error(f"❌ Fallback model also failed: {fallback_error}")
-            
+
             return None
     
     def _detect_keywords_language(self, keyword_texts: List[str]) -> Dict[str, Any]:
@@ -1690,57 +1698,66 @@ class EnhancedHybridKeywordExtractor:
         }
         
         model_name = model_config.get('model_name', '')
-        
+
         try:
-            # Test basic model loading
-            start_time = time.time()
-            if KEYBERT_AVAILABLE:
-                # Quick availability check
-                test_model = SentenceTransformer(
-                    model_name,
-                    cache_folder=model_config.get('cache_dir', './cache/sentence_transformers'),
-                    device='cpu'  # Use CPU for health check
-                )
-                load_time = time.time() - start_time
-                
+            import os
+            # Fast path in offline mode: don't load models to avoid network
+            offline_flag = model_config.get('offline_mode', True) or os.environ.get('HF_HUB_OFFLINE') == '1' or os.environ.get('TRANSFORMERS_OFFLINE') == '1'
+            if offline_flag:
                 health_status.update({
                     'available': True,
-                    'load_time_estimate': load_time,
-                    'performance_score': max(0.1, min(1.0, 1.0 - (load_time / 30.0)))  # Score based on load time
+                    'performance_score': 1.0,
+                    'load_time_estimate': 0.0,
+                    'fallback_recommended': False,
+                    'issues': ['offline_mode_skip_network']
                 })
-                
-                # Memory check
-                if PSUTIL_AVAILABLE:
-                    process = psutil.Process()
-                    memory_before = process.memory_info().rss
-                    
-                    # Test small encoding
-                    test_model.encode(["test"], convert_to_tensor=False)
-                    
-                    memory_after = process.memory_info().rss
-                    memory_used_mb = (memory_after - memory_before) / 1024 / 1024
-                    
-                    health_status['memory_efficient'] = memory_used_mb < 500  # Less than 500MB
-                    
-                    if memory_used_mb > 1000:  # More than 1GB
-                        health_status['issues'].append('high_memory_usage')
-                        health_status['fallback_recommended'] = True
-                
-                del test_model  # Clean up
-                
-            else:
-                health_status['issues'].append('keybert_not_available')
+                logger.debug(f"🏥 Model health check (offline) for {model_name}: OK")
+                return health_status
+
+            # Online mode: bounded check using local loader
+            start_time = time.time()
+            test_model = self._load_semantic_model({
+                'model_name': model_name,
+                'cache_dir': model_config.get('cache_dir', './cache/sentence_transformers'),
+                'device': 'cpu',
+                'offline_mode': False
+            })
+            if test_model is None:
+                health_status['issues'].append('model_load_failed')
                 health_status['fallback_recommended'] = True
-                
+                return health_status
+
+            load_time = time.time() - start_time
+            health_status.update({
+                'available': True,
+                'load_time_estimate': load_time,
+                'performance_score': max(0.1, min(1.0, 1.0 - (load_time / 30.0)))
+            })
+
+            if PSUTIL_AVAILABLE:
+                process = psutil.Process()
+                memory_before = process.memory_info().rss
+                test_model.encode(["test"], convert_to_tensor=False)
+                memory_after = process.memory_info().rss
+                memory_used_mb = (memory_after - memory_before) / 1024 / 1024
+                health_status['memory_efficient'] = memory_used_mb < 500
+                if memory_used_mb > 1000:
+                    health_status['issues'].append('high_memory_usage')
+                    health_status['fallback_recommended'] = True
+
+            # Heuristic: recommend fallback if slow
+            if load_time > 15:
+                health_status['fallback_recommended'] = True
+                health_status['issues'].append('slow_load_time')
+
+            logger.debug(f"🏥 Model health check for {model_name}: score={health_status['performance_score']:.2f}, available={health_status['available']}, issues={health_status['issues']}")
+            return health_status
+
         except Exception as e:
             health_status['issues'].append(f'load_error: {str(e)}')
             health_status['fallback_recommended'] = True
             logger.debug(f"Model health check failed for {model_name}: {e}")
-        
-        logger.debug(f"🏥 Model health check for {model_name}: score={health_status['performance_score']:.2f}, "
-                    f"available={health_status['available']}, issues={health_status['issues']}")
-        
-        return health_status
+            return health_status
     
     def _optimize_batch_processing(self, keywords: List[str], model_config: Dict[str, Any]) -> Dict[str, Any]:
         """

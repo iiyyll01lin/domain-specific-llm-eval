@@ -2322,6 +2322,44 @@ class PureRagasTestsetGenerator:
         }
         
         try:
+            # Normalize reference_contexts column: convert stringified lists to actual lists
+            try:
+                import ast
+                if 'reference_contexts' in df.columns:
+                    def _normalize_contexts(val):
+                        if val is None:
+                            return []
+                        # Handle pandas NaN
+                        try:
+                            import math
+                            if isinstance(val, float) and math.isnan(val):
+                                return []
+                        except Exception:
+                            pass
+                        # If already a list
+                        if isinstance(val, list):
+                            return val
+                        # If it's a string that looks like a list
+                        if isinstance(val, str):
+                            s = val.strip()
+                            if s.startswith('[') and s.endswith(']'):
+                                try:
+                                    parsed = ast.literal_eval(s)
+                                    return parsed if isinstance(parsed, list) else [str(parsed)]
+                                except Exception:
+                                    # Fallback: treat as single string context
+                                    return [s]
+                            # Otherwise, split on delimiter only if it seems concatenated
+                            if '\n' in s and '], [' not in s:
+                                parts = [p.strip() for p in s.split('\n') if p.strip()]
+                                return parts if parts else [s]
+                            return [s]
+                        # Any other type -> coerce to string
+                        return [str(val)]
+                    df['reference_contexts'] = df['reference_contexts'].apply(_normalize_contexts)
+            except Exception as norm_err:
+                logger.warning(f"reference_contexts normalization failed: {norm_err}")
+
             # Analyze synthesizer usage from the testset
             if 'synthesizer_name' in df.columns:
                 synthesizer_counts = df['synthesizer_name'].value_counts().to_dict()

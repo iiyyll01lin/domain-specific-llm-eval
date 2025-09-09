@@ -93,8 +93,8 @@ from langchain_openai import ChatOpenAI
 # Import enhanced keyword extractor and metadata manager
 try:
     sys.path.insert(0, str(Path(__file__).parent / "src"))
-    from utils.enhanced_keyword_extractor import EnhancedHybridKeywordExtractor
-    from utils.keyword_metadata_manager import KeywordMetadataManager
+    from src.utils.enhanced_keyword_extractor import EnhancedHybridKeywordExtractor
+    from src.utils.keyword_metadata_manager import KeywordMetadataManager
     ENHANCED_EXTRACTOR_AVAILABLE = True
     print("✅ Enhanced Hybrid Keyword Extractor imported successfully")
     print("✅ Keyword Metadata Manager imported successfully")
@@ -125,8 +125,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- Utility helpers -------------------------------------------------------
+def _sanitize_for_filename(text: str, max_len: int = 80) -> str:
+    """Sanitize arbitrary text into a safe filename fragment.
+
+    - Keep letters, numbers, underscore, hyphen, Chinese chars
+    - Replace other chars with underscore
+    - Collapse multiple underscores
+    - Trim to max_len
+    """
+    if not isinstance(text, str) or not text:
+        return "doc"
+    # Allow CJK range and basic safe chars
+    text = re.sub(r"[^\w\-\u4e00-\u9fff]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    if not text:
+        text = "doc"
+    return text[:max_len]
+
 # ✅ ADD THIS HELPER FUNCTION
-def setup_ragas_llm(config: Dict[str, Any]) -> ChatOpenAI:
+def setup_ragas_llm(config: Dict[str, Any]) -> Optional[ChatOpenAI]:
     """Sets up the raw ChatOpenAI LLM for RAGAS testset generation.
     
     Note: Returns raw ChatOpenAI object - RAGAS TestsetGenerator.from_langchain()
@@ -136,8 +154,24 @@ def setup_ragas_llm(config: Dict[str, Any]) -> ChatOpenAI:
     llm_config = ragas_config.get("custom_llm", {})
     
     if not llm_config or not ragas_config.get("use_custom_llm"):
-        logger.warning("⚠️ Custom LLM not configured for RAGAS, using default.")
-        # Fallback to a default or raise an error
+        # Try to fallback to top-level llm config if present; otherwise return None
+        top_llm = config.get("llm", {})
+        if top_llm:
+            try:
+                logger.info("ℹ️ Using top-level llm config as fallback for RAGAS LLM")
+                endpoint = top_llm.get("endpoint_url") or top_llm.get("endpoint") or top_llm.get("base_url")
+                chat_model = ChatOpenAI(
+                    model=top_llm.get("model", "gpt-4o"),
+                    base_url=(endpoint.replace('/v1/chat/completions', '/v1') if isinstance(endpoint, str) else None),
+                    api_key=top_llm.get("api_key", "dummy-key"),
+                    temperature=top_llm.get("temperature", 0.3),
+                    max_tokens=top_llm.get("max_tokens", 4096),
+                    timeout=top_llm.get("timeout", 180),
+                )
+                return chat_model
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to init top-level LLM for RAGAS: {e}")
+        logger.warning("⚠️ Custom LLM not configured for RAGAS and no valid fallback. Will skip RAGAS generation.")
         return None
 
     logger.info("🔧 Setting up custom LLM for RAGAS testset generation...")
@@ -248,29 +282,47 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
                     
                     # Create document with appropriate metadata based on content type
                     if content_type == 'smt_steel_plate':
+                        # Build filename as: {source_stem}__r{csv_line}__{sanitized_title}__{doc_id}.txt
+                        # Note:
+                        # - row_index: 0-based pandas index of the DataFrame row (programmatic)
+                        # - csv_line: 1-based physical CSV line number; with header on line 1, first data row is line 2
+                        src_name = Path(csv_path.name).stem  # e.g., pre-training-data
+                        row_index = int(idx)
+                        csv_line = row_index + 2  # header occupies line 1
+                        title_part = _sanitize_for_filename(title) if 'title' in locals() and title else f"row{csv_line}"
+                        doc_id = len(documents)
+                        filename = f"{src_name}__r{csv_line}__{title_part}__{doc_id}.txt"
+
                         document = {
                             'content': text_content,  # Clean content for reference_contexts
                             'metadata': {
-                                'title': title if 'title' in locals() else f"Document {idx}",
+                                'title': title if 'title' in locals() else f"Document {csv_line}",
                                 'source': csv_path.name,
-                                'document_id': len(documents),
-                                'filename': f"steel_plate_{idx}.txt",
+                                'document_id': doc_id,
+                                'row_index': row_index,  # 0-based DataFrame index
+                                'csv_line': csv_line,    # 1-based physical CSV line number (header=1)
+                                'filename': filename,
                                 'content_type': content_type,
                                 'category': category,
                                 'language': language if 'language' in locals() else 'unknown'
                             }
                         }
                     else:  # smt_error_code
+                        row_index = int(idx)
+                        csv_line = row_index + 2  # header occupies line 1
                         document = {
                             'content': text_content,  # Clean content for reference_contexts
                             'metadata': {
-                                'title': f"Error {error_code}" if 'error_code' in locals() and error_code else f"Document {idx}",
+                                'title': f"Error {error_code}" if 'error_code' in locals() and error_code else f"Document {csv_line}",
                                 'source': csv_path.name,
                                 'document_id': len(documents),
-                                'filename': f"error_{error_code}.txt" if 'error_code' in locals() and error_code else f"document_{idx}.txt",
+                                # Build filename as: {source_stem}__r{csv_line}__error_{error_code}__{doc_id}.txt
+                                'filename': f"{Path(csv_path.name).stem}__r{csv_line}__error_{_sanitize_for_filename(error_code) if 'error_code' in locals() and error_code else str(csv_line)}__{len(documents)}.txt",
                                 'content_type': content_type,
                                 'error_code': error_code if 'error_code' in locals() else '',
-                                'category': category
+                                'category': category,
+                                'row_index': row_index,  # 0-based DataFrame index
+                                'csv_line': csv_line     # 1-based physical CSV line number (header=1)
                             }
                         }
                     documents.append(document)
@@ -350,42 +402,73 @@ def load_txt_documents(document_files: List[str], config: Dict[str, Any]) -> Lis
 
 def extract_entities_from_content(content: str) -> List[str]:
     """Extract entities from content for relationship building"""
-    # Simple entity extraction - can be enhanced with NLP models
-    entities = []
-    
-    # Extract meaningful terms (remove common words)
-    words = re.findall(r'\b\w+\b', content.lower())
-    meaningful_words = [w for w in words if len(w) > 2 and not w.isdigit()]
-    
-    # Filter common stop words
-    stop_words = {'and', 'the', 'for', 'are', 'with', 'this', 'that', 'from', 'can', 'use', 'will', 'has', 'have', 'been'}
-    filtered_words = [w for w in meaningful_words if w not in stop_words]
-    
-    # Get most frequent meaningful words as entities
-    word_counts = Counter(filtered_words)
-    entities = [word for word, count in word_counts.most_common(10)]
-    
-    return entities
+    # Chinese + English friendly tokenization
+    # 1) English words
+    en_words = re.findall(r'\b[a-zA-Z]{2,}\b', content.lower())
+    # 2) Chinese terms (2+ consecutive CJK chars)
+    zh_terms = re.findall(r'[\u4e00-\u9fff]{2,}', content)
+
+    # Remove digits-only tokens
+    en_words = [w for w in en_words if not w.isdigit()]
+
+    # Stop words (basic)
+    stop_words = {
+        'and','the','for','are','with','this','that','from','can','use','will','has','have','been',
+        'of','in','on','to','by','as','is','was','were','be','or','but'
+    }
+    en_words = [w for w in en_words if w not in stop_words]
+
+    # Domain boost for SMT/NXT
+    domain_terms = {
+        'error','code','smt','nxt','sequence','inspection','placement','solder','component','chip','mark','job',
+        'coordinate','data','異常','錯誤','檢查','順序','資料','零件','基準','定位'
+    }
+
+    # Count frequencies
+    word_counts = Counter(en_words + zh_terms)
+
+    # Prefer domain terms if present
+    domain_hits = [t for t in word_counts if t in domain_terms]
+    top_domain = sorted(domain_hits, key=lambda t: word_counts[t], reverse=True)[:5]
+
+    # Fill remaining with most frequent non-domain tokens
+    remaining = [t for t, _ in word_counts.most_common(20) if t not in top_domain]
+    entities = top_domain + remaining
+    return entities[:10]
 
 def extract_keyphrases_from_content(content: str) -> List[str]:
     """Extract keyphrases from content for relationship building"""
-    keyphrases = []
-    
-    # Split content into sentences
-    sentences = re.split(r'[。．.!?]+', content)
+    keyphrases: List[str] = []
+
+    # Sentence-like splits for both Chinese and English punctuation
+    sentences = re.split(r'[。．。.!?\n]+', content)
     sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
-    
-    # Use first few sentences as keyphrases
-    keyphrases = sentences[:5]
-    
-    # Also extract some 2-3 word phrases
-    words = content.split()
-    for i in range(len(words) - 2):
-        phrase = ' '.join(words[i:i+3])
-        if len(phrase) > 5 and len(phrase) < 50:
+    keyphrases.extend(sentences[:5])
+
+    # English n-grams (2-3 words)
+    en_words = re.findall(r'[a-zA-Z]{2,}', content)
+    for i in range(len(en_words) - 2):
+        phrase = ' '.join(en_words[i:i+3])
+        if 5 < len(phrase) < 60:
             keyphrases.append(phrase)
-    
-    return keyphrases[:10]  # Limit to top 10 keyphrases
+
+    # Chinese sliding window phrases (2-6 chars)
+    zh_text = ''.join(re.findall(r'[\u4e00-\u9fff]', content))
+    for win in range(2, 7):
+        for i in range(0, max(len(zh_text) - win + 1, 0)):
+            phrase = zh_text[i:i+win]
+            if phrase:
+                keyphrases.append(phrase)
+
+    # Deduplicate while preserving order
+    seen = set()
+    deduped = []
+    for p in keyphrases:
+        if p not in seen:
+            seen.add(p)
+            deduped.append(p)
+
+    return deduped[:10]  # Limit to top 10 keyphrases
 
 async def build_relationships_with_ragas(kg: KnowledgeGraph) -> int:
     """Build relationships using RAGAS relationship builders on native KnowledgeGraph"""
@@ -1111,7 +1194,7 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
             # Fallback timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Step 1: ✅ ENHANCED KG CONVERSION - Use complete KG with all relationships and embeddings
+    # Step 1: ✅ ENHANCED KG CONVERSION - Use complete KG with all relationships and embeddings
         logger.info("🧠 Converting complete KG to RAGAS format...")
         
         # Convert your complete KG to RAGAS format while preserving ALL data
@@ -1131,7 +1214,7 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         
         logger.info(f"� KG Quality Check: {nodes_with_embeddings}/{len(ragas_kg.nodes)} nodes have embeddings, {nodes_with_summary_embeddings}/{len(ragas_kg.nodes)} have summary embeddings")
         
-        # Save the input Knowledge Graph
+    # Save the input Knowledge Graph
         kg_input_file = artifacts_dir / f"kg_input_{timestamp}.json"
         ragas_kg.save(kg_input_file)
         logger.info(f"💾 Saved input KG: {kg_input_file}")
@@ -1142,31 +1225,50 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         # ✅ Use the helper function to properly set up raw ChatOpenAI LLM 
         raw_llm = setup_ragas_llm(config)
         if raw_llm is None:
-            logger.error("❌ Failed to set up ChatOpenAI LLM")
-            raise Exception("ChatOpenAI LLM setup failed")
+            logger.error("❌ No valid LLM for RAGAS. Skipping RAGAS generation path.")
+            # Fall back immediately
+            return generate_simple_qa_fallback(documents, config)
         
         logger.info("✅ Raw ChatOpenAI LLM created successfully")
         
         # Use non-deprecated embeddings import with all-mpnet-base-v2
+        embeddings_init_ok = True
         try:
-            from langchain_huggingface import HuggingFaceEmbeddings
-            logger.info("✅ Using updated HuggingFace embeddings")
-        except ImportError:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
-            logger.warning("⚠️ Using deprecated HuggingFace embeddings")
-        
-        # Use all-mpnet-base-v2 as specified in config for consistent embedding model
-        raw_embeddings = HuggingFaceEmbeddings(
-            model_name="all-mpnet-base-v2",
-            model_kwargs={'device': 'cpu'}
-        )
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+                logger.info("✅ Using updated HuggingFace embeddings")
+            except ImportError:
+                from langchain_community.embeddings import HuggingFaceEmbeddings
+                logger.warning("⚠️ Using deprecated HuggingFace embeddings")
+            
+            # Use all-mpnet-base-v2 as specified in config for consistent embedding model
+            raw_embeddings = HuggingFaceEmbeddings(
+                model_name="all-mpnet-base-v2",
+                model_kwargs={'device': 'cpu'}
+            )
+        except Exception as e:
+            embeddings_init_ok = False
+            raw_embeddings = None
+            logger.warning(f"⚠️ Embeddings initialization failed, proceeding without embeddings: {e}")
         
         # Create TestsetGenerator using from_langchain (auto-wraps LLM and embeddings)
-        generator = TestsetGenerator.from_langchain(
-            llm=raw_llm,  # ✅ Pass raw ChatOpenAI - RAGAS will auto-wrap
-            embedding_model=raw_embeddings,  # ✅ Pass raw embeddings - RAGAS will auto-wrap
-            knowledge_graph=ragas_kg  # Use our pre-built KG
-        )
+        try:
+            if embeddings_init_ok and raw_embeddings is not None:
+                generator = TestsetGenerator.from_langchain(
+                    llm=raw_llm,
+                    embedding_model=raw_embeddings,
+                    knowledge_graph=ragas_kg
+                )
+            else:
+                # Some RAGAS versions allow embedding_model=None; if not, this will raise and we fallback
+                generator = TestsetGenerator.from_langchain(
+                    llm=raw_llm,
+                    embedding_model=None,
+                    knowledge_graph=ragas_kg
+                )
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize RAGAS TestsetGenerator: {e}")
+            return generate_simple_qa_fallback(documents, config)
         
         # Save generator configuration
         ragas_config = config.get("testset_generation", {}).get("ragas_config", {})
@@ -1192,14 +1294,25 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         # Cap at 8 to avoid potential performance issues
         max_samples = min(max_samples, 8)
         
-        # CRITICAL FIX: Limit knowledge graph size to prevent infinite DFS traversal
-        if len(ragas_kg.nodes) > 10:
-            logger.warning(f"🔧 Limiting KG from {len(ragas_kg.nodes)} to 10 nodes to prevent RAGAS infinite loop")
-            ragas_kg.nodes = ragas_kg.nodes[:10]
-            
-        # ✅ ENHANCED: Keep ALL relationships for better multi-hop generation
-        relationship_count = len(ragas_kg.relationships) if hasattr(ragas_kg, 'relationships') and ragas_kg.relationships else 0
-        logger.info(f"🔗 Preserving {relationship_count} relationships for enhanced multi-hop generation")
+        # Configurable KG node limiting with relationship pruning
+        kg_cfg = config.get('testset_generation', {}).get('ragas_config', {}).get('knowledge_graph_config', {})
+        max_nodes = kg_cfg.get('max_nodes')
+        if isinstance(max_nodes, int) and max_nodes > 0 and len(ragas_kg.nodes) > max_nodes:
+            logger.warning(f"🔧 Limiting KG from {len(ragas_kg.nodes)} to {max_nodes} nodes (config)")
+            keep_nodes = set(str(n.id) for n in ragas_kg.nodes[:max_nodes])
+            # prune nodes
+            ragas_kg.nodes = [n for n in ragas_kg.nodes if str(n.id) in keep_nodes]
+            # prune relationships consistently
+            if hasattr(ragas_kg, 'relationships') and ragas_kg.relationships:
+                before = len(ragas_kg.relationships)
+                ragas_kg.relationships = [
+                    rel for rel in ragas_kg.relationships
+                    if str(rel.source.id) in keep_nodes and str(rel.target.id) in keep_nodes
+                ]
+                after = len(ragas_kg.relationships)
+                logger.info(f"🔗 Pruned relationships: {before} -> {after}")
+        else:
+            logger.info("ℹ️ No KG node limiting applied")
         
         langchain_docs = [
             LCDocument(
@@ -1212,39 +1325,85 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         
         # ✅ ENHANCED: Import all available synthesizers with proper fallbacks
         try:
-            # Import all multi-hop synthesizers
+            # Read query distribution config and KG size to decide whether to disable multi-hop
+            qd_cfg = (
+                config.get('testset_generation', {})
+                .get('ragas_config', {})
+                .get('query_distribution_config', {})
+            )
+            prefer_single_hop = bool(qd_cfg.get('prefer_single_hop', False))
+            disable_multi_hop_cfg = bool(qd_cfg.get('disable_multi_hop', False))
+            node_threshold = int(qd_cfg.get('multi_hop_node_threshold', 60))
+            rel_threshold = int(qd_cfg.get('multi_hop_relationship_threshold', 1500))
+
+            kg_node_count = len(ragas_kg.nodes) if hasattr(ragas_kg, 'nodes') else 0
+            kg_rel_count = (
+                len(getattr(ragas_kg, 'relationships', []) or [])
+                if hasattr(ragas_kg, 'relationships')
+                else 0
+            )
+
+            # Force-disable multi hop if configured or KG is large
+            disable_multi_hop_dynamic = (
+                kg_node_count > node_threshold or kg_rel_count > rel_threshold
+            )
+            disable_multi_hop = disable_multi_hop_cfg or disable_multi_hop_dynamic or prefer_single_hop
+
+            if disable_multi_hop_dynamic:
+                logger.warning(
+                    f"🛑 Multi-hop disabled due to KG size (nodes={kg_node_count}, rels={kg_rel_count}, thresholds: nodes>{node_threshold} or rels>{rel_threshold})"
+                )
+            elif disable_multi_hop_cfg:
+                logger.info("🛡️ Multi-hop disabled by config (query_distribution_config.disable_multi_hop=true)")
+            elif prefer_single_hop:
+                logger.info("ℹ️ Prefer single-hop is enabled; using single-hop synthesizers only")
+
+            # Assign wrapped LLM early so all branches can use it
+            wrapped_llm = generator.llm
+
+            # Import synthesizers
             from ragas.testset.synthesizers import (
                 MultiHopAbstractQuerySynthesizer,
                 MultiHopSpecificQuerySynthesizer,
             )
-            
-            # Try importing all single-hop synthesizers with fallback
+
+            # Try importing single-hop synthesizer
             try:
                 from ragas.testset.synthesizers.single_hop import (
-                    SingleHopSpecificQuerySynthesizer
+                    SingleHopSpecificQuerySynthesizer,
                 )
-                
-                # ✅ Enhanced 3-type synthesizer distribution using generator's wrapped LLM
-                # Access the wrapped LLM from the generator
-                wrapped_llm = generator.llm
-                
-                synthesizer_distribution = [
-                    (SingleHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.5),       # 50% specific factual questions
-                    (MultiHopAbstractQuerySynthesizer(llm=wrapped_llm), 0.3),        # 30% abstract reasoning
-                    (MultiHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.2)         # 20% complex multi-hop queries
-                ]
-                logger.info("✅ Using 3 concrete synthesizer types (Enhanced Distribution)")
-                
+                single_hop_available = True
             except ImportError as e:
-                logger.warning(f"⚠️ Some single-hop synthesizers not available: {e}")
-                # Fallback to multi-hop only
-                
-                synthesizer_distribution = [
-                    (MultiHopAbstractQuerySynthesizer(llm=wrapped_llm), 0.6),        # 60% abstract reasoning  
-                    (MultiHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.4)         # 40% complex multi-hop queries
-                ]
-                logger.info("✅ Using 2 multi-hop synthesizer types (Fallback Distribution)")
-                
+                logger.warning(f"⚠️ Single-hop synthesizer import failed: {e}")
+                single_hop_available = False
+
+            if disable_multi_hop:
+                if single_hop_available:
+                    synthesizer_distribution = [
+                        (SingleHopSpecificQuerySynthesizer(llm=wrapped_llm), 1.0)
+                    ]
+                    logger.info("✅ Using SingleHop only (multi-hop disabled)")
+                else:
+                    # No single-hop available; fall back to default generation path (no custom distribution)
+                    synthesizer_distribution = None
+                    logger.warning("⚠️ Single-hop not available; proceeding without custom distribution")
+            else:
+                if single_hop_available:
+                    # Enhanced 3-type distribution
+                    synthesizer_distribution = [
+                        (SingleHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.5),
+                        (MultiHopAbstractQuerySynthesizer(llm=wrapped_llm), 0.3),
+                        (MultiHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.2),
+                    ]
+                    logger.info("✅ Using 3 synthesizer types (SingleHop + MultiHop)")
+                else:
+                    # Fallback to multi-hop only if single-hop missing
+                    synthesizer_distribution = [
+                        (MultiHopAbstractQuerySynthesizer(llm=wrapped_llm), 0.6),
+                        (MultiHopSpecificQuerySynthesizer(llm=wrapped_llm), 0.4),
+                    ]
+                    logger.info("✅ Using 2 multi-hop synthesizer types (SingleHop unavailable)")
+
         except ImportError as e:
             logger.warning(f"Failed to import enhanced synthesizers: {e}")
             logger.info("Falling back to default generation without custom distribution")
@@ -1293,19 +1452,44 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         for idx, sample in enumerate(testset):
             # Handle different RAGAS testset formats
             if hasattr(sample, 'question'):
-                question = sample.question
-                contexts = getattr(sample, 'contexts', [])
+                # Legacy/simple format
+                question = getattr(sample, 'question', '')
+                # Try multiple possible context fields for safety
+                contexts = (
+                    getattr(sample, 'reference_contexts', None)
+                    or getattr(sample, 'retrieved_contexts', None)
+                    or getattr(sample, 'contexts', [])
+                ) or []
                 ground_truth = getattr(sample, 'ground_truth', '')
                 sample_type = getattr(sample, 'sample_type', 'unknown')
             elif hasattr(sample, 'user_input'):
-                # Alternative RAGAS format
-                question = sample.user_input
-                contexts = getattr(sample, 'retrieved_contexts', [])
+                # RAGAS SingleTurnSample-style format
+                question = getattr(sample, 'user_input', '')
+                # PRIORITIZE reference_contexts, then fallbacks
+                contexts = (
+                    getattr(sample, 'reference_contexts', None)
+                    or getattr(sample, 'retrieved_contexts', None)
+                    or getattr(sample, 'contexts', None)
+                ) or []
                 ground_truth = getattr(sample, 'reference', '')
                 sample_type = getattr(sample, 'query_type', 'unknown')
+            elif hasattr(sample, 'eval_sample'):
+                # Wrapped eval sample case
+                eval_sample = getattr(sample, 'eval_sample', None)
+                question = getattr(eval_sample, 'user_input', '') if eval_sample else ''
+                contexts = []
+                if eval_sample:
+                    contexts = (
+                        getattr(eval_sample, 'reference_contexts', None)
+                        or getattr(eval_sample, 'retrieved_contexts', None)
+                        or getattr(eval_sample, 'contexts', None)
+                    ) or []
+                ground_truth = getattr(eval_sample, 'reference', '') if eval_sample else ''
+                sample_type = 'eval_sample'
             else:
-                # Handle TestsetSample objects
-                question = str(sample)[:100] + "..." if len(str(sample)) > 100 else str(sample)
+                # Generic/unknown object – best-effort string repr
+                sample_str = str(sample)
+                question = sample_str[:100] + "..." if len(sample_str) > 100 else sample_str
                 contexts = []
                 ground_truth = ''
                 sample_type = 'sample_object'
@@ -1629,7 +1813,7 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
         # Save keyword extraction metadata to separate file
         if ENHANCED_EXTRACTOR_AVAILABLE and keyword_metadata_collection:
             try:
-                from utils.keyword_metadata_manager import KeywordMetadataManager
+                from src.utils.keyword_metadata_manager import KeywordMetadataManager
                 metadata_manager = KeywordMetadataManager(base_output_dir, run_id)
                 metadata_file_path = metadata_manager.save_keyword_metadata(keyword_metadata_collection)
                 logger.info(f"💾 Saved keyword extraction metadata: {metadata_file_path}")
@@ -1698,7 +1882,7 @@ def generate_simple_qa_fallback(documents: List[Dict[str, Any]], config: Dict[st
             run_id = config.get('run_id', f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
             output_dir = Path(config.get('output_dir', 'outputs/fallback'))
             
-            from utils.keyword_metadata_manager import KeywordMetadataManager
+            from src.utils.keyword_metadata_manager import KeywordMetadataManager
             metadata_manager = KeywordMetadataManager(output_dir, run_id)
             metadata_file_path = metadata_manager.save_keyword_metadata(keyword_metadata_collection)
             logger.info(f"💾 Saved fallback keyword extraction metadata: {metadata_file_path}")
@@ -1996,6 +2180,125 @@ async def main():
         metadata_dir = base_output_dir / "metadata"
         metadata_dir.mkdir(parents=True, exist_ok=True)
         
+        # Compute document usage (which docs used by testset contexts)
+        try:
+            import re
+            # Collect all context strings and map to sample ids
+            sample_contexts = []  # list of (sample_id, context_text)
+            for sid, s in enumerate(test_samples):
+                ctxs = s.get('reference_contexts') or s.get('retrieved_contexts') or []
+                if isinstance(ctxs, str):
+                    ctxs = [ctxs]
+                for c in ctxs or []:
+                    if c and str(c).strip():
+                        sample_contexts.append((sid, str(c)))
+            # Extract inline sources from contexts: "Source: ..."
+            ctx_sources = set()
+            for _, c in sample_contexts:
+                m = re.findall(r"Source:\s*([^\n]+)", c)
+                for it in m:
+                    ctx_sources.add(it.strip())
+
+            # Build doc info list
+            docs_info = []
+            for i, doc in enumerate(documents):
+                meta = doc.get('metadata', {}) or {}
+                doc_id = meta.get('document_id') or meta.get('csv_id') or meta.get('id') or i
+                filename = meta.get('filename') or meta.get('source') or ''
+                source = meta.get('source') or meta.get('filename') or ''
+                title = meta.get('title') or ''
+                content = doc.get('content') or ''
+                docs_info.append({
+                    'index': i,
+                    'id': doc_id,
+                    'filename': filename,
+                    'source': source,
+                    'title': title,
+                    'content': content
+                })
+
+            # Match contexts to documents
+            used_docs = {}
+            for d in docs_info:
+                used_by = set()
+                # Strategy 1: match by source/filename
+                for sid, c in sample_contexts:
+                    if d['source'] and d['source'] in ctx_sources:
+                        used_by.add(sid)
+                    elif d['filename'] and d['filename'] in ctx_sources:
+                        used_by.add(sid)
+                # Strategy 2: substring overlap (both directions, simple check)
+                if not used_by:
+                    dc = (d['content'] or '').lower()
+                    if dc:
+                        for sid, c in sample_contexts:
+                            cl = c.lower()
+                            # Require minimal length to avoid trivial hits
+                            if len(cl) > 50 and (cl in dc or (len(dc) > 50 and dc in cl)):
+                                used_by.add(sid)
+                                # don't break to collect all sample ids
+                if used_by:
+                    used_docs[d['index']] = {
+                        'index': d['index'],
+                        'id': d['id'],
+                        'filename': d['filename'],
+                        'source': d['source'],
+                        'title': d['title'],
+                        'matched_by': 'source_or_content',
+                        'sample_ids': sorted(list(used_by))
+                    }
+
+            used_indices = set(used_docs.keys())
+            unused_docs = [
+                {
+                    'index': d['index'],
+                    'id': d['id'],
+                    'filename': d['filename'],
+                    'source': d['source'],
+                    'title': d['title']
+                }
+                for d in docs_info if d['index'] not in used_indices
+            ]
+
+            # Compute usage frequency details
+            used_list = sorted(list(used_docs.values()), key=lambda x: x['index'])
+            usage_frequency: Dict[str, int] = {}
+            used_frequency_summary: List[Dict[str, Any]] = []
+            for entry in used_list:
+                fname = entry.get('filename')
+                times = len(entry.get('sample_ids') or [])
+                if fname:
+                    usage_frequency[fname] = usage_frequency.get(fname, 0) + times
+                used_frequency_summary.append({
+                    'filename': fname,
+                    'title': entry.get('title'),
+                    'times_used': times,
+                    'sample_ids': entry.get('sample_ids') or []
+                })
+            used_frequency_summary.sort(key=lambda x: x.get('times_used', 0), reverse=True)
+
+            document_usage = {
+                'total_documents': len(documents),
+                'used_count': len(used_indices),
+                'unused_count': len(documents) - len(used_indices),
+                'context_sources_found': sorted(list(ctx_sources)),
+                'used': used_list,
+                'unused': unused_docs,
+                'usage_frequency': usage_frequency,
+                'used_frequency_summary': used_frequency_summary
+            }
+        except Exception as usage_err:
+            logger.warning(f"⚠️ Failed to compute document usage: {usage_err}")
+            document_usage = {
+                'total_documents': len(documents),
+                'used_count': None,
+                'unused_count': None,
+                'context_sources_found': [],
+                'used': [],
+                'unused': [],
+                'error': str(usage_err)
+            }
+
         # Metadata file
         metadata = {
             'run_id': run_id,
@@ -2004,12 +2307,41 @@ async def main():
             'testsets_generated': 1,
             'total_qa_pairs': len(test_samples),
             'document_sources': [doc['metadata'].get('filename', doc['metadata'].get('source', 'unknown')) for doc in documents],
+            'document_usage': document_usage,
             'generation_method': 'clean_2024_direct'
         }
         metadata_file = metadata_dir / f"testset_metadata_{run_id}.json"
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
         logger.info(f"✅ Saved metadata: {metadata_file}")
+
+        # Also save standalone document usage for quick inspection/grep
+        try:
+            doc_usage_file = metadata_dir / f"document_usage_{run_id}.json"
+            with open(doc_usage_file, 'w', encoding='utf-8') as f:
+                json.dump(document_usage, f, indent=2, ensure_ascii=False)
+            logger.info(f"✅ Saved document usage: {doc_usage_file}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to save standalone document usage: {e}")
+
+        # Save a frequency-only helper file for convenience
+        try:
+            freq_file = metadata_dir / f"document_usage_frequency_{run_id}.json"
+            freq_payload = {
+                'run_id': run_id,
+                'usage_frequency': document_usage.get('usage_frequency', {}),
+                'used_frequency_summary': document_usage.get('used_frequency_summary', []),
+                'totals': {
+                    'total_documents': document_usage.get('total_documents'),
+                    'used_count': document_usage.get('used_count'),
+                    'unused_count': document_usage.get('unused_count')
+                }
+            }
+            with open(freq_file, 'w', encoding='utf-8') as f:
+                json.dump(freq_payload, f, indent=2, ensure_ascii=False)
+            logger.info(f"✅ Saved document usage frequency: {freq_file}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to save document usage frequency: {e}")
         
         # Save personas
         personas_dir = metadata_dir / "personas"
