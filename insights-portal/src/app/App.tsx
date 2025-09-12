@@ -9,6 +9,8 @@ import { usePortalStore } from '@/app/store/usePortalStore'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TID } from '@/testing/testids'
 import PersonaManager from '@/components/PersonaManager'
+import { FeatureFlagsProvider } from '@/core/featureFlags'
+import { LifecycleRoutes } from './routes/LifecycleRoutes'
 
 export const App: React.FC = () => {
   const { t } = useTranslation()
@@ -111,6 +113,7 @@ export const App: React.FC = () => {
     return () => { cancelled = true }
   }, [setRunData])
   return (
+    <FeatureFlagsProvider>
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
       <header style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <h1 style={{ marginRight: 'auto' }}>{t('appTitle')}</h1>
@@ -127,7 +130,10 @@ export const App: React.FC = () => {
         {route === 'qa' && <QAFailureExplorer />}
   {route === 'analytics' && <AnalyticsDistribution />}
   {route === 'compare' && <CompareView />}
+  {/* Lifecycle console placeholder (feature flag gated inside component) */}
+  <LifecycleRoutes />
       </main>
     </div>
+    </FeatureFlagsProvider>
   )
 }
