@@ -1,0 +1,44 @@
+version: '3.9'
+services:
+  ingestion:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.ingestion.main:app --host 0.0.0.0 --port 8000 --reload
+  processing:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.processing.main:app --host 0.0.0.0 --port 8000 --reload
+  testset:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.testset.main:app --host 0.0.0.0 --port 8000 --reload
+  eval:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.eval.main:app --host 0.0.0.0 --port 8000 --reload
+  reporting:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.reporting.main:app --host 0.0.0.0 --port 8000 --reload
+  adapter:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.adapter.main:app --host 0.0.0.0 --port 8000 --reload
+  kg:
+    volumes:
+      - ./:/app
+    environment:
+      UVICORN_RELOAD: '1'
+    command: uvicorn services.kg.main:app --host 0.0.0.0 --port 8000 --reload

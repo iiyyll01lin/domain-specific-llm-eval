@@ -1,0 +1,89 @@
+version: '3.9'
+services:
+  ingestion:
+    build: .
+    environment:
+      SERVICE: ingestion
+      SERVICE_NAME: ingestion-service
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  processing:
+    build: .
+    environment:
+      SERVICE: processing
+      SERVICE_NAME: processing-service
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  testset:
+    build: .
+    environment:
+      SERVICE: testset
+      SERVICE_NAME: testset-service
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  eval:
+    build: .
+    environment:
+      SERVICE: eval
+      SERVICE_NAME: eval-service
+    ports:
+      - "8004:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  reporting:
+    build: .
+    environment:
+      SERVICE: reporting
+      SERVICE_NAME: reporting-service
+    ports:
+      - "8005:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  adapter:
+    build: .
+    environment:
+      SERVICE: adapter
+      SERVICE_NAME: adapter-service
+    ports:
+      - "8006:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  kg:
+    build: .
+    environment:
+      SERVICE: kg
+      SERVICE_NAME: kg-service
+    ports:
+      - "8007:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  default:
+    name: rag-eval-net

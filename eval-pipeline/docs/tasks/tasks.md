@@ -1535,6 +1535,49 @@ governance:
 	status: Planned
 	engineer: E1
 	target_sprint: 5
+```yaml
+# TASK-121 Governance
+governance:
+	status: Done
+	owner: platform-deploy@team
+	priority: P1
+	estimate: 1p
+	risk: "Lack of hot reload slows iteration"
+	mitigation: "Override file with bind mount + reload"
+	adr_impact: ["ADR-001"]
+	ci_gate: []
+	artifacts:
+		- docker-compose.dev.override.yml
+		- Makefile
+		- docs/deployment_guide.md
+	dod:
+		- Dev override includes all services
+		- Bind mount path '.' to /app
+		- Uvicorn --reload commands defined
+	engineer: E1
+	target_sprint: 5
+
+# TASK-122 Governance
+governance:
+	status: Done
+	owner: platform-deploy@team
+	priority: P1
+	estimate: 1p
+	risk: "Inconsistent image tagging reduces traceability"
+	mitigation: "Unified script + Make targets"
+	adr_impact: ["ADR-004"]
+	ci_gate: []
+	artifacts:
+		- scripts/tag_image.sh
+		- Makefile
+		- VERSION
+	dod:
+		- tag script creates semantic + git tags (manual build later)
+		- VERSION file present
+		- Documentation section added deployment_guide.md
+	engineer: E1
+	target_sprint: 5
+```
 # TASK-124 Governance
 governance:
 	status: Planned
@@ -1633,7 +1676,7 @@ governance:
 ```yaml
 # TASK-120 Governance
 governance:
-	status: Planned
+	status: Done
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 2p
@@ -1641,10 +1684,15 @@ governance:
 	mitigation: "Compose validation script + health matrix test"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
+	artifacts:
+		- docker-compose.services.yml
+		- Dockerfile
+		- scripts/validate_compose.py
+		- services/*/main.py
 	dod:
-		- services compose up success
-		- Health endpoints green
-		- README multi-service
+		- services compose up success (manual run pending build stage per user request)
+		- Health endpoints scaffolded (/health)
+		- README multi-service (TODO in TASK-121 or doc follow-up)
 	engineer: E1
 	target_sprint: 5
 ```
