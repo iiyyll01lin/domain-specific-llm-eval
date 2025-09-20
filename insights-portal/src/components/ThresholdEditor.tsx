@@ -2,10 +2,19 @@ import React from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import type { Thresholds } from '@/core/types'
 import { validateThresholdValue, validateThresholdsShape } from '@/core/verdict'
+import { useTranslation } from 'react-i18next'
 
 export const ThresholdEditor: React.FC = () => {
   const thresholds = usePortalStore((s) => s.thresholds)
   const setThresholds = usePortalStore((s) => s.setThresholds)
+  const { t } = useTranslation()
+
+  // Used to add unknown indicators
+  const [isAdding, setIsAdding] = React.useState(false)                   
+  const [newKey, setNewKey] = React.useState('')                         
+  const [newWarn, setNewWarn] = React.useState<string>('0.80')            
+  const [newCrit, setNewCrit] = React.useState<string>('0.60')            
+  const [addErr, setAddErr] = React.useState<string>('')                  
 
   const onChange = (k: string, field: 'warning' | 'critical', v: string) => {
   const num = Number(v)
@@ -15,6 +24,41 @@ export const ThresholdEditor: React.FC = () => {
   if (!chk.ok) return
   setThresholds(next)
   }
+
+  // Add unknown directly to the panel
+  const onAddMetric = () => {                                             
+    setAddErr('')
+    const rawKey = (newKey || '').trim()
+    const key = rawKey
+      .replace(/\s+/g, '')            
+      .replace(/[^\w.\-]/g, '')       
+    if (!key) { setAddErr(t('errors.enterMetricKey')); return }
+
+    if (key !== rawKey) {
+      setAddErr(t('errors.metricSanitized', { key }))  // Silent Sanitization message
+    }
+
+    if (thresholds && Object.prototype.hasOwnProperty.call(thresholds, key)) {
+      setAddErr(t('errors.metricExists')); return
+    }
+    const w = Number(newWarn)
+    const c = Number(newCrit)
+    if (!validateThresholdValue(w) || !validateThresholdValue(c)) {
+      setAddErr(t('errors.range01')); return
+    }
+    const next = { 
+      ...(thresholds as Thresholds), 
+      [key]: { warning: w, critical: c } 
+    } as Thresholds
+    const chk = validateThresholdsShape(next)
+    if (!chk.ok) { setAddErr(chk.errors.join(', ')); return }
+    setThresholds(next)
+    // reset UI
+    setIsAdding(false)
+    setNewKey('')
+    setNewWarn('0.80')
+    setNewCrit('0.60')
+  }           
 
   const onReset = async () => {
     // Try to load bundled profile thresholds first
@@ -35,9 +79,55 @@ export const ThresholdEditor: React.FC = () => {
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <h3 style={{ margin: 0 }}>Thresholds</h3>
-        <button onClick={onReset}>重置</button>
+        <h3 style={{ margin: 0 }}>{t('thresholds.title')}</h3>
+        <button onClick={onReset}>{t('thresholds.reset')}</button>
+        {/* enter add mode */}
+        <button onClick={() => setIsAdding(v => !v)} aria-expanded={isAdding} aria-controls="add-threshold-row">
+          {isAdding ? t('thresholds.cancelAdd') : t('thresholds.addMetric')}
+        </button>
       </div>
+
+      {/*add unknown metric enter*/}
+      {isAdding && (
+        <div id="add-threshold-row" 
+             style={{ marginTop: 8, padding: 8, border: '1px dashed #bbb', borderRadius: 8, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+             {t('thresholds.key')}
+            <input
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+              placeholder={t('thresholds.placeholderKey') as string}
+              aria-label="new-metric-key"
+              style={{ width: 200 }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {t('thresholds.warning')}
+            <input
+              type="number" step="0.01" min={0} max={1}
+              value={newWarn}
+              onChange={(e) => setNewWarn(e.target.value)}
+              aria-label="new-metric-warning"
+              style={{ width: 90 }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {t('thresholds.critical')}
+            <input
+              type="number" step="0.01" min={0} max={1}
+              value={newCrit}
+              onChange={(e) => setNewCrit(e.target.value)}
+              aria-label="new-metric-critical"
+              style={{ width: 90 }}
+            />
+          </label>
+          <button onClick={onAddMetric}>{t('thresholds.confirmAdd')}</button>
+          {addErr && (
+            <div role="alert" style={{ color: 'crimson', fontSize: 12 }}>{addErr}</div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8, marginTop: 8 }}>
         {Object.entries(thresholds).map(([k, lv]) => (
           <div key={k} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 8 }}>

@@ -54,6 +54,31 @@ const resources = {
   AnswerSimilarity: { label: 'Answer Similarity', help: '答案與參考答案相似度' },
   ContextualKeywordMean: { label: 'Contextual Keyword Mean', help: '上下文關鍵字平均分' },
       },
+
+      errors: {
+        jsonParse: 'JSON 解析失敗：{{file}}（位移 {{offset}}，第 {{line}} 行，第 {{column}} 欄）。',
+        csvParse: 'CSV 解析失敗：{{file}}（第 {{row}} 列，位移 {{offset}}）。',
+        workerRuntime: '工作緒執行錯誤：{{message}}',
+        unknown: '發生未知錯誤。',
+        noCompatibleFiles: '沒有相容的檔案可供載入。',
+
+        enterMetricKey: '請輸入 metric key',
+        metricExists: '此 metric 已存在',
+        range01: 'warning/critical 必須介於 0~1',
+        metricSanitized: '已將輸入清理為 "{{key}}"'
+      },
+
+      thresholds: {
+        title: 'Thresholds',
+        reset: '重置',
+        addMetric: '+ Add Metric',
+        cancelAdd: '取消新增',
+        confirmAdd: '加入',
+        key: 'key',
+        warning: 'warning',
+        critical: 'critical',
+        placeholderKey: '例如：AnswerFluency'
+      },
     },
   },
   'en-US': {
@@ -107,6 +132,30 @@ const resources = {
   AnswerRelevancy: { label: 'Answer Relevancy', help: 'Answer relevance to the question' },
   AnswerSimilarity: { label: 'Answer Similarity', help: 'Similarity against reference answer' },
   ContextualKeywordMean: { label: 'Contextual Keyword Mean', help: 'Contextual keyword average score' },
+      },
+      errors: {
+        jsonParse: 'JSON parse failed: {{file}} (offset {{offset}}, line {{line}}, column {{column}}).',
+        csvParse: 'CSV parse failed: {{file}} (row {{row}}, offset {{offset}}).',
+        workerRuntime: 'Worker runtime error: {{message}}',
+        unknown: 'Unknown error occurred.',
+        noCompatibleFiles: 'No compatible files.',
+
+        enterMetricKey: 'Please enter a metric key',
+        metricExists: 'This metric already exists',
+        range01: 'warning/critical must be between 0 and 1',
+        metricSanitized: 'Input sanitized to "{{key}}"'
+      },
+
+       thresholds: {
+        title: 'Thresholds',
+        reset: 'Reset',
+        addMetric: '+ Add Metric',
+        cancelAdd: 'Cancel',
+        confirmAdd: 'Add',
+        key: 'key',
+        warning: 'warning',
+        critical: 'critical',
+        placeholderKey: 'e.g., AnswerFluency'
       },
     },
   },
