@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     service_name: str = "unknown-service"
     log_level: str = "INFO"
     port: int = 8000
+    ingestion_db_path: str = "data/ingestion_jobs.db"
     object_store_endpoint: Optional[str] = None
     object_store_region: str = "us-east-1"
     object_store_access_key: Optional[str] = None

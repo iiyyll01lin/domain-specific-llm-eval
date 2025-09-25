@@ -1,4 +1,5 @@
 from fastapi import Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 class ServiceError(Exception):
@@ -30,3 +31,16 @@ async def generic_error_handler(request: Request, exc: Exception):
         'message': 'Internal server error',
         'trace_id': trace_id
     })
+
+
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    trace_id = getattr(request.state, 'trace_id', 'n/a')
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            'error_code': 'request_validation_failed',
+            'message': 'Request payload validation failed',
+            'trace_id': trace_id,
+            'details': exc.errors(),
+        },
+    )

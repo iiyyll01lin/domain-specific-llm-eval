@@ -183,7 +183,7 @@ governance:
 ### 5.2 Ingestion & Processing
 | ID       | Title                                         | Description                                                            | Acceptance Criteria                                                                                                      | Dependencies       | Artifacts                        | Req Mapping                  |
 |----------|-----------------------------------------------|------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|--------------------|----------------------------------|------------------------------|
-| TASK-010 | Ingestion API (POST /documents)               | Accept km_id + version, enqueue ingestion job.                         | 202 response; job row persisted.                                                                                         | TASK-001           | services/ingestion/api.py        | FR ingest                    |
+| TASK-010 | Ingestion API (POST /documents)               | Accept km_id + version, enqueue ingestion job.                         | 202 response; job row persisted.                                                                                         | TASK-001           | services/ingestion/main.py, services/ingestion/repository.py, services/ingestion/openapi.json | FR ingest                    |
 | TASK-011 | KM Fetch + Checksum Pipeline                  | Stream download, calculate checksum, dedupe, store raw.                | Duplicate returns existing doc_id; raw stored once.                                                                      | TASK-010, TASK-005 | ingestion/worker.py              | FR ingest                    |
 | TASK-012 | Ingestion Event Emission                      | Emit document.ingested (internal bus or simple pubsub).                | Event captured in test harness.                                                                                          | TASK-011           | events/schema.py                 | FR ingest, traceability      |
 | TASK-013 | Processing Job API (POST /process-jobs)       | Launch processing referencing document_id + profile hash.              | 202 + job_id; validation on document existence.                                                                          | TASK-011           | processing/api.py                | FR processing                |
@@ -516,7 +516,7 @@ governance:
 ```yaml
 # TASK-010 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-ingestion@team
@@ -526,6 +526,9 @@ governance:
 	mitigation: "Pydantic schema + negative tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-25
+	verification:
+		- pytest tests/services/ingestion/test_documents_api.py
 	dod:
 		- 202 + job_id test
 		- Invalid payload 400
