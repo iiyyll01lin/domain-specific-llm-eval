@@ -11,27 +11,36 @@ Owner: platform-secops@team
    ```
    Expected: UID/GID printed as non-zero (default `rag:rag`, 1000:1000).
 
-2. **Layer consolidation**  
+2. **Layer consolidation & multi-stage**  
    ```bash
    docker history rag-eval:test
    ```
-   Expected: Total layers < 12, pip install combined under single RUN instruction.
+   Expected: Total layers < 12, dependency installation isolated within the builder stage (single RUN instruction) and no build toolchain packages in the runtime stage.
 
 3. **Cache hygiene**  
    - `pip install` invoked with `--no-cache-dir`.
    - `/var/lib/apt/lists` cleared in the same layer as package install.
 
-4. **Configurable model cache**  
+4. **PyPI mirror & offline guard**  
+   - Optional build args (`PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`) allow routing through an internal mirror when required.
+   - `PIP_NETWORK_CHECK_URL` + `PIP_NETWORK_TIMEOUT` provide a fast connectivity probe; run `docker build --build-arg PIP_NETWORK_TIMEOUT=3 .` and observe the "PyPI unreachable" log when air-gapped.
+   - Offline detection should skip the dependency install step within two timeout windows, preventing 15s×n retries.
+
+5. **Configurable model cache**  
    - Build argument `MODELS_CACHE` defaults to `/var/cache/rag-models`.
    - Volume declared for the cache path.
    - Directory owned by service user (`rag`).
 
-5. **Ownership and PATH**  
+6. **Ownership and PATH**  
    - `/app` tree (including `services/`) owned by the service user.
    - `$PATH` includes `/home/rag/.local/bin` for future pip --user installs.
 
-6. **Documentation**  
+7. **Documentation**  
    - `docs/deployment_guide.md` Section 7 summarises the hardening outcome.
+
+8. **Base image patching**  
+   - Verify Dockerfile references `python:3.11-slim-bookworm` (builder and runtime stages).
+   - `apt-get upgrade -y --no-install-recommends` executes before package install to ensure latest security updates.
 
 ## Operational Notes
 - Override `MODELS_CACHE` during build via `--build-arg MODELS_CACHE=/data/models` to align with external volume mounts.

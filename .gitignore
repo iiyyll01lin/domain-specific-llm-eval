@@ -224,3 +224,23 @@ config/pipeline_config.yaml
 eval-pipeline/config/pipeline_config.yaml
 eval-pipeline/config/docker_production_config.yaml
 eval-pipeline/config.yaml
+
+
+.git.bfg-report/
+bfg.jar
+test_cache/
+*.pyc
+__pycache__/
+*.log
+*.DS_Store
+# Local / scratch scripts not for release
+integrate_*  
+demo_*  
+quick_test.sh
+
+docs/adr/ADR-001-microservices-structure.zh.md
+docs/adr/ADR-002-knowledge-graph-visualization-tech.zh.md
+docs/adr/ADR-003-subgraph-sampling-strategy.zh.md
+docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.zh.md
+docs/adr/ADR-005-telemetry-taxonomy.zh.md
+docs/adr/ADR-006-event-schema-versioning.zh.md

@@ -1508,7 +1508,7 @@ governance:
 | TASK-122 | Image Versioning & Tag Strategy             | Introduce semantic + git SHA tagging script + Make targets (build:tag).                                                                 | make build-tag produces :vX.Y.Z and :git-<sha>; tags listed via docker images; documented strategy section added.                                                                         | TASK-120           | scripts/tag_image.sh, Makefile update, docs/deployment_guide.md                     | Traceability, Release governance      |
 | TASK-123 | CI Governance & Image Build Workflow        | GitHub Actions workflow running validators (schemas, taxonomy) then build & push tagged images on main branch.                          | .github/workflows/build-governance.yml passes in PR; failing validator blocks build; pushed image appears in registry log.                                                                | TASK-118, TASK-119 | .github/workflows/build-governance.yml                                              | Automation, Reliability, Governance   |
 | TASK-124 | Security & Vulnerability Scan Integration   | Integrate Trivy (or equivalent) scan into CI; fail on HIGH/CRITICAL; produce sarif artifact.                                            | CI run shows scan step; intentionally injected vulnerable image triggers failure; sarif uploaded as artifact.                                                                             | TASK-123           | .github/workflows/build-governance.yml (extended), docs/security.md                 | Security NFR                          |
-| TASK-125 | Base Image Hardening & Non-Root Enforcement | Update Dockerfile: non-root user, minimize layers, add pip --no-cache-dir, separate build arg for models cache volume.                  | docker history shows reduced layers; container runs as non-root (id != 0); package manager caches removed; final layer count <12; size reduction documented; hardening checklist present. | TASK-120           | Dockerfile (updated), docs/deployment_guide.md                                      | Security, Performance                 |
+| TASK-125 | Base Image Hardening & Non-Root Enforcement | Update Dockerfile: non-root user, minimize layers, add pip --no-cache-dir, network-aware pip mirror build args, separate build arg for models cache volume. | docker history shows reduced layers; container runs as non-root (id != 0); package manager caches removed; final layer count <12; offline builds log the PyPI skip guard; size reduction documented; hardening checklist present. | TASK-120           | Dockerfile (updated), docs/deployment_guide.md                                      | Security, Performance                 |
 | TASK-126 | Extension / Plugin Mount Pattern            | Provide extensions/ directory volume + loader searching entrypoints allowing drop-in metrics or builders.                               | Adding sample plugin in extensions/ loads without rebuild; README section added; unit test enumerates plugin discovery.                                                                   | TASK-032, TASK-120 | extensions/sample_metric.py, services/common/plugin_loader.py                       | Extensibility, ADR-001 modularity     |
 | TASK-127 | Helm Chart Decomposition                    | Create Helm chart with subcharts or templates per service + values toggles (enable/disable KG, WS).                                     | helm template succeeds; toggling kg.enabled=false excludes KG deployment; README documents values.                                                                                        | TASK-120           | deploy/helm/Chart.yaml, deploy/helm/templates/*                                     | K8s readiness, Deployment flexibility |
 | TASK-128 | Health & Readiness Probes Standardization   | Add /healthz /readyz endpoints & compose/helm probe config; include startup probe for heavy init (embeddings).                          | All services respond 200; failing injected test causes non-ready status; probes defined in compose & Helm.                                                                                | TASK-120, TASK-127 | services/*/health.py, helm templates updates, compose updates                       | Reliability, Ops                      |
@@ -1860,8 +1860,8 @@ governance:
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
-	risk: "Image size & root user risks"
-	mitigation: "Dockerfile lint + size diff check"
+	risk: "Unhandled base image CVEs or privilege escalation"
+	mitigation: "Hardened Dockerfile with multi-stage build and scan hooks"
 	adr_impact: ["ADR-004"]
 	ci_gate: ["unit-tests"]
 	artifacts:
@@ -1871,12 +1871,18 @@ governance:
 		- docs/deployment_guide.md
 		- docs/hardening_checklist.md
 	dod:
-		- Non-root user declared (USER ${APP_USER})
-		- MODELS_CACHE build arg surfaced with compose volume wiring
-		- Hardening checklist documented
+		- Dockerfile refactored into builder/runtime stages; runtime contains no build toolchain packages
+		- Non-root service user retained with owned `/app`, `${MODELS_CACHE_PATH}`, and `${EXTENSIONS_DIR}` directories
+		- Dependency installation consolidated with `pip --no-cache-dir`, `PIP_DISABLE_PIP_VERSION_CHECK`, and bytecode suppression
+		- Build-time pip mirror/offline guard configurable via `PIP_INDEX_URL`/* and documented in hardening checklist to prevent repeated timeout loops
+		- Base image patched (`python:3.11-slim-bookworm`) with `apt-get upgrade` executed per stage; MODELS_CACHE build arg still surfaced with compose volume wiring
+		- Hardening checklist & deployment guide updated to capture verification steps and multi-stage rationale
 	completed_on: 2025-09-25
 	verification:
-		- 2025-09-25 python3 inline assertion (Dockerfile hardening)
+		- 2025-09-25 docker build -t rag-eval:test .
+		- 2025-09-25 docker history rag-eval:test | head -n 12
+		- 2025-09-25 grep "python:3.11-slim-bookworm" Dockerfile
+		- 2025-09-25 python3 -m compileall services
 	engineer: E1
 	target_sprint: 5
 

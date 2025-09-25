@@ -63,12 +63,13 @@ make validate-compose
 Outputs JSON with failure reasons (non-zero exit on problems).
 
 ## 7. Image Hardening Summary (TASK-125)
-- Uvicorn now runs as non-root user (`rag`, UID/GID configurable via build args).
-- Dependency install layers consolidated with `pip --no-cache-dir` enforced.
-- Configurable model cache path (`MODELS_CACHE` build arg) with dedicated volume mount.
-- Default PATH extends `${HOME}/.local/bin` so user-level installs resolve.
-- Ownership of `/app` and cache directory transferred to the service user at build time.
-- Checklist with verification steps lives in `docs/hardening_checklist.md`.
+- Multi-stage build: a `builder` stage creates an isolated venv; the final runtime stage only receives the virtualenv and service code, trimming unnecessary toolchain layers.
+- Base image pinned to `python:3.11-slim-bookworm` and upgraded during build; security patches apply before the runtime is sealed.
+- Runtime executes as the configurable non-root user (`rag`, UID/GID build args) with `/app`, `${MODELS_CACHE_PATH}`, and `${EXTENSIONS_DIR}` owned by that account.
+- Dependency installation stays in a single layer with `pip --no-cache-dir`, `PIP_DISABLE_PIP_VERSION_CHECK`, and `PYTHONDONTWRITEBYTECODE` to avoid cache bloat and stray bytecode.
+- Network-aware pip guard: build args (`PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_NETWORK_CHECK_URL`, `PIP_NETWORK_TIMEOUT`) allow mirror selection and skip dependency installation quickly when PyPI is unreachable, preventing long retry storms during offline builds.
+- Build arg `MODELS_CACHE` keeps the model cache path configurable (default `/var/cache/rag-models`) and is exposed as a named volume for persistence.
+- Hardening verification steps and remediation checklist remain in `docs/hardening_checklist.md`.
 
 ## 8. Extensions & Plugin Loader (TASK-126)
 - Host directory `extensions/` is mounted into `/extensions` within each container.

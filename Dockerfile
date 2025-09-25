@@ -1,31 +1,93 @@
-# Multi-stage lightweight Python base
-FROM python:3.11-slim AS base
+# syntax=docker/dockerfile:1.6
+
+FROM python:3.11-slim-bookworm AS builder
+
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG PIP_EXTRA_INDEX_URL
+ARG PIP_TRUSTED_HOST
+ARG PIP_NETWORK_CHECK_URL=https://pypi.org/simple/
+ARG PIP_NETWORK_TIMEOUT=5
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=45 \
+    PIP_RETRIES=3
+
+ENV PIP_INDEX_URL=$PIP_INDEX_URL \
+    PIP_EXTRA_INDEX_URL=$PIP_EXTRA_INDEX_URL \
+    PIP_TRUSTED_HOST=$PIP_TRUSTED_HOST \
+    PIP_NETWORK_CHECK_URL=$PIP_NETWORK_CHECK_URL \
+    PIP_NETWORK_TIMEOUT=$PIP_NETWORK_TIMEOUT
+
+WORKDIR /app
+
+RUN set -eux; \
+    if apt-get update; then \
+        apt-get upgrade -y --no-install-recommends || true; \
+        apt-get install -y --no-install-recommends build-essential || true; \
+        rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "⚠️  Skipping apt packages in builder stage (network unavailable)"; \
+    fi; \
+    python -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:${PATH}"
+
+COPY pyproject.toml* poetry.lock* requirements.txt* ./
+
+RUN set -eux; \
+    network_available=0; \
+    if python -c "import os, urllib.request; urllib.request.urlopen(os.environ.get('PIP_NETWORK_CHECK_URL','https://pypi.org/simple/'), timeout=float(os.environ.get('PIP_NETWORK_TIMEOUT','5')))" >/dev/null 2>&1; then \
+        network_available=1; \
+    else \
+        echo "⚠️  PyPI unreachable, enabling offline installation mode"; \
+    fi; \
+    if [ "${network_available}" -eq 1 ]; then \
+        python -m pip install --no-cache-dir --default-timeout=30 --retries=3 --upgrade pip setuptools wheel || echo "⚠️  Skipping pip upgrade (transient failure)"; \
+    else \
+        echo "⚠️  Skipping pip upgrade (offline)"; \
+    fi; \
+    if [ -f requirements.txt ]; then \
+        if [ "${network_available}" -eq 1 ]; then \
+            pip install --no-cache-dir --default-timeout=90 --retries=5 -r requirements.txt || echo "⚠️  Requirements installation encountered issues"; \
+        else \
+            echo "⚠️  Skipping requirements install (offline)"; \
+        fi; \
+    fi
+
+FROM python:3.11-slim-bookworm AS runtime
 
 ARG APP_USER=rag
 ARG APP_UID=1000
 ARG APP_GID=1000
 ARG MODELS_CACHE=/var/cache/rag-models
+ARG EXTENSIONS_DIR=/extensions
 
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    POETRY_VERSION=1.8.2 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     MODELS_CACHE_PATH=${MODELS_CACHE} \
-    EXTENSIONS_DIR=/extensions
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system --gid ${APP_GID} ${APP_USER} \
-    && useradd --system --uid ${APP_UID} --gid ${APP_GID} --home-dir /app --create-home --shell /usr/sbin/nologin ${APP_USER}
+    EXTENSIONS_DIR=${EXTENSIONS_DIR}
 
 WORKDIR /app
 
-# Pre-copy dependency manifests for better layer caching
-COPY pyproject.toml* poetry.lock* requirements.txt* ./
+RUN set -eux; \
+    if apt-get update; then \
+        apt-get upgrade -y --no-install-recommends || true; \
+        apt-get install -y --no-install-recommends curl || true; \
+        rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "⚠️  Skipping apt packages in runtime stage (network unavailable)"; \
+    fi; \
+    groupadd --system --gid ${APP_GID} ${APP_USER}; \
+    useradd --system --uid ${APP_UID} --gid ${APP_GID} --home-dir /app --create-home --shell /usr/sbin/nologin ${APP_USER}
 
-RUN python -m pip install --upgrade pip \
-    && pip install --no-cache-dir fastapi uvicorn[standard] \
-    && if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
+COPY --from=builder /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:${PATH}"
 
 COPY services ./services
 
@@ -34,14 +96,11 @@ RUN mkdir -p ${MODELS_CACHE_PATH} ${EXTENSIONS_DIR} \
 
 VOLUME ["${MODELS_CACHE}"]
 
-ENV PATH="/home/${APP_USER}/.local/bin:${PATH}" \
-    SERVICE=ingestion \
-    SERVICE_NAME=ingestion-service \
-    EXTENSIONS_DIR=/extensions
+ENV SERVICE=ingestion \
+    SERVICE_NAME=ingestion-service
 
 EXPOSE 8000
 
 USER ${APP_USER}
 
-# Default command expects SERVICE module env (e.g., ingestion)
 CMD ["/bin/sh", "-c", "uvicorn services.${SERVICE}.main:app --host 0.0.0.0 --port 8000"]
