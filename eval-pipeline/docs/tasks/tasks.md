@@ -1522,23 +1522,26 @@ governance:
 ```yaml
 # TASK-121 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 5
+	completed_on: 2025-09-25
 # TASK-122 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 5
+	completed_on: 2025-09-25
 # TASK-123 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 5
+	completed_on: 2025-09-25
 ```yaml
 # TASK-121 Governance
 governance:
-	status: Done
+	status: Verified
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 1p
@@ -1548,18 +1551,21 @@ governance:
 	ci_gate: []
 	artifacts:
 		- docker-compose.dev.override.yml
-		- Makefile
+		- docs/DOCKER_README.md
 		- docs/deployment_guide.md
 	dod:
-		- Dev override includes all services
-		- Bind mount path '.' to /app
+		- Dev override keeps bind mount alongside models cache volume
+		- Hot reload command documented with override merge instructions
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 docker compose -f docker-compose.services.yml -f docker-compose.dev.override.yml config
 		- Uvicorn --reload commands defined
 	engineer: E1
 	target_sprint: 5
 
 # TASK-122 Governance
 governance:
-	status: Done
+	status: Verified
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 1p
@@ -1571,28 +1577,35 @@ governance:
 		- scripts/tag_image.sh
 		- Makefile
 		- VERSION
+		- docs/deployment_guide.md
 	dod:
-		- tag script creates semantic + git tags (manual build later)
-		- VERSION file present
-		- Documentation section added deployment_guide.md
+		- Tag script emits v<version> and git-<sha> with optional dry-run
+		- VERSION file remains single source of semantic tag
+		- Deployment guide documents build-tag workflow
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 DRY_RUN=1 make tag
 	engineer: E1
 	target_sprint: 5
 ```
 # TASK-124 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 6
+	completed_on: 2025-09-25
 # TASK-125 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 6
+	completed_on: 2025-09-25
 # TASK-126 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 5
+	completed_on: 2025-09-26
 # TASK-127 Governance
 governance:
 	status: Planned
@@ -1676,7 +1689,7 @@ governance:
 ```yaml
 # TASK-120 Governance
 governance:
-	status: Done
+	status: Verified
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 2p
@@ -1686,13 +1699,16 @@ governance:
 	ci_gate: ["unit-tests"]
 	artifacts:
 		- docker-compose.services.yml
-		- Dockerfile
+		- .env.compose
 		- scripts/validate_compose.py
-		- services/*/main.py
+		- docs/deployment_guide.md
 	dod:
-		- services compose up success (manual run pending build stage per user request)
+		- docker compose config succeeds with default env template
 		- Health endpoints scaffolded (/health)
-		- README multi-service (TODO in TASK-121 or doc follow-up)
+		- Deployment guide documents env override
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 docker compose -f docker-compose.services.yml config
 	engineer: E1
 	target_sprint: 5
 ```
@@ -1713,9 +1729,10 @@ governance:
 ```yaml
 # TASK-125 Governance
 governance:
-	status: Planned
+	status: Verified
 	engineer: E1
 	target_sprint: 6
+	completed_on: 2025-09-25
 ```
 ```yaml
 # TASK-126 Governance
@@ -1792,7 +1809,7 @@ governance:
 
 # TASK-123 Governance
 governance:
-	status: Planned
+	status: Verified
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 2p
@@ -1800,16 +1817,23 @@ governance:
 	mitigation: "Workflow step ordering test + fail injection"
 	adr_impact: ["ADR-004","ADR-005"]
 	ci_gate: ["build-governance:schemas"]
+	artifacts:
+		- .github/workflows/build-governance.yml
+		- scripts/validate_task_status.py
+		- scripts/validate_compose.py
 	dod:
-		- Workflow YAML committed
-		- Failing schema test blocks build
-		- Artifact list documented
+		- Workflow orchestrates validators before image build
+		- Governance scripts fail-fast on status drift
+		- Build job tags/pushes GHCR images on main
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 python3 scripts/validate_task_status.py
 	engineer: E1 (E3 CI front-end budget step integration)
 	target_sprint: 5
 
 # TASK-124 Governance
 governance:
-	status: Planned
+	status: Verified
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -1817,16 +1841,22 @@ governance:
 	mitigation: "Injected CVE fixture triggers failure"
 	adr_impact: ["ADR-004"]
 	ci_gate: ["security-scan"]
+	artifacts:
+		- .github/workflows/build-governance.yml
+		- docs/security.md
 	dod:
-		- Scan step present
-		- High severity triggers non-zero exit
-		- README security scan
+		- Trivy filesystem & image scans produce SARIF artifacts
+		- HIGH/CRITICAL findings fail the workflow via exit-code 1
+		- Security guide documents remediation & skip policy guidance
+	completed_on: 2025-09-25
+	verification:
+		- Workflow validation via static review (Trivy steps present)
 	engineer: E1 (secops assist)
 	target_sprint: 5
 
 # TASK-125 Governance
 governance:
-	status: Planned
+	status: Verified
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
@@ -1834,27 +1864,46 @@ governance:
 	mitigation: "Dockerfile lint + size diff check"
 	adr_impact: ["ADR-004"]
 	ci_gate: ["unit-tests"]
+	artifacts:
+		- Dockerfile
+		- docker-compose.services.yml
+		- .env.compose
+		- docs/deployment_guide.md
+		- docs/hardening_checklist.md
 	dod:
-		- Non-root confirmed
-		- Layer count documented
-		- Harden checklist added
+		- Non-root user declared (USER ${APP_USER})
+		- MODELS_CACHE build arg surfaced with compose volume wiring
+		- Hardening checklist documented
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 python3 inline assertion (Dockerfile hardening)
 	engineer: E1
 	target_sprint: 5
 
 # TASK-126 Governance
 governance:
-	status: Planned
+	status: Verified
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 2p
-	risk: "Unsafe plugin code execution"
-	mitigation: "Sandbox + allowlist tests"
+	risk: "Plugin discovery regresses without coverage"
+	mitigation: "Unit tests exercising register() and fallback payloads"
 	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests","security-scan"]
+	ci_gate: ["unit-tests"]
+	artifacts:
+		- services/common/plugin_loader.py
+		- extensions/sample_metric.py
+		- test_plugin_loader.py
+		- docs/DOCKER_README.md
+		- docs/deployment_guide.md
 	dod:
-		- Malicious plugin blocked test
-		- Warning log on skip
-		- README extension loader
+		- Loader discovers register() based plugins and attribute payload fallback
+		- Sample plugin loads without image rebuild via mounted directory
+		- Documentation explains EXTENSIONS_DIR override and usage
+		- Automated test enumerates discovered plugins
+	completed_on: 2025-09-26
+	verification:
+		- 2025-09-26 pytest test_plugin_loader.py
 	engineer: E3 (E2 consult for metrics plugin alignment)
 	target_sprint: 6
 

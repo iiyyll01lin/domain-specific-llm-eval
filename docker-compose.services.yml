@@ -1,89 +1,89 @@
 version: '3.9'
+
+x-service-base: &service-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - ${COMPOSE_ENV_FILE:-.env.compose}
+  restart: unless-stopped
+  healthcheck: &default-healthcheck
+    test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+  logging: &default-logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  networks:
+    - rag-eval-net
+  volumes:
+    - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
+    - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
+
 services:
   ingestion:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-ingestion
     environment:
       SERVICE: ingestion
       SERVICE_NAME: ingestion-service
     ports:
       - "8001:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   processing:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-processing
     environment:
       SERVICE: processing
       SERVICE_NAME: processing-service
     ports:
       - "8002:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   testset:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-testset
     environment:
       SERVICE: testset
       SERVICE_NAME: testset-service
     ports:
       - "8003:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   eval:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-eval
     environment:
       SERVICE: eval
       SERVICE_NAME: eval-service
     ports:
       - "8004:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   reporting:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-reporting
     environment:
       SERVICE: reporting
       SERVICE_NAME: reporting-service
     ports:
       - "8005:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   adapter:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-adapter
     environment:
       SERVICE: adapter
       SERVICE_NAME: adapter-service
     ports:
       - "8006:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
   kg:
-    build: .
+    <<: *service-base
+    container_name: rag-eval-kg
     environment:
       SERVICE: kg
       SERVICE_NAME: kg-service
     ports:
       - "8007:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+
 networks:
-  default:
+  rag-eval-net:
     name: rag-eval-net
+
+volumes:
+  models-cache:
