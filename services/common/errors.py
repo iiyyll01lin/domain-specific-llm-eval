@@ -1,12 +1,19 @@
-from fastapi import Request
+from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from fastapi import status
 
 class ServiceError(Exception):
     def __init__(self, error_code: str, message: str, http_status: int = status.HTTP_400_BAD_REQUEST):
         self.error_code = error_code
         self.message = message
         self.http_status = http_status
+
+class ObjectStoreError(ServiceError):
+    def __init__(self, error_code: str, message: str, http_status: int = status.HTTP_502_BAD_GATEWAY):
+        super().__init__(error_code=error_code, message=message, http_status=http_status)
+
+class ChecksumMismatchError(ObjectStoreError):
+    def __init__(self, message: str = "Checksum mismatch detected"):
+        super().__init__(error_code="object_store_checksum_mismatch", message=message, http_status=status.HTTP_409_CONFLICT)
 
 async def service_error_handler(request: Request, exc: ServiceError):
     trace_id = getattr(request.state, 'trace_id', 'n/a')

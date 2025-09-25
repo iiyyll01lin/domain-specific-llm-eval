@@ -48,7 +48,36 @@ python run_pipeline.py --config config.yaml
 
 **📚 Complete Guide**: See [`eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`](eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md) for detailed setup and usage instructions.
 
-## 🚀 Core Capabilities
+## �️ Object Storage Client (New)
+
+The microservice layer now ships with a reusable S3/MinIO client that adds exponential backoff, checksum validation, and consistent error envelopes. Configure it via environment variables (pydantic automatically maps snake_case fields to upper-case env vars):
+
+- `OBJECT_STORE_ENDPOINT` – Optional custom endpoint (e.g., MinIO).
+- `OBJECT_STORE_REGION` – Defaults to `us-east-1`.
+- `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` – Credentials used when non-anonymous access is required.
+- `OBJECT_STORE_BUCKET` – Default bucket used by ingestion/processing services.
+- `OBJECT_STORE_USE_SSL` – Set to `false` for plain HTTP endpoints.
+- `OBJECT_STORE_MAX_ATTEMPTS` and `OBJECT_STORE_BACKOFF_SECONDS` – Tune retry behaviour.
+
+Usage highlights:
+
+```python
+from services.common.storage.object_store import ObjectStoreClient
+
+client = ObjectStoreClient()
+client.upload_bytes(bucket=None, key="documents/doc.json", payload=b"{}")
+data = client.download_bytes(bucket=None, key="documents/doc.json")
+```
+
+Checksum mismatches raise a `ChecksumMismatchError` with trace-aware error envelopes, ensuring downstream services fail fast when corrupted artifacts surface.
+
+To validate the integration, run the dedicated unit tests:
+
+```bash
+pytest tests/services/common/test_object_store.py
+```
+
+## �🚀 Core Capabilities
 
 This project addresses specific bottlenecks in domain-specific LLM evaluation:
 

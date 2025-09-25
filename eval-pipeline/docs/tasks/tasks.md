@@ -161,7 +161,7 @@ governance:
 
 # TASK-005 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-foundation@team
@@ -171,6 +171,9 @@ governance:
 	mitigation: "Retry + checksum mismatch test"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-25
+	verification:
+		- pytest tests/services/common/test_object_store.py
 	dod:
 		- Retry logic test
 		- Checksum mismatch failure
