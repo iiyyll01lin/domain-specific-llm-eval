@@ -210,9 +210,19 @@ governance:
 		- Job status and error columns updated in repository schema
 # TASK-012 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
+	owner: platform-foundation@team
+	priority: P1
+	estimate: 1p
+	completed_at: 2025-09-25
+	verification:
+		- pytest tests/services/ingestion/test_worker.py
+	dod:
+		- document.ingested envelope emitted for new documents
+		- Duplicate ingestion requests reuse existing document without extra events
+		- Event publisher injectable for unit tests
 # TASK-013 Governance
 governance:
 	status: Planned

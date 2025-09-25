@@ -34,6 +34,14 @@ class FakeObjectStore:
         self.uploads.append((bucket, key, payload, expected_checksum))
 
 
+class RecordingEventPublisher:
+    def __init__(self) -> None:
+        self.events: List[dict] = []
+
+    def document_ingested(self, **payload):  # type: ignore[no-untyped-def]
+        self.events.append(payload)
+
+
 @pytest.fixture
 def repository(tmp_path) -> Iterator[IngestionRepository]:
     db_path = tmp_path / "ingestion.db"
@@ -44,11 +52,13 @@ def test_process_job_creates_document(repository: IngestionRepository):
     job = repository.create_job(km_id="KM-001", version="v1")
     km_client = FakeKMClient([b"hello", b" ", b"world"])
     object_store = FakeObjectStore()
+    events = RecordingEventPublisher()
     worker = IngestionWorker(
         repository=repository,
         km_client=km_client,
         object_store=object_store,
         bucket="test-bucket",
+        event_publisher=events,
     )
 
     processed = worker.process_job(job.job_id)
@@ -61,16 +71,24 @@ def test_process_job_creates_document(repository: IngestionRepository):
     assert document.checksum == compute_checksum(b"hello world")
     assert object_store.uploads[0][1] == document.storage_key
     assert km_client.calls == [("KM-001", "v1")]
+    assert len(events.events) == 1
+    event_payload = events.events[0]
+    assert event_payload["document_id"] == document.document_id
+    assert event_payload["checksum"] == document.checksum
+    assert event_payload["byte_size"] == document.size_bytes
+    assert event_payload["source_uri"] == "km://KM-001/v1"
 
 
 def test_process_job_reuses_existing_document(repository: IngestionRepository):
     km_client = FakeKMClient([b"payload"])
     object_store = FakeObjectStore()
+    events = RecordingEventPublisher()
     worker = IngestionWorker(
         repository=repository,
         km_client=km_client,
         object_store=object_store,
         bucket="test-bucket",
+        event_publisher=events,
     )
 
     first_job = repository.create_job(km_id="KM-001", version="v1")
@@ -85,16 +103,19 @@ def test_process_job_reuses_existing_document(repository: IngestionRepository):
     assert processed_second.document_id == processed_first.document_id
     assert len(object_store.uploads) == 1
     assert km_client.calls == [("KM-001", "v1")]
+    assert len(events.events) == 1
 
 
 def test_process_job_deduplicates_by_checksum(repository: IngestionRepository):
     km_client = FakeKMClient([b"same content"])
     object_store = FakeObjectStore()
+    events = RecordingEventPublisher()
     worker = IngestionWorker(
         repository=repository,
         km_client=km_client,
         object_store=object_store,
         bucket="test-bucket",
+        event_publisher=events,
     )
 
     job_one = repository.create_job(km_id="KM-001", version="v1")
@@ -107,6 +128,7 @@ def test_process_job_deduplicates_by_checksum(repository: IngestionRepository):
     assert processed_second.status == "duplicate"
     assert processed_second.document_id == processed_first.document_id
     assert len(object_store.uploads) == 1
+    assert len(events.events) == 1
 
 
 def test_process_job_records_failure(repository: IngestionRepository):

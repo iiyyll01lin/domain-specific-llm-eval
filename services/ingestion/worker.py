@@ -5,6 +5,7 @@ from typing import Iterable, Optional
 import httpx
 
 from services.common.config import settings
+from services.common.events import EventPublisher, NullEventPublisher
 from services.common.errors import ServiceError
 from services.common.storage.object_store import ObjectStoreClient, compute_checksum
 from services.ingestion.repository import IngestionJob, IngestionRepository
@@ -51,12 +52,14 @@ class IngestionWorker:
         *,
         bucket: Optional[str] = None,
         storage_prefix: str = "documents",
+        event_publisher: Optional[EventPublisher] = None,
     ) -> None:
         self._repository = repository
         self._km_client = km_client
         self._object_store = object_store
         self._bucket = bucket or settings.object_store_bucket
         self._storage_prefix = storage_prefix.strip("/")
+        self._events = event_publisher or NullEventPublisher()
 
     def process_job(self, job_id: str) -> IngestionJob:
         job = self._repository.get_job(job_id)
@@ -106,6 +109,12 @@ class IngestionWorker:
                 size_bytes=len(payload),
             )
             self._repository.mark_job_completed(job.job_id, document.document_id, deduplicated=False)
+            self._events.document_ingested(
+                document_id=document.document_id,
+                checksum=document.checksum,
+                byte_size=document.size_bytes,
+                source_uri=f"km://{job.km_id}/{job.version}",
+            )
             updated = self._repository.get_job(job.job_id)
             if updated is None:  # pragma: no cover - defensive
                 raise RuntimeError("Failed to reload ingestion job after completion")
