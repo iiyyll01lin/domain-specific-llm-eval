@@ -195,9 +195,19 @@ governance:
 ```yaml
 # TASK-011 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
+	owner: platform-foundation@team
+	priority: P1
+	estimate: 3p
+	completed_at: 2025-09-25
+	verification:
+		- pytest tests/services/ingestion -q
+	dod:
+		- KM client streams document content and deduplicates by km/version and checksum
+		- Object store upload occurs once per unique payload
+		- Job status and error columns updated in repository schema
 # TASK-012 Governance
 governance:
 	status: Planned
