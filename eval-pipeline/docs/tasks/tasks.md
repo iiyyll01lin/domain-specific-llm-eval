@@ -225,9 +225,19 @@ governance:
 		- Event publisher injectable for unit tests
 # TASK-013 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
+	owner: platform-foundation@team
+	priority: P1
+	estimate: 2p
+	completed_at: 2025-09-25
+	verification:
+		- pytest tests/services/processing/test_jobs_api.py
+	dod:
+		- POST /process-jobs returns 202 with persisted job metadata
+		- Missing document_id responds with document_not_found envelope (404)
+		- Invalid payload routes through standardized validation handler
 # TASK-014 Governance
 governance:
 	status: Planned
