@@ -240,9 +240,19 @@ governance:
 		- Invalid payload routes through standardized validation handler
 # TASK-014 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
+	owner: platform-processing@team
+	priority: P1
+	estimate: 2p
+	completed_at: 2025-09-26
+	verification:
+		- pytest tests/services/processing/test_extraction_stage.py
+	dod:
+		- PDF and text adapters share normalization pipeline with whitespace collapse and Unicode cleanup
+		- Unsupported binary payloads yield standardized unsupported_mime_type errors
+		- Empty-text guard raises extraction_empty_text to protect downstream stages
 # TASK-016 Governance
 governance:
 	status: Planned
@@ -295,7 +305,7 @@ governance:
 ```yaml
 # TASK-015a Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-processing@team
@@ -305,10 +315,13 @@ governance:
 	mitigation: "Golden mixed corpus tests + fallback path"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-26
+	verification:
+		- pytest tests/services/processing/test_tokenizer_stage.py
 	dod:
-		- Mixed corpus test stable
-		- Fallback triggered log
-		- Docs updated boundaries
+		- Mixed English/Chinese corpus segmentation verified via unit tests
+		- Unsupported mime path emits downgrade log and returns deterministic single segment
+		- Sentence heuristics documented in services/processing/README.md
 # TASK-015b Governance
 governance:
 	status: Planned
