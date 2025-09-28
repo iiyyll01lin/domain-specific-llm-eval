@@ -2,6 +2,7 @@ from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     service_name: str = "unknown-service"
     log_level: str = "INFO"
@@ -19,4 +20,14 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+
 settings = Settings()  # type: ignore
+
+
+def configure_service(service_name: str) -> Settings:
+    """Update the shared settings instance with the active service name."""
+    settings.service_name = service_name
+    return settings
+
+
+__all__ = ["Settings", "settings", "configure_service"]

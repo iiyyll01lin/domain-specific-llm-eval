@@ -1,17 +1,30 @@
 from fastapi import FastAPI
-from services.common.middleware import TraceMiddleware
-from services.common.errors import ServiceError, service_error_handler, generic_error_handler
-from services.common.config import settings
+from fastapi.exceptions import RequestValidationError
 
-app = FastAPI(title="testset-service")
+from services.common.config import configure_service
+from services.common.errors import (
+    ServiceError,
+    generic_error_handler,
+    service_error_handler,
+    validation_error_handler,
+)
+from services.common.middleware import TraceMiddleware
+
+SERVICE_NAME = "testset-service"
+configure_service(SERVICE_NAME)
+
+app = FastAPI(title=SERVICE_NAME)
 app.add_middleware(TraceMiddleware)
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(Exception, generic_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
-@app.get('/health')
+
+@app.get("/health")
 async def health():
-    return {'status':'ok','service': settings.service_name}
+    return {"status": "ok", "service": SERVICE_NAME}
 
-@app.get('/')
+
+@app.get("/")
 async def root():
-    return {'service':'testset','message':'testset service skeleton'}
+    return {"service": SERVICE_NAME, "message": "testset service skeleton"}

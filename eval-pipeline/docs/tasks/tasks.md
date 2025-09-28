@@ -84,7 +84,7 @@ Checklist snippet (embed in DoD if needed):
 ### 5.1 Foundation & Repo Prep
 | ID       | Title                             | Description                                                                                                                                 | Acceptance Criteria                                                     | Dependencies | Artifacts                      | Req Mapping           |
 |----------|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|--------------|--------------------------------|-----------------------|
-| TASK-001 | Service Skeleton Scaffolding      | Create base FastAPI project structure for microservices (ingestion, processing, testset, eval, reporting, adapter) with shared lib package. | Repos build; uvicorn launch each svc; shared utilities imported.        | None         | /services/*, pyproject.toml(s) | FR baseline infra     |
+| TASK-001 | Service Skeleton Scaffolding      | Create base FastAPI project structure for microservices (ingestion, processing, testset, eval, reporting, adapter) with shared lib package. | Repos build; uvicorn launch each svc; shared utilities imported.        | None         | services/*; services/pyproject.toml; services/tests/test_service_skeleton.py | FR baseline infra     |
 | TASK-002 | Common Config & Env Loader        | Implement unified settings module (env + .env + defaults) and validation.                                                                   | All services log config at startup; missing critical var aborts.        | TASK-001     | services/common/config.py      | NFR robustness        |
 | TASK-003 | Logging & Trace ID Middleware     | Structured JSON logs + per-request trace_id injection.                                                                                      | log line contains trace_id, path, status_code.                          | TASK-001     | middleware/logging.py          | NFR observability     |
 | TASK-004 | Error Envelope Standardization    | Implement exception handlers returning {error_code,message,trace_id}.                                                                       | 4xx/5xx responses conform; tests validate.                              | TASK-003     | error_handlers.py              | UI-FR-053~055         |
@@ -93,20 +93,28 @@ Checklist snippet (embed in DoD if needed):
 ```yaml
 # TASK-001 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 1
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 2p
+	completed_at: 2025-09-28
+	verification:
+		- pytest services/tests/test_service_skeleton.py -q
+	deliverables:
+		- services/pyproject.toml
+		- services/tests/test_service_skeleton.py
+		- services/common/config.py
+		- services/*/main.py
 	risk: "Inconsistent service layout hampers reuse"
 	mitigation: "Template + scaffold test verifying directories"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
 	dod:
-		- All base services start (health check)
-		- Shared lib imported in each
-		- Scaffold test passes
+		- Health endpoints expose service-specific identifiers with trace_id header
+		- Shared middleware and error handlers imported across services without runtime errors
+		- Scaffold smoke test validates validation envelope contract
 
 # TASK-002 Governance
 governance:

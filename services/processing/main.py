@@ -3,7 +3,7 @@ from functools import lru_cache
 from fastapi import Depends, FastAPI, status
 from fastapi.exceptions import RequestValidationError
 
-from services.common.config import settings
+from services.common.config import configure_service, settings
 from services.common.errors import (
     ServiceError,
     generic_error_handler,
@@ -15,7 +15,10 @@ from services.ingestion.repository import IngestionRepository
 from services.processing.repository import ProcessingRepository
 from services.processing.schemas import ProcessingJobRequest, ProcessingJobResponse
 
-app = FastAPI(title="processing-service")
+SERVICE_NAME = "processing-service"
+configure_service(SERVICE_NAME)
+
+app = FastAPI(title=SERVICE_NAME)
 app.add_middleware(TraceMiddleware)
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(Exception, generic_error_handler)
@@ -34,7 +37,7 @@ def get_document_repository() -> IngestionRepository:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": settings.service_name}
+    return {"status": "ok", "service": SERVICE_NAME}
 
 
 @app.post(
@@ -66,4 +69,4 @@ async def submit_processing_job(
 
 @app.get("/")
 async def root():
-    return {"service": "processing", "message": "processing service"}
+    return {"service": SERVICE_NAME, "message": "processing service skeleton"}
