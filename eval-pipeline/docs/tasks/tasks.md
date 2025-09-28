@@ -332,7 +332,7 @@ governance:
 		- Sentence heuristics documented in services/processing/README.md
 # TASK-015b Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-processing@team
@@ -342,10 +342,17 @@ governance:
 	mitigation: "Hard cap + size histogram test"
 	adr_impact: []
 	ci_gate: ["unit-tests","perf-baseline"]
+	completed_at: 2025-09-29
+	verification:
+		- pytest tests/services/processing/test_chunk_rules.py -q
+	deliverables:
+		- services/processing/stages/chunk_rules.py
+		- tests/services/processing/test_chunk_rules.py
 	dod:
 		- No chunk >800
 		- Determinism test
 		- Size histogram emitted
+		- Overlap trimmed when exceeding hard_max while preserving suffix order
 # TASK-015c Governance
 governance:
 	status: Planned
