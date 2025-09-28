@@ -355,7 +355,7 @@ governance:
 		- Overlap trimmed when exceeding hard_max while preserving suffix order
 # TASK-015c Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-processing@team
@@ -365,10 +365,20 @@ governance:
 	mitigation: "Max attempts + circuit breaker tests"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests","perf-baseline"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest tests/services/processing/test_embed_executor.py -q
+	deliverables:
+		- services/processing/stages/embed_executor.py
+		- tests/services/processing/test_embed_executor.py
+		- services/common/config.py
+		- services/pyproject.toml
 	dod:
-		- Retry/backoff tests
-		- Breaker open metric
-		- Error envelope verified
+		- Retry/backoff logic verified against timeout and 429 scenarios
+		- Circuit breaker opens after consecutive failures and emits metric
+		- Error envelope normalizes provider exceptions
+		- Batch size capped via settings.processing_embedding_max_batch_size
+		- Prometheus metrics exposed for durations, failures, and batch size
 # TASK-015d Governance
 governance:
 	status: Planned
