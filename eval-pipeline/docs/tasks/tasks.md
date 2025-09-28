@@ -118,16 +118,21 @@ governance:
 
 # TASK-002 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 1
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 2p
+	completed_at: 2025-09-29
 	risk: "Misconfigured env vars cause runtime instability"
 	mitigation: "Central pydantic validation + fail-fast; config snapshot in logs"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests","lint-config"]
+	verification:
+		- pytest services/tests/test_config.py -q
+		- pytest services/tests/test_service_skeleton.py -q
+		- pytest tests/services/common/test_object_store.py -q
 	dod:
 		- Missing critical var abort test
 		- Config printed once with redaction
