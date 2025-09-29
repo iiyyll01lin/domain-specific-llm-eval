@@ -12,6 +12,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "baseUrl": ".",
+  "types": ["vitest/globals"],
     "paths": {
       "@/*": ["src/*"],
       "@/components/*": ["src/components/*"],

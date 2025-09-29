@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { RunParsed, Thresholds } from '@/core/types'
+import type { DocumentRow, ProcessingJob } from '@/app/lifecycle/types'
 
 export interface FiltersState {
   language?: string | null
@@ -35,6 +36,10 @@ interface PortalState {
   setThresholds: (t: Thresholds) => void
   defaultThresholds?: Thresholds
   setDefaultThresholds: (t: Thresholds) => void
+  documents: DocumentRow[]
+  setDocuments: (docs: DocumentRow[]) => void
+  processingJobs: ProcessingJob[]
+  setProcessingJobs: (jobs: ProcessingJob[]) => void
 }
 
 export const usePortalStore = create<PortalState>((set) => ({
@@ -103,4 +108,8 @@ export const usePortalStore = create<PortalState>((set) => ({
   setThresholds: (t) => set({ thresholds: t }),
   defaultThresholds: undefined,
   setDefaultThresholds: (t) => set({ defaultThresholds: t }),
+  documents: [],
+  setDocuments: (docs) => set({ documents: docs }),
+  processingJobs: [],
+  setProcessingJobs: (jobs) => set({ processingJobs: jobs }),
 }))

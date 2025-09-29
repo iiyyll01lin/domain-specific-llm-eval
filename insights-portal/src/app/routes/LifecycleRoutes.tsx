@@ -1,5 +1,7 @@
 import React from 'react'
 import { useFeatureFlags } from '@/core/featureFlags'
+import { DocumentsPanel } from '@/app/lifecycle/DocumentsPanel'
+import { ProcessingPanel } from '@/app/lifecycle/ProcessingPanel'
 
 const Placeholder: React.FC<{ title: string }> = ({ title }) => (
   <div style={{ padding: 24 }}>
@@ -13,8 +15,8 @@ export const LifecycleRoutes: React.FC = () => {
   if (!flags.lifecycleConsole) return <div style={{ padding: 24 }}>Lifecycle console disabled.</div>
   return (
     <div style={{ display: 'grid', gap: 16 }}>
-      <Placeholder title="Documents" />
-      <Placeholder title="Processing" />
+      <DocumentsPanel />
+      <ProcessingPanel />
       <Placeholder title="Knowledge Graph" />
       <Placeholder title="Testsets" />
       <Placeholder title="Evaluations" />

@@ -298,9 +298,20 @@ governance:
 		- Schema fixtures synchronized across EN/ZH docs & README reference updated
 # TASK-017 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E3
 	target_sprint: 1
+	owner: ui-platform@team
+	priority: P1
+	estimate: 3p
+	completed_at: 2025-09-30
+	verification:
+		- vitest run src/app/lifecycle/__tests__/DocumentsPanel.test.tsx src/app/lifecycle/__tests__/ProcessingPanel.test.tsx
+	dod:
+		- Documents panel surfaces latest status, timestamps, and failure reasons with 10s polling via lifecycle config
+		- Processing panel renders all jobs with status chips and manual refresh wired to polling hook
+		- Polling hook updates lifecycle store while respecting AbortController cancellation and fetch timeouts
+		- i18n resources supply zh-TW/en-US copy for lifecycle tabs and empty states
 # TASK-015 Governance
 governance:
 	status: Planned              # Planned | In-Progress | Blocked | Done | Verified
