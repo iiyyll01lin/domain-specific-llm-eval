@@ -18,24 +18,34 @@ class ChecksumMismatchError(ObjectStoreError):
 
 async def service_error_handler(request: Request, exc: ServiceError):
     trace_id = getattr(request.state, 'trace_id', 'n/a')
-    return JSONResponse(status_code=exc.http_status, content={
-        'error_code': exc.error_code,
-        'message': exc.message,
-        'trace_id': trace_id
-    })
+    response = JSONResponse(
+        status_code=exc.http_status,
+        content={
+            'error_code': exc.error_code,
+            'message': exc.message,
+            'trace_id': trace_id
+        },
+    )
+    response.headers['x-trace-id'] = trace_id
+    return response
 
 async def generic_error_handler(request: Request, exc: Exception):
     trace_id = getattr(request.state, 'trace_id', 'n/a')
-    return JSONResponse(status_code=500, content={
-        'error_code': 'internal_error',
-        'message': 'Internal server error',
-        'trace_id': trace_id
-    })
+    response = JSONResponse(
+        status_code=500,
+        content={
+            'error_code': 'internal_error',
+            'message': 'Internal server error',
+            'trace_id': trace_id
+        },
+    )
+    response.headers['x-trace-id'] = trace_id
+    return response
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError):
     trace_id = getattr(request.state, 'trace_id', 'n/a')
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
             'error_code': 'request_validation_failed',
@@ -44,3 +54,5 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
             'details': exc.errors(),
         },
     )
+    response.headers['x-trace-id'] = trace_id
+    return response

@@ -1,5 +1,9 @@
-import logging, sys, json, time, uuid
-from typing import Any
+import json
+import logging
+import sys
+import time
+import uuid
+from typing import Any, Dict
 from .config import settings
 
 class JsonFormatter(logging.Formatter):
@@ -11,8 +15,16 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "service": settings.service_name,
         }
-        if hasattr(record, 'trace_id'):
-            base['trace_id'] = getattr(record, 'trace_id')
+        if hasattr(record, "trace_id"):
+            base["trace_id"] = getattr(record, "trace_id")
+
+        context: Any = getattr(record, "context", None)
+        if isinstance(context, dict):
+            base.update(context)
+
+        if record.exc_info:
+            base["exception"] = self.formatException(record.exc_info)
+
         return json.dumps(base, ensure_ascii=False)
 
 def configure_logging():

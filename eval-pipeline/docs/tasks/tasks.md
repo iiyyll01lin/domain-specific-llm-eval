@@ -140,16 +140,19 @@ governance:
 
 # TASK-003 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3   # Shared log format consumption by UI, but implemented by backend infra engineer if preferred
 	target_sprint: 1
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 2p
+	completed_at: 2025-09-29
 	risk: "Unstructured logs hinder incident triage"
 	mitigation: "JSON logger + trace_id middleware test + structured schema"
 	adr_impact: ["ADR-002"]
 	ci_gate: ["unit-tests","log-schema-check"]
+	verification:
+		- pytest services/tests/test_logging.py services/tests/test_errors.py -q
 	dod:
 		- Log schema unit test
 		- Trace id present in request log test
@@ -157,16 +160,19 @@ governance:
 
 # TASK-004 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 1
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 1p
+	completed_at: 2025-09-29
 	risk: "Inconsistent error shapes break UI handling"
 	mitigation: "Unified handler + contract test fixtures"
 	adr_impact: ["ADR-003"]
 	ci_gate: ["unit-tests","api-schema"]
+	verification:
+		- pytest services/tests/test_logging.py services/tests/test_errors.py -q
 	dod:
 		- 4xx/5xx error schema snapshot
 		- Trace id always present
