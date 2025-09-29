@@ -274,9 +274,28 @@ governance:
 		- Empty-text guard raises extraction_empty_text to protect downstream stages
 # TASK-016 Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
+	owner: platform-processing@team
+	priority: P1
+	estimate: 3p
+	risk: "Event omission breaks downstream traceability"
+	mitigation: "Worker orchestrator unit tests + schema validation"
+	adr_impact: ["ADR-004","ADR-006"]
+	ci_gate: ["unit-tests","event-contract"]
+	completed_at: 2025-09-29
+	verification:
+		- pytest tests/services/processing/test_worker.py -q
+	deliverables:
+		- services/processing/worker.py
+		- tests/services/processing/test_worker.py
+		- services/common/events.py
+		- events/schemas/document.processed.v1.json
+	dod:
+		- Worker orchestrates extract → chunk → embed → persist and updates job status transitions
+		- document.processed event includes chunk_count, embedding_count, manifest_object_key, duration_ms
+		- Schema fixtures synchronized across EN/ZH docs & README reference updated
 # TASK-017 Governance
 governance:
 	status: Planned
@@ -392,7 +411,7 @@ governance:
 		- Prometheus metrics exposed for durations, failures, and batch size
 # TASK-015d Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E1
 	target_sprint: 1
 	owner: platform-processing@team
@@ -402,10 +421,16 @@ governance:
 	mitigation: "Count+hash manifest validation test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-29
+	verification:
+		- pytest tests/services/processing/test_chunk_persistence.py -q
+	deliverables:
+		- services/processing/stages/chunk_persist.py
+		- tests/services/processing/test_chunk_persistence.py
 	dod:
-		- Manifest schema test
-		- Hash mismatch failure
-		- README integrity notes
+		- Manifest schema serialized alongside chunks.jsonl & embeddings.jsonl
+		- Hash mismatch raises ChunkPersistenceError and aborts upload
+		- README integrity notes describe manifest + checksum workflow
 ```
 
 ### 5.3 Testset Generation

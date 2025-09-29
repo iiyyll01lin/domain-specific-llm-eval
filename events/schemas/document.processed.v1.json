@@ -1,0 +1,25 @@
+{
+  "$id": "document.processed.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["event", "seq", "timestamp", "payload"],
+  "properties": {
+    "event": {"const": "document.processed"},
+    "seq": {"type": "integer", "minimum": 0},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "required": ["document_id", "chunk_count", "profile_hash"],
+      "properties": {
+        "document_id": {"type": "string"},
+        "chunk_count": {"type": "integer", "minimum": 0},
+        "profile_hash": {"type": "string", "minLength": 8},
+        "embedding_count": {"type": "integer", "minimum": 0},
+        "manifest_key": {"type": "string", "minLength": 1},
+        "duration_ms": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

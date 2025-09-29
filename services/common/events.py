@@ -46,6 +46,29 @@ class EventPublisher:
             payload["source_uri"] = source_uri
         self.publish("document.ingested", payload)
 
+    def document_processed(
+        self,
+        *,
+        document_id: str,
+        profile_hash: str,
+        chunk_count: int,
+        embedding_count: Optional[int] = None,
+        manifest_key: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+    ) -> None:
+        payload: Dict[str, Any] = {
+            "document_id": document_id,
+            "profile_hash": profile_hash,
+            "chunk_count": chunk_count,
+        }
+        if embedding_count is not None:
+            payload["embedding_count"] = embedding_count
+        if manifest_key:
+            payload["manifest_key"] = manifest_key
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        self.publish("document.processed", payload)
+
     def _default_transport(self, envelope: Dict[str, Any]) -> None:
         logger.info(
             "event emitted",
