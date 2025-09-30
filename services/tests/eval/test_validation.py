@@ -4,6 +4,8 @@ Tests for evaluation run input validation.
 Task: TASK-030b - Input Validation Layer
 """
 
+import asyncio
+
 import pytest
 from pydantic import ValidationError
 
@@ -42,6 +44,14 @@ class TestEvaluationRunCreateRequest:
         assert request.rag_endpoint == "http://localhost:8080/query"
         assert request.timeout_seconds == 60
         assert request.max_retries == 5
+
+    def test_valid_request_hex_identifier(self):
+        """32-character hex testset ID is accepted."""
+        request = EvaluationRunCreateRequest(
+            testset_id="550e8400e29b41d4a716446655440000",
+            profile="baseline",
+        )
+        assert request.testset_id == "550e8400e29b41d4a716446655440000"
     
     def test_invalid_testset_id_too_short(self):
         """Testset ID that is too short fails validation."""
@@ -140,6 +150,7 @@ class TestEvaluationRunValidator:
         return {
             "550e8400-e29b-41d4-a716-446655440000",
             "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            "550e8400e29b41d4a716446655440000",
         }
     
     @pytest.fixture
@@ -157,40 +168,37 @@ class TestEvaluationRunValidator:
             available_profiles=["baseline", "comprehensive", "fast"],
         )
     
-    @pytest.mark.anyio
-    async def test_valid_request_passes(self, validator):
+    def test_valid_request_passes(self, validator):
         """Valid request with existing testset and valid profile passes."""
         request = EvaluationRunCreateRequest(
             testset_id="550e8400-e29b-41d4-a716-446655440000",
             profile="baseline",
         )
-        await validator.validate(request)
+        asyncio.run(validator.validate(request))
         # No exception expected
     
-    @pytest.mark.anyio
-    async def test_missing_testset_raises_error(self, validator):
+    def test_missing_testset_raises_error(self, validator):
         """Request with non-existent testset raises TestsetNotFoundError."""
         request = EvaluationRunCreateRequest(
             testset_id="00000000-0000-0000-0000-000000000000",
             profile="baseline",
         )
         with pytest.raises(TestsetNotFoundError) as exc_info:
-            await validator.validate(request)
+            asyncio.run(validator.validate(request))
         
         assert exc_info.value.testset_id == "00000000-0000-0000-0000-000000000000"
         assert exc_info.value.error_code == "testset_not_found"
         assert exc_info.value.http_status == 404
         assert "00000000-0000-0000-0000-000000000000" in exc_info.value.message
     
-    @pytest.mark.anyio
-    async def test_invalid_profile_raises_error(self, validator):
+    def test_invalid_profile_raises_error(self, validator):
         """Request with invalid profile raises InvalidProfileError."""
         request = EvaluationRunCreateRequest(
             testset_id="550e8400-e29b-41d4-a716-446655440000",
             profile="nonexistent",
         )
         with pytest.raises(InvalidProfileError) as exc_info:
-            await validator.validate(request)
+            asyncio.run(validator.validate(request))
         
         assert exc_info.value.profile == "nonexistent"
         assert exc_info.value.error_code == "invalid_profile"
@@ -199,8 +207,7 @@ class TestEvaluationRunValidator:
         assert "baseline" in exc_info.value.message
         assert exc_info.value.available_profiles == ["baseline", "comprehensive", "fast"]
     
-    @pytest.mark.anyio
-    async def test_all_valid_profiles_accepted(self, validator):
+    def test_all_valid_profiles_accepted(self, validator):
         """All configured profiles are accepted."""
         valid_profiles = ["baseline", "comprehensive", "fast"]
         
@@ -209,7 +216,7 @@ class TestEvaluationRunValidator:
                 testset_id="550e8400-e29b-41d4-a716-446655440000",
                 profile=profile,
             )
-            await validator.validate(request)
+            asyncio.run(validator.validate(request))
             # No exception expected
 
 

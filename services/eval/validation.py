@@ -18,9 +18,9 @@ class EvaluationRunCreateRequest(BaseModel):
     
     testset_id: str = Field(
         ...,
-        description="UUID of the testset to evaluate",
-        min_length=36,
-        max_length=36,
+    description="UUID or 32-char hex identifier of the testset to evaluate",
+    min_length=32,
+    max_length=36,
     )
     
     profile: str = Field(
@@ -53,11 +53,14 @@ class EvaluationRunCreateRequest(BaseModel):
     @classmethod
     def validate_testset_id_format(cls, v: str) -> str:
         """Validate testset_id is a valid UUID format."""
-        # Basic UUID format check (8-4-4-4-12 hex digits)
+        # Basic UUID format check (8-4-4-4-12 hex digits) or 32-char hex (uuid4 hex)
         import re
+
+        normalized = v.lower()
         uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        if not re.match(uuid_pattern, v.lower()):
-            raise ValueError('testset_id must be a valid UUID')
+        hex_pattern = r'^[0-9a-f]{32}$'
+        if not (re.match(uuid_pattern, normalized) or re.match(hex_pattern, normalized)):
+            raise ValueError('testset_id must be a valid UUID or 32-character hex string')
         return v
     
     @field_validator('profile')

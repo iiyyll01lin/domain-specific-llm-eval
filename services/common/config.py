@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ingestion_db_path: str = Field(default="data/ingestion_jobs.db", validation_alias="INGESTION_DB_PATH")
     processing_db_path: str = Field(default="data/processing_jobs.db", validation_alias="PROCESSING_DB_PATH")
     testset_db_path: str = Field(default="data/testset_jobs.db", validation_alias="TESTSET_DB_PATH")
+    eval_db_path: str = Field(default="data/eval_runs.db", validation_alias="EVAL_DB_PATH")
     processing_embedding_max_batch_size: int = Field(
         default=512,
         validation_alias="PROCESSING_EMBEDDING_MAX_BATCH_SIZE",

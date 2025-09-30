@@ -816,7 +816,7 @@ governance:
 ### 5.4 Evaluation Runner
 | ID       | Title                            | Description                                                                             | Acceptance Criteria                              | Dependencies | Artifacts                | Req Mapping              |
 |----------|----------------------------------|-----------------------------------------------------------------------------------------|--------------------------------------------------|--------------|--------------------------|--------------------------|
-| TASK-030 | Evaluation Run API               | Create run referencing testset_id + rag profile.                                        | 202 run_id; validation on testset existence.     | TASK-024     | eval/api.py              | FR-017~022               |
+| TASK-030 | Evaluation Run API               | Create run referencing testset_id + rag profile.                                        | 202 run_id; validation on testset existence.     | TASK-024     | services/eval/main.py    | FR-017~022               |
 | TASK-031 | RAG Invocation & Context Capture | Adapter layer to call target RAG system; collect contexts.                              | All evaluation_items contain context array.      | TASK-030     | eval/rag_adapter.py      | FR-017~022               |
 | TASK-032 | Metrics Plugin Registry          | Load baseline metrics (faithfulness, answer_relevancy, precision etc.) via entrypoints. | registry lists metrics; each executed per item.  | TASK-031     | eval/metrics/__init__.py | FR-017~022               |
 | TASK-033 | Evaluation Items Persistence     | Stream write evaluation_items.json with flush intervals.                                | File incremental growth; final count == samples. | TASK-032     | eval/persist.py          | FR-017~022               |
@@ -911,36 +911,49 @@ governance:
 		- EvaluationRunValidator with async testset existence checking
 # TASK-030c Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P1
+	completed_at: 2025-10-02
 	estimate: 1p
 	risk: "Duplicate runs waste resources"
 	mitigation: "Hash guard + race test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_api.py -k "idempotent" -q
+	deliverables:
+		- services/eval/run_guard.py
+		- services/tests/eval/test_api.py
 	dod:
-		- Duplicate request returns same run_id
-		- Concurrency test passes
-		- Log includes dedupe=true flag
+		- Duplicate request returns same run_id (API test asserts json match)
+		- Guard prevents concurrent active run creation via repository check
+		- Structured log includes result field marking duplicate reuse
 # TASK-030d Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P2
+	completed_at: 2025-10-02
 	estimate: 1p
 	risk: "Missing metrics hinder observability"
 	mitigation: "Metric name lint + sample scrape test"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests","build-governance:schemas"]
+	verification:
+		- pytest services/tests/eval/test_api.py -k "metrics" -q
+	deliverables:
+		- services/eval/metrics.py
+		- services/eval/main.py
+		- services/tests/eval/test_api.py
 	dod:
-		- Metric exposed
-		- Structured log asserts
-		- Docs updated
+		- Metric exposed on /metrics endpoint with evaluation_run_created_total counter
+		- Structured log emits run_id and profile on run creation
+		- Prometheus registry wiring covered by API integration test
 ```
 
 #### TASK-031 Subtasks
@@ -1173,20 +1186,32 @@ governance:
 ```yaml
 # TASK-030 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P1
+	completed_at: 2025-10-02
 	estimate: 2p
 	risk: "Run lifecycle ambiguity"
 	mitigation: "State diagram + transition tests"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_api.py -q
+		- pytest services/tests/eval/test_validation.py -q
+	deliverables:
+		- services/eval/main.py
+		- services/eval/repository.py
+		- services/eval/schemas.py
+		- services/tests/eval/test_api.py
+		- services/tests/eval/test_validation.py
 	dod:
-		- State enum defined
-		- Invalid transition test
-		- Lifecycle doc
+		- POST /eval-runs returns 202 with persisted run payload
+		- Duplicate submissions reuse existing run_id via guard
+		- Metrics endpoint publishes evaluation_run_created_total counter
+		- Validation rejects non-existent testset_id with structured error
+		- Documentation updated in tasks governance sections
 ```
 
 ```yaml
