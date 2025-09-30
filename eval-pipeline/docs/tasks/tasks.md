@@ -468,9 +468,29 @@ governance:
 ```yaml
 # TASK-021 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
+	owner: platform-testset@team
+	priority: P1
+	estimate: 3p
+	risk: "Seed instability breaks reproducibility"
+	mitigation: "Generator + engine deterministic tests"
+	adr_impact: ["ADR-001","ADR-005"]
+	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_engine.py -q
+		- pytest services/tests/testset/test_generator_core.py -q
+	deliverables:
+		- services/testset/engine.py
+		- services/testset/repository.py
+		- services/tests/testset/test_engine.py
+	dod:
+		- Engine persists samples and metadata with deterministic object keys and checksums
+		- Repository supports running/completed transitions with audit timestamps and error resets
+		- Metadata document exposes persona/scenario counts, seed, and checksum for traceability
+		- Unit tests cover success, missing job, and empty generation failure paths
 # TASK-022 Governance
 governance:
 	status: Planned

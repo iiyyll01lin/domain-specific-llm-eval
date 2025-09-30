@@ -115,6 +115,15 @@ class GeneratorCore:
         metadata = {
             "seed": params.seed,
             "persona": params.persona_profile or None,
+            "persona_count": 1 if params.persona_profile else 0,
+            "scenarios": [
+                {
+                    "scenario_id": scenario.scenario_id,
+                    "label": scenario.label,
+                    "instructions": scenario.instructions,
+                }
+                for scenario in scenarios
+            ],
             "scenario_count": len(scenarios),
             "strategies": list(params.selected_strategies),
         }
