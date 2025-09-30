@@ -314,7 +314,7 @@ governance:
 		- i18n resources supply zh-TW/en-US copy for lifecycle tabs and empty states
 # TASK-015 Governance
 governance:
-	status: Planned              # Planned | In-Progress | Blocked | Done | Verified
+	status: Done              # Planned | In-Progress | Blocked | Done | Verified
 	engineer: E1
 	target_sprint: 1
 	owner: platform-ml@team
@@ -334,6 +334,10 @@ governance:
 	logs:
 		- code=EMBED_BATCH_START level=INFO
 		- code=EMBED_BATCH_FAIL level=ERROR
+	completed_at: 2025-09-30
+	verification:
+		- python3 -m pytest tests/processing -q
+		- python3 -m pytest -q
 	dod:
 		- Unit tests cover tokenizer + batch executor failure paths
 		- chunks.jsonl produced; chunk_count == embedding_count

@@ -1,7 +1,8 @@
 from functools import lru_cache
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, Response, status
 from fastapi.exceptions import RequestValidationError
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from services.common.config import configure_service, settings
 from services.common.errors import (
@@ -38,6 +39,12 @@ def get_document_repository() -> IngestionRepository:
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": SERVICE_NAME}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    payload = generate_latest()
+    return Response(content=payload, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post(
