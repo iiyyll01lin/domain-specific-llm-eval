@@ -69,6 +69,22 @@ class EventPublisher:
             payload["duration_ms"] = duration_ms
         self.publish("document.processed", payload)
 
+    def testset_created(
+        self,
+        *,
+        testset_id: str,
+        sample_count: int,
+        seed: int,
+        config_hash: str,
+    ) -> None:
+        payload: Dict[str, Any] = {
+            "testset_id": testset_id,
+            "sample_count": sample_count,
+            "seed": seed,
+            "config_hash": config_hash,
+        }
+        self.publish("testset.created", payload)
+
     def _default_transport(self, envelope: Dict[str, Any]) -> None:
         logger.info(
             "event emitted",

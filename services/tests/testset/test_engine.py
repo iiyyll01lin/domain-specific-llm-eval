@@ -7,8 +7,10 @@ from typing import Any, Dict, Mapping, Sequence
 import pytest
 from ragas.dataset_schema import SingleTurnSample
 from ragas.testset.synthesizers.testset_schema import TestsetSample
+from jsonschema import Draft202012Validator
 
 from services.common.errors import ServiceError
+from services.common.events import EventPublisher
 from services.common.storage.object_store import compute_checksum
 from services.testset.engine import TestsetGenerationEngine
 from services.testset.generator_core import GenerationStats
@@ -36,6 +38,15 @@ class InMemoryObjectStore:
             "checksum": checksum,
         }
         return checksum
+
+
+class RecordingEventPublisher(EventPublisher):
+    def __init__(self) -> None:
+        self.events: list[Dict[str, Any]] = []
+        super().__init__(transport=self._record)
+
+    def _record(self, envelope: Dict[str, Any]) -> None:
+        self.events.append(envelope)
 
 
 class StubGenerator:
@@ -110,10 +121,12 @@ def test_generate_persists_artifacts_and_metadata(temp_repo: TestsetRepository, 
         config={"method": "baseline", "seed": 99, "max_total_samples": 1},
     )
     store = InMemoryObjectStore()
+    events = RecordingEventPublisher()
     engine = TestsetGenerationEngine(
         repository=temp_repo,
         object_store=store,
         generator=StubGenerator(),
+        event_publisher=events,
         storage_prefix="unit-test/",
         bucket="test-bucket",
     )
@@ -121,7 +134,7 @@ def test_generate_persists_artifacts_and_metadata(temp_repo: TestsetRepository, 
     result = engine.generate(job_id=job.job_id, chunks=[_create_chunk()])
 
     assert result.sample_count == 1
-    assert set(result.artifact_paths.keys()) == {"samples", "metadata"}
+    assert set(result.artifact_paths.keys()) == {"samples", "metadata", "personas", "scenarios"}
     assert result.metadata["job_id"] == job.job_id
 
     stored_job = temp_repo.get_job(job.job_id)
@@ -134,8 +147,12 @@ def test_generate_persists_artifacts_and_metadata(temp_repo: TestsetRepository, 
 
     samples_key = stored_job.artifact_paths["samples"]
     metadata_key = stored_job.artifact_paths["metadata"]
+    personas_key = stored_job.artifact_paths["personas"]
+    scenarios_key = stored_job.artifact_paths["scenarios"]
     assert samples_key in store.uploads
     assert metadata_key in store.uploads
+    assert personas_key in store.uploads
+    assert scenarios_key in store.uploads
 
     samples_payload = store.uploads[samples_key]["payload"].decode("utf-8").strip()
     sample_record = json.loads(samples_payload)
@@ -145,6 +162,28 @@ def test_generate_persists_artifacts_and_metadata(temp_repo: TestsetRepository, 
     assert metadata_payload["persona_count"] == 1
     assert metadata_payload["scenario_count"] == 1
     assert metadata_payload["checksum"] == store.uploads[samples_key]["checksum"]
+    assert metadata_payload["personas_artifact"] == personas_key
+    assert metadata_payload["scenarios_artifact"] == scenarios_key
+
+    personas_payload = json.loads(store.uploads[personas_key]["payload"].decode("utf-8"))
+    assert personas_payload["count"] == 1
+    assert personas_payload["items"][0]["role"] == "auditor"
+
+    scenarios_payload = json.loads(store.uploads[scenarios_key]["payload"].decode("utf-8"))
+    assert scenarios_payload["count"] == 1
+    assert scenarios_payload["items"][0]["scenario_id"] == "scenario-1"
+
+    assert len(events.events) == 1
+    envelope = events.events[0]
+    schema_path = Path(__file__).resolve().parents[3] / "events" / "schemas" / "testset.created.v1.json"
+    schema = json.loads(schema_path.read_text("utf-8"))
+    Draft202012Validator(schema).validate(envelope)
+    assert envelope["event"] == "testset.created"
+    payload = envelope["payload"]
+    assert payload["testset_id"] == job.job_id
+    assert payload["sample_count"] == 1
+    assert payload["config_hash"] == job.config_hash
+    assert payload["seed"] == 99
 
 
 def test_generate_requires_existing_job(temp_repo: TestsetRepository) -> None:
@@ -152,6 +191,7 @@ def test_generate_requires_existing_job(temp_repo: TestsetRepository) -> None:
         repository=temp_repo,
         object_store=InMemoryObjectStore(),
         generator=StubGenerator(),
+        event_publisher=RecordingEventPublisher(),
     )
 
     with pytest.raises(ServiceError) as exc:
@@ -169,6 +209,7 @@ def test_generate_marks_failure_when_empty(temp_repo: TestsetRepository) -> None
         repository=temp_repo,
         object_store=InMemoryObjectStore(),
         generator=EmptyGenerator(),
+        event_publisher=RecordingEventPublisher(),
     )
 
     with pytest.raises(ServiceError) as exc:

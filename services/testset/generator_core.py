@@ -9,6 +9,7 @@ import random
 from ragas.dataset_schema import SingleTurnSample
 from ragas.testset.synthesizers.testset_schema import TestsetSample
 
+from services.testset.dedupe import SampleDeduplicator
 from services.testset.payloads import DraftSample, SourceChunk
 from services.testset.persona_injector import PersonaInjectionResult, PersonaInjector
 from services.testset.pre_filter import QualityFilter, QualityFilterResult
@@ -73,11 +74,13 @@ class GeneratorCore:
         *,
         templates: Sequence[str] | None = None,
         persona_injector: PersonaInjector | None = None,
+        deduplicator: SampleDeduplicator | None = None,
         scenario_generator: ScenarioVariationGenerator | None = None,
         quality_filter: QualityFilter | None = None,
     ) -> None:
         self._templates = templates or _DEFAULT_TEMPLATES
         self._persona_injector = persona_injector or PersonaInjector()
+        self._deduplicator = deduplicator or SampleDeduplicator()
         self._scenario_generator = scenario_generator or ScenarioVariationGenerator()
         self._quality_filter = quality_filter or QualityFilter()
 
@@ -102,14 +105,15 @@ class GeneratorCore:
             scenarios=scenarios,
             rng=rng,
         )
-        filtered = self._quality_filter.apply(processed, rng=rng)
+        dedupe_result = self._deduplicator.apply(processed)
+        filtered = self._quality_filter.apply(dedupe_result.samples, rng=rng)
         limited = filtered.samples[: params.max_total_samples]
         samples = [self._to_testset_sample(sample, params.method) for sample in limited]
 
         stats = GenerationStats(
             generated=len(draft_samples),
             filtered=len(limited),
-            dropped_duplicates=filtered.dropped_duplicates,
+            dropped_duplicates=dedupe_result.dropped_duplicates + filtered.dropped_duplicates,
             dropped_length=filtered.dropped_length,
         )
         metadata = {
@@ -126,6 +130,9 @@ class GeneratorCore:
             ],
             "scenario_count": len(scenarios),
             "strategies": list(params.selected_strategies),
+            "deduplicated_count": len(dedupe_result.samples),
+            "duplicate_ratio": dedupe_result.duplicate_ratio,
+            "duplicate_ratio_limit": self._deduplicator.config.max_duplicate_ratio,
         }
         return samples, stats, metadata
 

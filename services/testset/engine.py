@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from services.common.errors import ServiceError
+from services.common.events import EventPublisher, NullEventPublisher
 from services.common.storage.object_store import ObjectStoreClient, compute_checksum
 from services.testset.generator_core import GenerationStats, GeneratorCore
 from services.testset.payloads import SourceChunk
+from services.testset.persona import build_personas_document, build_scenarios_document
 from services.testset.repository import TestsetRepository
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ class TestsetGenerationEngine:
         object_store: ObjectStoreClient,
         *,
         generator: Optional[GeneratorCore] = None,
+        event_publisher: Optional[EventPublisher] = None,
         storage_prefix: str = "testsets",
         bucket: Optional[str] = None,
     ) -> None:
@@ -40,6 +43,7 @@ class TestsetGenerationEngine:
         self._repository = repository
         self._object_store = object_store
         self._generator = generator or GeneratorCore()
+        self._event_publisher = event_publisher or NullEventPublisher()
         self._storage_prefix = storage_prefix.strip("/")
         self._bucket = bucket
 
@@ -117,6 +121,53 @@ class TestsetGenerationEngine:
             checksum=samples_checksum,
             generated_at=timestamp,
         )
+        personas_document = build_personas_document(
+            metadata_document.get("persona"),
+            job_id=job.job_id,
+            config_hash=job.config_hash,
+            seed=metadata_document.get("seed"),
+            generated_at=timestamp,
+        )
+        personas_payload = json.dumps(personas_document, ensure_ascii=False, indent=2).encode("utf-8")
+        personas_key = f"{artifact_prefix}/personas.json"
+        self._object_store.upload_bytes(
+            self._bucket,
+            personas_key,
+            personas_payload,
+            expected_checksum=compute_checksum(personas_payload),
+        )
+
+        scenarios_document = build_scenarios_document(
+            metadata_document.get("scenarios"),
+            job_id=job.job_id,
+            config_hash=job.config_hash,
+            seed=metadata_document.get("seed"),
+            generated_at=timestamp,
+        )
+        scenarios_payload = json.dumps(scenarios_document, ensure_ascii=False, indent=2).encode("utf-8")
+        scenarios_key = f"{artifact_prefix}/scenarios.json"
+        self._object_store.upload_bytes(
+            self._bucket,
+            scenarios_key,
+            scenarios_payload,
+            expected_checksum=compute_checksum(scenarios_payload),
+        )
+
+        artifact_paths = {
+            "samples": samples_key,
+            "personas": personas_key,
+            "scenarios": scenarios_key,
+        }
+
+        seed = metadata_document.get("seed")
+        persona_count = int(personas_document.get("count") or 0)
+        scenario_count = int(scenarios_document.get("count") or 0)
+
+        metadata_document["persona_count"] = persona_count
+        metadata_document["scenario_count"] = scenario_count
+        metadata_document["personas_artifact"] = personas_key
+        metadata_document["scenarios_artifact"] = scenarios_key
+
         metadata_payload = json.dumps(metadata_document, ensure_ascii=False, indent=2).encode("utf-8")
         metadata_key = f"{artifact_prefix}/metadata.json"
         self._object_store.upload_bytes(
@@ -126,14 +177,7 @@ class TestsetGenerationEngine:
             expected_checksum=compute_checksum(metadata_payload),
         )
 
-        artifact_paths = {
-            "samples": samples_key,
-            "metadata": metadata_key,
-        }
-
-        seed = metadata_document.get("seed")
-        persona_count = int(metadata_document.get("persona_count") or 0)
-        scenario_count = int(metadata_document.get("scenario_count") or 0)
+        artifact_paths["metadata"] = metadata_key
 
         self._repository.mark_completed(
             job_id,
@@ -144,6 +188,13 @@ class TestsetGenerationEngine:
             artifact_prefix=artifact_prefix,
             artifact_paths=artifact_paths,
             metadata=metadata_document,
+        )
+
+        self._event_publisher.testset_created(
+            testset_id=job.job_id,
+            sample_count=len(samples),
+            seed=int(seed or 0),
+            config_hash=job.config_hash,
         )
 
         logger.info(

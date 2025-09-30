@@ -79,3 +79,5 @@ def test_generator_applies_persona_and_scenarios() -> None:
     assert "Persona context" in sample_question
     assert "Scenario:" in sample_question
     assert metadata["persona"]["id"] == "qa-analyst"
+    assert metadata["deduplicated_count"] >= len(samples)
+    assert "duplicate_ratio" in metadata

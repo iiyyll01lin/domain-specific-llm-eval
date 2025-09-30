@@ -493,19 +493,66 @@ governance:
 		- Unit tests cover success, missing job, and empty generation failure paths
 # TASK-022 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
+	owner: platform-testset@team
+	priority: P1
+	estimate: 2p
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_engine.py -q
+		- pytest services/tests/testset/test_persona_artifacts.py -q
+	deliverables:
+		- services/testset/persona.py
+		- services/testset/engine.py
+		- services/tests/testset/test_engine.py
+		- services/tests/testset/test_persona_artifacts.py
+	dod:
+		- Personas and scenarios manifests uploaded with deterministic schema and artifact references recorded in metadata.json
+		- Repository completion metadata captures persona_count and scenario_count sourced from generated manifests
+		- Unit tests assert artifact contents, counts, and metadata linkage
 # TASK-023 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
+	owner: platform-testset@team
+	priority: P1
+	estimate: 3p
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_dedupe.py -q
+		- pytest services/tests/testset/test_generator_core.py -q
+		- pytest services/tests/testset/test_engine.py -q
+	deliverables:
+		- services/testset/dedupe.py
+		- services/testset/generator_core.py
+		- services/tests/testset/test_dedupe.py
+		- services/tests/testset/test_generator_core.py
+	dod:
+		- MinHash-inspired deduplication filters near-identical samples while preserving persona/scenario diversity
+		- Generation metadata surfaces duplicate ratio, deduplicated counts, and enforcement threshold for observability
+		- Quality filter metrics incorporate deduplicator drops ensuring final sample count respects configured caps
 # TASK-024 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
+	owner: platform-testset@team
+	priority: P1
+	estimate: 2p
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_engine.py -q
+	deliverables:
+		- services/common/events.py
+		- services/testset/engine.py
+		- services/tests/testset/test_engine.py
+	dod:
+		- testset.created envelopes emitted with id, sample_count, seed, and config_hash on successful generation
+		- Event publisher exposes helper for testset notifications reused across services
+		- Unit tests validate envelope against JSON schema to guarantee contract stability
 # TASK-025 Governance
 governance:
 	status: Planned
