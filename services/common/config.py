@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, validation_alias="PORT")
     ingestion_db_path: str = Field(default="data/ingestion_jobs.db", validation_alias="INGESTION_DB_PATH")
     processing_db_path: str = Field(default="data/processing_jobs.db", validation_alias="PROCESSING_DB_PATH")
+    testset_db_path: str = Field(default="data/testset_jobs.db", validation_alias="TESTSET_DB_PATH")
     processing_embedding_max_batch_size: int = Field(
         default=512,
         validation_alias="PROCESSING_EMBEDDING_MAX_BATCH_SIZE",

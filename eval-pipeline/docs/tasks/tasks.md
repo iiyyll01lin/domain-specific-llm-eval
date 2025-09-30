@@ -515,9 +515,19 @@ governance:
 		- Hash doc added
 # TASK-020b Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
+	owner: platform-testset@team
+	priority: P1
+	estimate: 1p
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_api.py::test_duplicate_submission_returns_same_job_id -q
+	dod:
+		- Guard ensures duplicate config_hash returns existing job within same request cycle
+		- Repository enforces UNIQUE index on config_hash for persistence-level safety
+		- Duplicate guard path emits structured debug log with job_id and status
 	owner: platform-testset@team
 	priority: P1
 	estimate: 1p
@@ -554,7 +564,7 @@ governance:
 		- Selected strategies de-duplicated and persona metadata normalised
 # TASK-020d Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -564,10 +574,13 @@ governance:
 	mitigation: "Metric + log integration tests"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_api.py -q
 	dod:
-		- Metric scrape test
-		- Log includes hash & size
-		- README observability
+		- Prometheus counter labels capture created vs duplicate outcomes
+		- Structured log includes job_id, config_hash, method for observability
+		- /metrics endpoint exposes testset_job_created_total for scrape
 ```
 
 #### TASK-021 Subtasks
@@ -668,7 +681,7 @@ governance:
 
 # TASK-020 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 1
 	owner: platform-testset@team
@@ -678,10 +691,15 @@ governance:
 	mitigation: "Normalizer golden test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_api.py -q
+		- pytest services/tests/testset/test_validation.py -q
 	dod:
-		- Stable hash test
-		- Error envelope test
-		- README config hash section
+		- POST /testset-jobs returns 202 with job_id, config_hash, method metadata
+		- Duplicate submissions reuse existing job_id and set duplicate=true
+		- Metrics counter labels (created/duplicate) increment per request outcome
+		- Structured log emits job_id and config_hash for traceability
 ```
 
 ### 5.4 Evaluation Runner
