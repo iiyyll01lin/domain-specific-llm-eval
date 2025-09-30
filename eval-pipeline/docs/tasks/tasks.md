@@ -531,20 +531,27 @@ governance:
 		- Structured dedupe log
 # TASK-020c Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 1
 	owner: platform-testset@team
 	priority: P1
 	estimate: 1p
+	completed_at: 2025-09-30
 	risk: "Invalid counts produce runaway generation"
 	mitigation: "Range validation + negative tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- python3 -m pytest services/tests/testset/test_validation.py -q
+	deliverables:
+		- services/testset/validation.py
+		- services/tests/testset/test_validation.py
 	dod:
-		- Invalid seed test
-		- Count bounds enforced
-		- Error schema doc
+		- Config validation prevents submission without required fields
+		- Invalid counts rejected with 400 and error_code testset_config_invalid
+		- Seed and sample limits enforced with unit coverage
+		- Selected strategies de-duplicated and persona metadata normalised
 # TASK-020d Governance
 governance:
 	status: Planned
