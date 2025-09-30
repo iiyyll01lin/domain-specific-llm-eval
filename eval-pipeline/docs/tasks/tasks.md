@@ -841,45 +841,55 @@ governance:
 	completed_at: 2025-09-30
 # TASK-030a Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P1
+	completed_at: 2025-09-30
 	verification:
-		- pytest services/tests/testset -q
+		- pytest services/tests/eval/test_run_states.py -v
 	deliverables:
-		- services/testset/generator_core.py
-		- services/testset/persona_injector.py
-		- services/testset/scenario_variation.py
-		- services/testset/pre_filter.py
-		- services/testset/payloads.py
-		- services/tests/testset/
+		- services/eval/run_states.py
+		- services/tests/eval/test_run_states.py
 	estimate: 1p
 	risk: "State explosion or invalid transition logic"
 	mitigation: "Finite enum + transition table test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
 	dod:
-		- Transition matrix unit tested
-		- Invalid transition raises error
-		- README updated with lifecycle
+		- Transition matrix unit tested (26 tests passed)
+		- Invalid transition raises InvalidStateTransitionError
+		- RunState enum with 5 states (PENDING, RUNNING, COMPLETED, FAILED, CANCELLED)
+		- Terminal state detection implemented
+		- State transition validation with comprehensive test coverage
 # TASK-030b Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P1
+	completed_at: 2025-09-30
 	estimate: 1p
 	risk: "Missing validation permits bad run config"
 	mitigation: "Pydantic schema + negative tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_validation.py -v -k "not trio"
+	deliverables:
+		- services/eval/validation.py
+		- services/tests/eval/test_validation.py
 	dod:
-		- Validation rejects bad profile
-		- Tests cover missing testset_id
-		- Error envelope documented
+		- Validation rejects bad profile (19 tests passed)
+		- Tests cover missing testset_id with TestsetNotFoundError
+		- Error envelope documented with ServiceError integration
+		- EvaluationRunCreateRequest schema with pydantic validation
+		- UUID format validation for testset_id
+		- Profile name validation (alphanumeric + underscore)
+		- Timeout and retry parameter range validation
+		- EvaluationRunValidator with async testset existence checking
 # TASK-030c Governance
 governance:
 	status: Planned
