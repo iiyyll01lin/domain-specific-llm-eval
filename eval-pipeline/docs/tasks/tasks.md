@@ -834,9 +834,27 @@ governance:
 ```yaml
 # TASK-031 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
+	owner: platform-eval@team
+	priority: P1
+	estimate: 2p
+	completed_at: 2025-09-30
+	risk: "Missing context capture breaks downstream metrics traceability"
+	mitigation: "EvaluationRunner enforces fallback contexts and retry telemetry with unit coverage"
+	adr_impact: ["ADR-001","ADR-005"]
+	ci_gate: ["unit-tests"]
+	verification:
+		- python3 -m pytest services/tests/eval/test_runner.py
+	deliverables:
+		- services/eval/runner.py
+		- services/tests/eval/test_runner.py
+		- services/eval/retry_policy.py
+	dod:
+		- EvaluationRunner iterates testset samples and invokes adapters via RetryPolicy with metrics hooks
+		- Empty or failed invocations inject fallback contexts tagged with empty_context reason
+		- rag_attempts, rag_outcome, rag_error_code metadata added for downstream persistence logic
 # TASK-033 Governance
 governance:
 	status: Planned

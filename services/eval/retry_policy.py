@@ -56,6 +56,12 @@ class RetryPolicy:
         self._retry_exceptions = retry_exceptions or (TimeoutError,)
         self._sleep = sleep_fn
 
+    @property
+    def max_attempts(self) -> int:
+        """Expose the configured maximum number of attempts."""
+
+        return self._max_attempts
+
     def execute(self, operation: Callable[[], T]) -> Tuple[T, RetryTelemetry]:
         attempts = 0
         last_delay = 0.0
