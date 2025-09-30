@@ -594,23 +594,30 @@ governance:
 ```yaml
 # TASK-021a Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
 	priority: P1
 	estimate: 2p
+	completed_at: 2025-09-30
 	risk: "Seed nondeterminism breaks reproducibility"
 	mitigation: "Fixed seed fixture tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/testset/test_generator_core.py -q
+	deliverables:
+		- services/testset/generator_core.py
+		- services/testset/payloads.py
+		- services/tests/testset/test_generator_core.py
 	dod:
 		- First 5 Q/A stable
 		- Seed param documented
 		- Snapshot approved
 # TASK-021b Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -620,13 +627,19 @@ governance:
 	mitigation: "Token length threshold test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_persona_injector.py -q
+	deliverables:
+		- services/testset/persona_injector.py
+		- services/tests/testset/test_persona_injector.py
 	dod:
 		- Token overhead < limit
 		- Snapshot diff updated
 		- README persona section
 # TASK-021c Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -636,13 +649,19 @@ governance:
 	mitigation: "Variant count assertion"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_scenario_variation.py -q
+	deliverables:
+		- services/testset/scenario_variation.py
+		- services/tests/testset/test_scenario_variation.py
 	dod:
 		- ≥3 variants test
 		- Diversity doc
 		- Scenario rules README
 # TASK-021d Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -652,6 +671,12 @@ governance:
 	mitigation: "Fuzzy similarity threshold tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/testset/test_pre_filter.py -q
+	deliverables:
+		- services/testset/pre_filter.py
+		- services/tests/testset/test_pre_filter.py
 	dod:
 		- Duplicate reduction >=90%
 		- Length bounds enforced
@@ -743,9 +768,10 @@ governance:
 	target_sprint: 3
 # TASK-036 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 3
+	completed_at: 2025-09-30
 # TASK-030a Governance
 governance:
 	status: Planned
@@ -753,6 +779,15 @@ governance:
 	target_sprint: 2
 	owner: platform-eval@team
 	priority: P1
+	verification:
+		- pytest services/tests/testset -q
+	deliverables:
+		- services/testset/generator_core.py
+		- services/testset/persona_injector.py
+		- services/testset/scenario_variation.py
+		- services/testset/pre_filter.py
+		- services/testset/payloads.py
+		- services/tests/testset/
 	estimate: 1p
 	risk: "State explosion or invalid transition logic"
 	mitigation: "Finite enum + transition table test"
