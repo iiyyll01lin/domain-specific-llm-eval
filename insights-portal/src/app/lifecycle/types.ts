@@ -27,6 +27,23 @@ export interface ProcessingJob {
 export interface LifecycleConfig {
   ingestionBaseUrl: string
   processingBaseUrl: string
+  testsetBaseUrl: string
   pollIntervalMs: number
   requestTimeoutMs: number
+}
+
+export interface TestsetJob {
+  job_id: string
+  status: string
+  method: string
+  config_hash: string
+  sample_count?: number
+  persona_count?: number
+  scenario_count?: number
+  seed?: number
+  created_at?: string
+  updated_at?: string
+  duplicate?: boolean
+  error_code?: string
+  error_message?: string
 }

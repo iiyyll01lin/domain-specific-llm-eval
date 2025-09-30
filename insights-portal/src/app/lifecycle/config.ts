@@ -6,6 +6,7 @@ declare global {
       services?: {
         ingestion?: string
         processing?: string
+        testset?: string
       }
       polling?: {
         intervalMs?: number
@@ -18,12 +19,14 @@ declare global {
 const DEFAULT_CONFIG: LifecycleConfig = {
   ingestionBaseUrl: 'http://localhost:8001',
   processingBaseUrl: 'http://localhost:8002',
+  testsetBaseUrl: 'http://localhost:8003',
   pollIntervalMs: 10_000,
   requestTimeoutMs: 10_000,
 }
 
 const envIngestion = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_INGESTION_BASE : undefined
 const envProcessing = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_PROCESSING_BASE : undefined
+const envTestset = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_TESTSET_BASE : undefined
 const envInterval = typeof import.meta !== 'undefined' ? Number((import.meta as any)?.env?.VITE_LIFECYCLE_POLL_MS) : NaN
 const envTimeout = typeof import.meta !== 'undefined' ? Number((import.meta as any)?.env?.VITE_LIFECYCLE_TIMEOUT_MS) : NaN
 
@@ -32,6 +35,7 @@ const globalCfg = typeof window !== 'undefined' ? window.RAG_EVAL_PORTAL_CONFIG 
 const config: LifecycleConfig = {
   ingestionBaseUrl: sanitizeBase(globalCfg?.services?.ingestion) || sanitizeBase(envIngestion) || DEFAULT_CONFIG.ingestionBaseUrl,
   processingBaseUrl: sanitizeBase(globalCfg?.services?.processing) || sanitizeBase(envProcessing) || DEFAULT_CONFIG.processingBaseUrl,
+  testsetBaseUrl: sanitizeBase(globalCfg?.services?.testset) || sanitizeBase(envTestset) || DEFAULT_CONFIG.testsetBaseUrl,
   pollIntervalMs: resolveNumber(DEFAULT_CONFIG.pollIntervalMs, globalCfg?.polling?.intervalMs, envInterval),
   requestTimeoutMs: resolveNumber(DEFAULT_CONFIG.requestTimeoutMs, globalCfg?.polling?.requestTimeoutMs, envTimeout),
 }

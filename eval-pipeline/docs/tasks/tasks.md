@@ -555,9 +555,28 @@ governance:
 		- Unit tests validate envelope against JSON schema to guarantee contract stability
 # TASK-025 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 2
+	owner: ui-platform@team
+	priority: P1
+	estimate: 3p
+	completed_at: 2025-09-30
+	verification:
+		- npm run test -- --run src/app/lifecycle/__tests__/TestsetsPanel.test.tsx
+	deliverables:
+		- insights-portal/src/app/lifecycle/TestsetsPanel.tsx
+		- insights-portal/src/app/lifecycle/api.ts
+		- insights-portal/src/app/lifecycle/types.ts
+		- insights-portal/src/app/lifecycle/config.ts
+		- insights-portal/src/app/store/usePortalStore.ts
+		- insights-portal/src/app/i18n/index.ts
+		- insights-portal/src/app/routes/LifecycleRoutes.tsx
+		- insights-portal/src/app/lifecycle/__tests__/TestsetsPanel.test.tsx
+	dod:
+		- Testsets panel lists method, config hash, seed, and counts with localized labels and status badges
+		- Lifecycle polling reuses shared hook and supports manual refresh with duplicate tag rendering
+		- i18n resources updated for zh-TW/en-US and governance config exposes testset service base URL
 # TASK-020a Governance
 governance:
 	status: Done

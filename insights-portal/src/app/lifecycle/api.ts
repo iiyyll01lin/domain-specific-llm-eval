@@ -1,5 +1,5 @@
 import { getLifecycleConfig } from './config'
-import type { DocumentRow, ProcessingJob } from './types'
+import type { DocumentRow, ProcessingJob, TestsetJob } from './types'
 
 interface FetchOptions {
   signal: AbortSignal
@@ -43,6 +43,25 @@ export async function fetchProcessingJobs(options: FetchOptions): Promise<Proces
   }
 }
 
+export async function fetchTestsetJobs(options: FetchOptions): Promise<TestsetJob[]> {
+  const { testsetBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(() => controller.abort(), requestTimeoutMs)
+  try {
+    const res = await fetch(`${testsetBaseUrl}/testset-jobs`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (!res.ok) throw new Error(`Failed to load testset jobs: ${res.status}`)
+    const payload = await res.json().catch(() => ([]))
+    const items = Array.isArray(payload) ? payload : Array.isArray((payload as any)?.items) ? (payload as any).items : []
+    return items.map(normalizeTestsetJob)
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
+
 function normalizeDocumentRow(raw: any): DocumentRow {
   return {
     km_id: String(raw?.km_id ?? ''),
@@ -80,6 +99,24 @@ function normalizeProcessingJob(raw: any): ProcessingJob {
   }
 }
 
+function normalizeTestsetJob(raw: any): TestsetJob {
+  return {
+    job_id: String(raw?.job_id ?? raw?.id ?? ''),
+    status: String(raw?.status ?? ''),
+    method: String(raw?.method ?? raw?.config?.method ?? ''),
+    config_hash: String(raw?.config_hash ?? ''),
+    sample_count: parseOptionalNumber(raw?.sample_count),
+    persona_count: parseOptionalNumber(raw?.persona_count),
+    scenario_count: parseOptionalNumber(raw?.scenario_count),
+    seed: parseOptionalNumber(raw?.seed),
+    created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+    updated_at: typeof raw?.updated_at === 'string' ? raw.updated_at : undefined,
+    duplicate: typeof raw?.duplicate === 'boolean' ? raw.duplicate : undefined,
+    error_code: typeof raw?.error_code === 'string' ? raw.error_code : undefined,
+    error_message: typeof raw?.error_message === 'string' ? raw.error_message : undefined,
+  }
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.min(Math.max(value, min), max)
@@ -95,4 +132,13 @@ function mergeSignals(signalA: AbortSignal, signalB: AbortSignal): AbortSignal {
   if (typeof signalA.addEventListener === 'function') signalA.addEventListener('abort', abort, { once: true })
   if (typeof signalB.addEventListener === 'function') signalB.addEventListener('abort', abort, { once: true })
   return controller.signal
+}
+
+function parseOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number.parseFloat(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return undefined
 }
