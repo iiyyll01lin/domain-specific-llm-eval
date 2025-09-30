@@ -1282,7 +1282,7 @@ governance:
 ```yaml
 # TASK-032a Governance
 governance:
-	status: Planned
+	status: In Progress
 	owner: platform-observability@team
 	priority: P1
 	estimate: 1p
@@ -1290,6 +1290,16 @@ governance:
 	mitigation: "Contract test + docstring"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
+	started_at: 2025-10-03
+	progress_notes:
+		- Implemented MetricInput/MetricValue dataclasses and MetricPlugin protocol in services/eval/metrics/interface.py.
+		- Added validation helper ensuring missing evaluate method raises MetricPluginDefinitionError.
+		- Unit coverage via services/tests/eval/test_metric_interface.py confirming contract version export.
+	verification:
+		- pytest services/tests/eval/test_metric_interface.py -q
+	deliverables:
+		- services/eval/metrics/interface.py
+		- services/tests/eval/test_metric_interface.py
 	dod:
 		- Interface test
 		- Missing method error

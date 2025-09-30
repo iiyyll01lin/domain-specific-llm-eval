@@ -56,6 +56,7 @@ class RAGRequestMetricsRecorder(Protocol):
 class PrometheusRAGRequestMetrics(RAGRequestMetricsRecorder):
     def __init__(
         self,
+        *,
         latency_histogram: Histogram = _RAG_REQUEST_LATENCY,
         attempts_counter: Counter = _RAG_ATTEMPT_COUNTER,
     ) -> None:
