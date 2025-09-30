@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RunLoader } from '@/components/RunLoader'
 import { usePortalStore } from '@/app/store/usePortalStore'
@@ -46,6 +46,27 @@ function KpiInfoPopover(props: { metricKey: string; value: number | undefined; r
   )
 }
 
+//In-page error banner component
+function ErrorBanner({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <div
+      role="alert"
+      style={{
+        marginTop: 8,
+        padding: '8px 12px',
+        borderRadius: 8,
+        border: '1px solid var(--status-error, #dc2626)',
+        background: 'rgba(220,38,38,.08)',
+        color: 'var(--status-error, #dc2626)',
+        fontSize: 13
+      }}
+    >
+      ⚠️ {message}
+    </div>
+  )
+}
+
 export default function ExecutiveOverview() {
   const { t } = useTranslation()
   const run = usePortalStore((s) => s.run)
@@ -55,6 +76,55 @@ export default function ExecutiveOverview() {
   const [sortByGap, setSortByGap] = React.useState(false)
   const filtersFromStore = useStore((s) => s.filters)
   const setFiltersInStore = useStore((s) => s.setFilters)
+
+  //Parsing error message status
+  const [parseError, setParseError] = useState<string | null>(null)
+  useEffect(() => {
+    const isParseErrorDetail = (x: any): x is {
+    code: 'JSON_PARSE' | 'CSV_PARSE' | 'WORKER_RUNTIME' | string
+    file?: string
+    offset?: number
+    line?: number
+    column?: number
+    row?: number
+    raw?: string
+  } => !!x && typeof x === 'object' && 'code' in x && typeof (x as any).code === 'string'
+
+    const onErr = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail
+      if (typeof detail === 'string') {
+        setParseError(detail)
+      } else if (detail instanceof Error) {
+      setParseError(detail.message || t('errors.unknown'))
+      } else if (isParseErrorDetail(detail)) {
+        const { code, file, offset, line, column, row, raw } = detail
+        if (code === 'JSON_PARSE') {
+          setParseError(
+            t('errors.jsonParse', { file, offset, line, column })
+          )
+        } else if (code === 'CSV_PARSE') {
+          setParseError(
+            t('errors.csvParse', { file, row, offset })
+          )
+        } else if (code === 'WORKER_RUNTIME') {
+          setParseError(
+            t('errors.workerRuntime', { message: raw })
+          )
+        } else {
+          setParseError(t('errors.unknown'))
+        }
+      } else {
+        setParseError(t('errors.unknown'))
+      }
+    }
+    const onStart = () => setParseError(null) 
+    window.addEventListener('run-parse-error', onErr as EventListener)
+    window.addEventListener('run-parse-start', onStart as EventListener)
+    return () => {
+      window.removeEventListener('run-parse-error', onErr as EventListener)
+      window.removeEventListener('run-parse-start', onStart as EventListener)
+    }
+  }, [t])
 
   const filters: UIFilters = useMemo(() => ({
     language: (filtersFromStore as any).language ?? undefined,
@@ -240,6 +310,8 @@ export default function ExecutiveOverview() {
     <h2>{t('nav.executive')}</h2>
       <RunLoader />
   <RunDirectoryPicker />
+  {/* Error messages are displayed on the next line of the detection block. */}
+  <ErrorBanner message={parseError} />
       {/* Dev-only timing panel; hidden in production if process.env.NODE_ENV === 'production' */}
       {import.meta.env.DEV && (
         <div style={{ marginTop: 8 }}>

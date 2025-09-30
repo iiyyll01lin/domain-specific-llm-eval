@@ -40,6 +40,46 @@ function extractArrayFromJson(data: any): any[] {
   return []
 }
 
+/** Extract the position and line/column from the error message */
+function parseJsonErrorPosition(msg: string) {
+  // Chrome: "... at position 2048"
+  const mPos = /position\s+(\d+)/i.exec(msg)
+  const pos = mPos ? Number(mPos[1]) : undefined
+  // Some translators also append the line/column
+  const mLine = /line\s+(\d+)/i.exec(msg)
+  const mCol = /column\s+(\d+)/i.exec(msg)
+  const line = mLine ? Number(mLine[1]) : undefined
+  const column = mCol ? Number(mCol[1]) : undefined
+  return { pos, line, column }
+}
+
+// Send structured errors uniformly while preserving legacy messages
+function postStructuredError(payload: {
+  code: 'JSON_PARSE' | 'CSV_PARSE' | 'WORKER_RUNTIME'
+  file?: string
+  offset?: number
+  line?: number
+  column?: number
+  row?: number
+  raw?: string
+}) {
+  let fallback = 'Unknown error'
+  if (payload.code === 'JSON_PARSE') {
+    fallback = `JSON parse failed: ${payload.file ?? ''}` +
+      ((payload.offset ?? payload.line ?? payload.column) != null
+        ? ` (offset ${payload.offset ?? '-'}, line ${payload.line ?? '-'}, column ${payload.column ?? '-'})`
+        : '')
+  } else if (payload.code === 'CSV_PARSE') {
+    fallback = `CSV parse failed: ${payload.file ?? ''}` +
+      ((payload.row ?? payload.offset) != null
+        ? ` (row ${payload.row ?? '-'}, offset ${payload.offset ?? '-'})`
+        : '')
+  } else if (payload.code === 'WORKER_RUNTIME') {
+    fallback = `Worker runtime error: ${payload.raw ?? ''}`
+  }
+  postMessage({ type: 'error', message: fallback, error: payload })
+}
+
 async function parseFile(file: File): Promise<EvaluationItem[]> {
   const text = await file.text()
   let data: unknown
@@ -47,11 +87,9 @@ async function parseFile(file: File): Promise<EvaluationItem[]> {
     data = JSON.parse(text)
   } catch (e: any) {
   const msg = String(e?.message ?? e)
-  // Best-effort offset/position extraction from error message if available
-  // e.g., Unexpected token } in JSON at position 1234
-  const m = /position\s+(\d+)/i.exec(msg)
-  const pos = m ? Number(m[1]) : undefined
-  throw new Error(`JSON 解析失敗: ${file.name}${pos != null ? ` @ offset ${pos}` : ''}: ${msg}`)
+  const { pos, line, column } = parseJsonErrorPosition(msg)
+    postStructuredError({ code: 'JSON_PARSE', file: file.name, offset: pos, line, column, raw: msg })
+    return []
   }
   const arr = extractArrayFromJson(data)
   const items: EvaluationItem[] = []
@@ -100,9 +138,9 @@ async function parseCsvFile(file: File): Promise<EvaluationItem[]> {
           // PapaParse puts cursor/bytes into meta when possible; not always exposed here
           const metaCursor = (err && (err.meta?.cursor ?? undefined)) as number | undefined
           const msg = String(err?.message ?? reason ?? err)
-          reject(new Error(`CSV 解析失敗: ${file.name}${row != null ? ` @ row ${row}` : ''}${metaCursor != null ? `, offset ${metaCursor}` : ''}: ${msg}`))
-        } catch (e) {
-          reject(err)
+          postStructuredError({ code: 'CSV_PARSE', file: file.name, row, offset: metaCursor, raw: msg })
+        } finally {
+          resolve()
         }
       },
     })
@@ -137,7 +175,10 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
       try {
         data = JSON.parse(text)
       } catch (e: any) {
-        throw new Error(`JSON 解析失敗: ${e?.message ?? e}`)
+        const raw = String(e?.message ?? e)
+        const { pos, line, column } = parseJsonErrorPosition(raw)
+        postStructuredError({ code: 'JSON_PARSE', file: msg.file.name, offset: pos, line, column, raw })
+        return
       }
       const arr: any[] = Array.isArray(data) ? data : data?.items ?? []
       const sample = Math.min(msg.sample ?? 50, arr.length)
@@ -251,7 +292,7 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
       }
     }
   } catch (e: any) {
-    postMessage({ type: 'error', message: e?.message ?? String(e) })
+     postStructuredError({ code: 'WORKER_RUNTIME', raw: e?.message ?? String(e) })
   }
 }
 
