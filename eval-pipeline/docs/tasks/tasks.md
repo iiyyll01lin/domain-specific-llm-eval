@@ -493,7 +493,7 @@ governance:
 	target_sprint: 2
 # TASK-020a Governance
 governance:
-	status: Planned
+	status: Done
 	engineer: E2
 	target_sprint: 1
 	owner: platform-testset@team
@@ -503,6 +503,12 @@ governance:
 	mitigation: "Normalizer golden tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- python3 -m pytest services/tests/testset/test_config_normalizer.py
+	deliverables:
+		- services/testset/config_normalizer.py
+		- services/tests/testset/test_config_normalizer.py
 	dod:
 		- Order invariance tests
 		- Empty optional stripped
