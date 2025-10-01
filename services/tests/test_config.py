@@ -45,3 +45,29 @@ def test_configuration_logged_once_with_redaction(caplog) -> None:
     assert snapshot["object_store_secret_key"] == "***redacted***"
     assert snapshot["object_store_access_key"] == "***redacted***"
     assert snapshot["object_store_endpoint"].startswith("http")
+
+
+def test_service_specific_override_applied(monkeypatch) -> None:
+    for key, value in _DEFAULT_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("INGESTION_SERVICE_OBJECT_STORE_BUCKET", "ingestion-bucket")
+
+    config._reset_config_logging_for_tests()
+    monkeypatch.setattr(config, "settings", config.load_settings())
+
+    active = config.configure_service("ingestion-service")
+
+    assert active.object_store_bucket == "ingestion-bucket"
+    assert active.service_name == "ingestion-service"
+
+
+def test_service_specific_override_validation_error(monkeypatch) -> None:
+    for key, value in _DEFAULT_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("PROCESSING_SERVICE_OBJECT_STORE_MAX_ATTEMPTS", "abc")
+
+    config._reset_config_logging_for_tests()
+    monkeypatch.setattr(config, "settings", config.load_settings())
+
+    with pytest.raises(RuntimeError):
+        config.configure_service("processing-service")

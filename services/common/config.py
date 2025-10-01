@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from typing import Any, Dict, Iterable, Optional
 
 from pydantic import Field, ValidationError
@@ -16,6 +18,7 @@ CRITICAL_FIELDS = (
     "object_store_bucket",
 )
 _CONFIG_LOGGED = False
+_SERVICE_ENV_PATTERN = re.compile(r"[^A-Z0-9]+")
 
 
 class Settings(BaseSettings):
@@ -71,6 +74,74 @@ def load_settings() -> Settings:
 settings = load_settings()
 
 
+def _normalize_service_prefix(service_name: str) -> str:
+    normalized = _SERVICE_ENV_PATTERN.sub("_", service_name.strip().upper())
+    return normalized.strip("_")
+
+
+def _resolve_env_alias(field_name: str) -> str:
+    field = Settings.model_fields[field_name]
+    alias = field.validation_alias
+    if alias is None:
+        return field_name.upper()
+    if isinstance(alias, str):
+        return alias
+    try:
+        # AliasChoices implements __iter__
+        return next(iter(alias))  # type: ignore[arg-type]
+    except (TypeError, StopIteration):
+        return field_name.upper()
+
+
+def _apply_service_overrides(service_name: str, current: Settings) -> Settings:
+    prefix = _normalize_service_prefix(service_name)
+    if not prefix:
+        return current
+
+    overrides: Dict[str, Any] = {}
+    for field_name in Settings.model_fields:
+        if field_name == "service_name":
+            continue
+        env_key = f"{prefix}_{_resolve_env_alias(field_name)}"
+        if env_key in os.environ:
+            overrides[field_name] = os.environ[env_key]
+
+    if not overrides:
+        return current
+
+    try:
+        update_payload = {
+            alias: overrides[field_name]
+            for field_name in overrides
+            if (alias := _resolve_env_alias(field_name))
+        }
+        updated = Settings.model_validate(
+            {
+                **current.model_dump(),
+                **update_payload,
+            }
+        )
+    except ValidationError as exc:
+        logger.error(
+            "Invalid service-specific configuration overrides",
+            extra={
+                "service": service_name,
+                "invalid_keys": sorted(overrides.keys()),
+                "errors": exc.errors(),
+            },
+        )
+        raise RuntimeError(f"Invalid configuration override for service '{service_name}'") from exc
+
+    logger.info(
+        "Applied service-specific configuration overrides",
+        extra={
+            "service": service_name,
+            "overrides": sorted(overrides.keys()),
+        },
+    )
+    return updated
+
+
 def _redact_settings_snapshot(raw: Dict[str, Any]) -> Dict[str, Any]:
     snapshot: Dict[str, Any] = {}
     for key, value in raw.items():
@@ -99,6 +170,8 @@ def _ensure_required_fields(required_fields: Iterable[str]) -> None:
 def configure_service(service_name: str, *, required_fields: Optional[Iterable[str]] = None) -> Settings:
     """Update the shared settings instance with the active service name and validate requirements."""
 
+    global settings
+    settings = _apply_service_overrides(service_name, settings)
     settings.service_name = service_name
     if required_fields:
         _ensure_required_fields(required_fields)
