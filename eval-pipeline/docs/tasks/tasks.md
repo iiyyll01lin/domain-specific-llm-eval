@@ -124,19 +124,22 @@ governance:
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 2p
-	completed_at: 2025-09-29
+	completed_at: 2025-10-01
 	risk: "Misconfigured env vars cause runtime instability"
 	mitigation: "Central pydantic validation + fail-fast; config snapshot in logs"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests","lint-config"]
 	verification:
 		- pytest services/tests/test_config.py -q
+		record_date: 2025-10-01
+		test_notes: "Covers service-specific overrides"
 		- pytest services/tests/test_service_skeleton.py -q
 		- pytest tests/services/common/test_object_store.py -q
 	dod:
 		- Missing critical var abort test
 		- Config printed once with redaction
-		- .env.example updated
+		- .env.example updated with per-service override guidance
+		- Service-specific env overrides validated and logged once per process
 
 # TASK-003 Governance
 governance:
