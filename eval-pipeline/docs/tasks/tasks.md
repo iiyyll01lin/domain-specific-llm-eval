@@ -1300,7 +1300,7 @@ governance:
 ```yaml
 # TASK-032a Governance
 governance:
-	status: In Progress
+	status: Completed
 	owner: platform-observability@team
 	priority: P1
 	estimate: 1p
@@ -1308,7 +1308,8 @@ governance:
 	mitigation: "Contract test + docstring"
 	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
-	started_at: 2025-10-03
+	started_at: 2025-09-30
+	completed_at: 2025-09-30
 	progress_notes:
 		- Implemented MetricInput/MetricValue dataclasses and MetricPlugin protocol in services/eval/metrics/interface.py.
 		- Added validation helper ensuring missing evaluate method raises MetricPluginDefinitionError.
@@ -1326,7 +1327,7 @@ governance:
 	target_sprint: 2
 # TASK-032b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-observability@team
 	priority: P1
 	estimate: 2p
@@ -1334,15 +1335,30 @@ governance:
 	mitigation: "Deterministic fixture + seed control"
 	adr_impact: []
 	ci_gate: ["unit-tests","perf-baseline"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/eval/test_baseline_metrics.py -q
+	deliverables:
+		- services/eval/metrics/baseline/__init__.py
+		- services/eval/metrics/baseline/faithfulness.py
+		- services/eval/metrics/baseline/answer_relevancy.py
+		- services/eval/metrics/baseline/context_precision.py
+		- services/tests/eval/test_baseline_metrics.py
+	progress_notes:
+		- Implemented lexical-overlap baseline metrics for faithfulness, answer relevancy, and context precision with deterministic rounding.
+		- Shared tokenisation helpers created to normalise multilingual (EN/zh) inputs without external dependencies.
+		- Metadata payloads expose matched/total token counts to aid downstream KPI aggregation.
 	dod:
 		- 3 metrics implemented
 		- Determinism test
 		- README metrics list
+	README_updates:
+		- services/eval/README.md#baseline-metric-plugins
 	engineer: E2
 	target_sprint: 3
 # TASK-032c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-observability@team
 	priority: P1
 	estimate: 2p
@@ -1350,6 +1366,17 @@ governance:
 	mitigation: "Isolation try/except tests"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
+	completed_at: 2025-09-30
+	verification:
+		- pytest services/tests/eval/test_metrics_loader.py -q
+		- pytest services/tests/eval -q
+	deliverables:
+		- services/eval/metrics/loader.py
+		- services/tests/eval/test_metrics_loader.py
+	progress_notes:
+		- Implemented metric registry supporting built-in, dynamic import paths, and entry point discovery with deterministic ordering and duplicate suppression.
+		- Failures are isolated per-metric with counters/logs following METRIC_PLUGIN_FAILED code, while execution latency histogram tracks individual plugin durations.
+		- Added loader tests covering builtin registration, plugin paths, entry points, and failure isolation scenarios.
 	dod:
 		- Fault injection test
 		- Skip warning log
