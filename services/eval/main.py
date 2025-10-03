@@ -5,6 +5,7 @@ from typing import Dict
 from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pathlib import Path
 
 from services.common.config import configure_service
 from services.common.errors import (
@@ -18,7 +19,9 @@ from services.eval.metrics import (
     EvaluationRunMetricsRecorder,
     PrometheusEvaluationRunMetrics,
 )
+from services.eval.metrics.loader import MetricRegistry, load_metric_registry
 from services.eval.repository import EvaluationRunRepository
+from services.eval.persistence_pipeline import EvaluationPersistencePipeline
 from services.eval.run_guard import EvaluationRunGuard, RunGuardResult
 from services.eval.schemas import EvaluationRunResponse
 from services.eval.validation import (
@@ -74,9 +77,20 @@ def get_guard() -> EvaluationRunGuard:
 
 
 @lru_cache
+def get_metric_registry() -> MetricRegistry:
+    return load_metric_registry()
+
+
+@lru_cache
 def get_metrics() -> EvaluationRunMetricsRecorder:
     return PrometheusEvaluationRunMetrics()
 
+
+@lru_cache
+def get_output_root() -> Path:
+    from services.common.config import settings
+
+    return Path(settings.eval_outputs_dir)
 
 @app.get("/health")
 async def health():
@@ -139,3 +153,7 @@ async def submit_eval_run(
 @app.get("/")
 async def root():
     return {"service": SERVICE_NAME, "message": "evaluation service skeleton"}
+
+def build_persistence_pipeline(run_id: str) -> EvaluationPersistencePipeline:
+    output_root = get_output_root()
+    return EvaluationPersistencePipeline(run_id, output_root / run_id)
