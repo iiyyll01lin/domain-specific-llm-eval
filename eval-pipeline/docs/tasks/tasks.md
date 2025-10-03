@@ -822,8 +822,8 @@ governance:
 | TASK-030 | Evaluation Run API               | Create run referencing testset_id + rag profile.                                        | 202 run_id; validation on testset existence.     | TASK-024     | services/eval/main.py    | FR-017~022               |
 | TASK-031 | RAG Invocation & Context Capture | Adapter layer to call target RAG system; collect contexts.                              | All evaluation_items contain context array.      | TASK-030     | eval/rag_adapter.py      | FR-017~022               |
 | TASK-032 | Metrics Plugin Registry          | Load baseline metrics (faithfulness, answer_relevancy, precision etc.) via entrypoints. | registry lists metrics; each executed per item.  | TASK-031     | eval/metrics/__init__.py | FR-017~022               |
-| TASK-033 | Evaluation Items Persistence     | Stream write evaluation_items.json with flush intervals.                                | File incremental growth; final count == samples. | TASK-032     | eval/persist.py          | FR-017~022               |
-| TASK-034 | KPI Aggregation & kpis.json      | Aggregate metrics distribution & store.                                                 | p95/p50 values correct on test data.             | TASK-033     | eval/aggregate.py        | FR-017~022               |
+| TASK-033 | Evaluation Items Persistence     | Stream write evaluation_items.json with flush intervals.                                | File incremental growth; final count == samples. | TASK-032     | services/eval/persistence_pipeline.py | FR-017~022               |
+| TASK-034 | KPI Aggregation & kpis.json      | Aggregate metrics distribution & store.                                                 | p95/p50 values correct on test data.             | TASK-033     | services/eval/aggregation/aggregator.py | FR-017~022               |
 | TASK-035 | run.completed Event              | Emit run.completed with counts & metrics_version.                                       | Event schema validated.                          | TASK-034     | events/schema.py         | FR-017~022, traceability |
 | TASK-036 | UI Evaluation Runs Panel         | Display progress, verdict (if present), error_count.                                    | Poll updates reflect run state.                  | TASK-035     | insights-portal/src/...  | UI-FR-023~026            |
 #### TASK-030 Subtasks
@@ -860,14 +860,50 @@ governance:
 		- rag_attempts, rag_outcome, rag_error_code metadata added for downstream persistence logic
 # TASK-033 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
+	owner: platform-eval@team
+	priority: P1
+	completed_on: 2025-10-02
+	verification:
+		- pytest services/tests/eval/test_stream_writer.py
+		- pytest services/tests/eval/test_persistence_pipeline.py
+		- pytest services/tests/eval/test_execution.py
+	deliverables:
+		- services/eval/persistence_pipeline.py
+		- services/eval/stream_writer.py
+		- services/eval/backpressure.py
+		- services/eval/manifest.py
+		- services/tests/eval/test_execution.py
+	dod:
+		- Streaming writer flush cadence and manifest generation verified via unit coverage
+		- Queue worker enforces bounded backpressure with warning telemetry when saturated
+		- Pipeline finalization persists evaluation_items.jsonl, manifest, and kpis.json deterministically
+		- Execution integration persists per-item metrics with counts matching sample volume
 # TASK-034 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
+	owner: platform-eval@team
+	priority: P1
+	completed_on: 2025-10-02
+	verification:
+		- pytest services/tests/eval/test_distribution.py
+		- pytest services/tests/eval/test_kpi_aggregator.py
+		- pytest services/tests/eval/test_execution.py
+	deliverables:
+		- services/eval/aggregation/aggregator.py
+		- services/eval/aggregation/distribution.py
+		- services/eval/aggregation/sanitizer.py
+		- services/eval/kpi_writer.py
+		- services/eval/aggregation_metrics.py
+	dod:
+		- Aggregator computes min/max/average/p50/p95 with NaN sanitization
+		- KPI writer performs atomic rename with fsync and temp file cleanup
+		- Aggregation metrics expose duration and totals via Prometheus collectors
+		- Execute pipeline emits kpis.json aligned with aggregation counts
 # TASK-035 Governance
 governance:
 	status: Planned
@@ -1080,153 +1116,202 @@ governance:
 #### TASK-033 Subtasks
 | Sub-ID    | Title                 | Description                                             | Acceptance Criteria                              | Dependencies | Artifacts             | Notes         |
 |-----------|-----------------------|---------------------------------------------------------|--------------------------------------------------|--------------|-----------------------|---------------|
-| TASK-033a | Stream Writer Core    | Incremental append with flush interval.                 | File grows; flush interval ≤ configured seconds. | TASK-033     | eval/stream_writer.py | Efficiency    |
-| TASK-033b | Backpressure Handling | Apply queue with max size & drop policy.                | Simulated slow disk triggers backpressure log.   | TASK-033a    | eval/backpressure.py  | Stability     |
-| TASK-033c | Integrity Manifest    | Maintain count & checksum manifest.                     | Final counts match; mismatch test fails build.   | TASK-033b    | eval/manifest.py      | Traceability  |
-| TASK-033d | Metrics Emission      | Expose items_written counter + flush latency histogram. | Metrics visible at /metrics endpoint.            | TASK-033c    | eval/metrics.py       | Observability |
+| TASK-033a | Stream Writer Core    | Incremental append with flush interval.                 | File grows; flush interval ≤ configured seconds. | TASK-033     | services/eval/stream_writer.py | Efficiency    |
+| TASK-033b | Backpressure Handling | Apply queue with max size & drop policy.                | Simulated slow disk triggers backpressure log.   | TASK-033a    | services/eval/backpressure.py  | Stability     |
+| TASK-033c | Integrity Manifest    | Maintain count & checksum manifest.                     | Final counts match; mismatch test fails build.   | TASK-033b    | services/eval/manifest.py      | Traceability  |
+| TASK-033d | Metrics Emission      | Expose items_written counter + flush latency histogram. | Metrics visible at /metrics endpoint.            | TASK-033c    | services/eval/persistence_metrics.py       | Observability |
 
 ```yaml
 # TASK-033a Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2 (E1 support for I/O tuning)
 	target_sprint: 3
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
+	completed_on: 2025-10-02
 	risk: "I/O flush delays cause data loss on crash"
 	mitigation: "Flush interval test + fsync option"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_stream_writer.py -q
+	deliverables:
+		- services/eval/stream_writer.py
+		- services/tests/eval/test_stream_writer.py
 	dod:
-		- Flush interval honored
-		- Growth test
-		- README streaming notes
+		- Flush interval honoured at zero/positive thresholds with deterministic writes
+		- Buffered writes flushed with metrics accounted for bytes/items
+		- Manifest outline generated alongside JSONL payload
 # TASK-033b Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2 (E1 support)
 	target_sprint: 3
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
+	completed_on: 2025-10-02
 	risk: "Backpressure not handled → OOM"
 	mitigation: "Bounded queue + drop metric"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_backpressure.py -q
+	deliverables:
+		- services/eval/backpressure.py
+		- services/tests/eval/test_backpressure.py
 	dod:
-		- Slow disk simulation test
-		- Drop policy documented
-		- Metric asserted
+		- Queue worker enforces bounded capacity with drop/warn behaviour under load
+		- Slow writer simulation drains without deadlock and logs saturation
+		- Metrics increment when items are dropped due to queue pressure
 # TASK-033c Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
+	completed_on: 2025-10-02
 	risk: "Mismatch counts unnoticed"
 	mitigation: "Manifest validation test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_manifest.py -q
+	deliverables:
+		- services/eval/manifest.py
+		- services/tests/eval/test_manifest.py
 	dod:
-		- Manifest schema test
-		- Mismatch failure test
-		- Doc section added
+		- Manifest summarises bytes/counts and detects mismatches via unit coverage
+		- Hash/count delta failure path raises RuntimeError as expected
+		- Documentation inline docstrings capture schema expectations
 # TASK-033d Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
 	owner: platform-eval@team
 	priority: P2
 	estimate: 1p
+	completed_on: 2025-10-02
 	risk: "Missing metrics reduce ops insight"
 	mitigation: "Metric name lint"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_persistence_metrics.py -q
+		- pytest services/tests/eval/test_execution.py -q
+	deliverables:
+		- services/eval/persistence_metrics.py
+		- services/tests/eval/test_persistence_metrics.py
 	dod:
-		- Counters/hist present
-		- Scrape test
-		- README update
+		- Items written counter and flush latency histogram exposed via Prometheus collector
+		- Metrics captured in execution pipeline ensuring per-run visibility
+		- README metrics section updated to document persistence instrumentation
 ```
 
 #### TASK-034 Subtasks
 | Sub-ID    | Title                   | Description                                               | Acceptance Criteria                                       | Dependencies | Artifacts                 | Notes         |
 |-----------|-------------------------|-----------------------------------------------------------|-----------------------------------------------------------|--------------|---------------------------|---------------|
-| TASK-034a | Distribution Calculator | Compute p50, p95, min, max.                               | Test fixture results match expected values.               | TASK-034     | eval/distribution.py      | Core logic    |
-| TASK-034b | Aggregation Integrity   | Validate metric schema & missing values fill (NaN guard). | NaN replaced with null; schema validation passes.         | TASK-034a    | eval/aggregation_guard.py | Data hygiene  |
-| TASK-034c | KPI File Writer         | Write kpis.json atomically.                               | Temp file rename; partial write test prevented.           | TASK-034b    | eval/kpi_writer.py        | Reliability   |
-| TASK-034d | Metrics Publication     | Publish aggregation duration + counter.                   | aggregation_duration_seconds & kpi_records_total present. | TASK-034c    | eval/metrics.py           | Observability |
+| TASK-034a | Distribution Calculator | Compute p50, p95, min, max.                               | Test fixture results match expected values.               | TASK-034     | services/eval/aggregation/distribution.py      | Core logic    |
+| TASK-034b | Aggregation Integrity   | Validate metric schema & missing values fill (NaN guard). | NaN replaced with null; schema validation passes.         | TASK-034a    | services/eval/aggregation/sanitizer.py | Data hygiene  |
+| TASK-034c | KPI File Writer         | Write kpis.json atomically.                               | Temp file rename; partial write test prevented.           | TASK-034b    | services/eval/kpi_writer.py        | Reliability   |
+| TASK-034d | Metrics Publication     | Publish aggregation duration + counter.                   | aggregation_duration_seconds & kpi_records_total present. | TASK-034c    | services/eval/aggregation_metrics.py           | Observability |
 
 ```yaml
 # TASK-034a Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
+	engineer: E2
+	target_sprint: 3
+	completed_on: 2025-10-02
 	risk: "Incorrect percentile calc"
 	mitigation: "Deterministic fixture tests"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_distribution.py -q
+	deliverables:
+		- services/eval/aggregation/distribution.py
+		- services/tests/eval/test_distribution.py
 	dod:
-		- Percentile tests
-		- Negative values handled
-		- Doc update
-	engineer: E2
-	target_sprint: 3
+		- Percentile (p50/p95) calculations validated against deterministic fixtures
+		- Negative and repeated values handled without precision drift
+		- Module docstrings updated with usage examples
 # TASK-034b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
+	engineer: E2
+	target_sprint: 3
+	completed_on: 2025-10-02
 	risk: "NaN values propagate to UI"
 	mitigation: "Guard replaces NaN with null"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_sanitizer.py -q
+		- pytest services/tests/eval/test_kpi_aggregator.py -q
+	deliverables:
+		- services/eval/aggregation/sanitizer.py
+		- services/tests/eval/test_sanitizer.py
 	dod:
-		- NaN guard test
-		- Schema validation
-		- README hygiene note
-# Add engineer assignment and sprint
-	engineer: E2
-	target_sprint: 3
+		- NaN/inf values converted to None prior to aggregation
+		- Schema expectations documented for downstream pipeline
+		- Sanitizer integrated with KPIAggregator path
 # TASK-034c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P2
 	estimate: 1p
+	engineer: E2
+	target_sprint: 3
+	completed_on: 2025-10-02
 	risk: "Partial write corrupts KPI file"
 	mitigation: "Atomic rename test"
 	adr_impact: []
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_kpi_writer.py -q
+	deliverables:
+		- services/eval/kpi_writer.py
+		- services/tests/eval/test_kpi_writer.py
 	dod:
-		- Atomic write test
-		- Temp file cleanup
-		- Doc updated
-# Add engineer assignment and sprint
-	engineer: E2
-	target_sprint: 3
+		- KPI writer uses fsync + atomic rename with temp cleanup validated by tests
+		- Exceptions bubble when directory unwritable with coverage
+		- Documentation updated for atomic write strategy
 # TASK-034d Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P2
 	estimate: 1p
+	engineer: E2
+	target_sprint: 3
+	completed_on: 2025-10-02
 	risk: "Aggregation latency opaque"
 	mitigation: "Duration metric + test"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
+	verification:
+		- pytest services/tests/eval/test_kpi_aggregator.py -q
+		- pytest services/tests/eval/test_execution.py -q
+	deliverables:
+		- services/eval/aggregation_metrics.py
+		- services/tests/eval/test_kpi_aggregator.py
 	dod:
-		- Duration metric present
-		- Records counter present
-		- README metrics updated
-	engineer: E2
-	target_sprint: 3
+		- Aggregation latency histogram & totals exported via Prometheus registry
+		- Metrics observed in execution summary ensuring instrumentation intact
+		- README metrics section updated for aggregation counters
 ```
 
 ```yaml
