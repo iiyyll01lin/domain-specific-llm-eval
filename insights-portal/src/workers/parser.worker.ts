@@ -209,6 +209,7 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
           const BIG_N = 100_000
           const useChunked = (items?.length || 0) > BIG_N && !msg.sample
           if (!useChunked) {
+            //const filtered = applyFilters(items, adaptFiltersForApply(filters))
             const filtered = applyFilters(items, filters)
             const t1 = Date.now()
             const sampled = msg.sample ? sampleItems(filtered, msg.sample) : filtered
