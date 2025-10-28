@@ -3,8 +3,10 @@ import React from 'react'
 import WorkerModule from '../workers/parser.worker.ts?worker'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { defaultParseSummary } from './runloader.parse'
+import { useTranslation } from 'react-i18next'
 
 export const RunLoader: React.FC = () => {
+  const { t } = useTranslation()
   const setRunData = usePortalStore((s) => s.setRunData)
   const [progress, setProgress] = React.useState<string>('')
   const [error, setError] = React.useState<string>('')
@@ -38,7 +40,7 @@ export const RunLoader: React.FC = () => {
           input.onchange = () => {
             const f = input.files?.[0]
             if (f) resolve(f)
-            else reject(new Error('未選取檔案'))
+            else reject(new Error(t('errors.noFileSelected')))
           }
           input.click()
         })
@@ -54,7 +56,7 @@ export const RunLoader: React.FC = () => {
   }
 
   const parseSummaryJson = async (file: File) => {
-    setProgress('準備解析...')
+    setProgress(t('progress.preparingJson'))
     defaultParseSummary(file, setRunData, (m) => setError(String(m)), (p) => setProgress(p))
   }
 
@@ -68,18 +70,18 @@ export const RunLoader: React.FC = () => {
         input.onchange = () => {
           const f = input.files?.[0]
           if (f) resolve(f)
-          else reject(new Error('未選取檔案'))
+          else reject(new Error(t('errors.noFileSelected')))
         }
         input.click()
       })
-      setProgress('準備解析 CSV...')
-  const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+      setProgress(t('progress.preparingCsv'))
+      const worker: Worker = new (WorkerModule as unknown as { new(): Worker })()
       worker.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
         if (msg.type === 'progress') setProgress(`${msg.phase}: ${msg.current}/${msg.total}`)
         else if (msg.type === 'parsed') {
           setRunData({ id: file.name, items: msg.items, kpis: msg.kpis, counts: { total: msg.total }, latencies: msg.latencies, artifacts: { summaryJson: file } })
-          setProgress('完成')
+          setProgress(t('progress.done'))
           worker.terminate()
         } else if (msg.type === 'error') {
           setError(String(msg.message))
@@ -95,8 +97,8 @@ export const RunLoader: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button onClick={onPickFile}>選擇 JSON 檔載入 run</button>
-  <button onClick={onPickCsv}>選擇 CSV 檔載入 run</button>
+      <button onClick={onPickFile}>{t('actions.selectJsonRun')}</button>
+      <button onClick={onPickCsv}>{t('actions.selectCsvRun')}</button>
       {progress && <span aria-live="polite">{progress}</span>}
       {error && <span style={{ color: 'crimson' }}>{error}</span>}
     </div>
