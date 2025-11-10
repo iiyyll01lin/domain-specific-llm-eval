@@ -79,7 +79,7 @@ export function FiltersBar({ metrics, filters, onChange, locale = 'en-US' }: Pro
   };
 
   const clearAll = () => {
-    onChange({ language: undefined, latencyMs: undefined, metrics: {} });
+   onChange({ language: undefined, latencyMs: undefined, metrics: {} } as FiltersState);
   };
 
   return (
@@ -91,7 +91,7 @@ export function FiltersBar({ metrics, filters, onChange, locale = 'en-US' }: Pro
           type="text"
           placeholder="e.g., zh, en"
           value={filters.language || ''}
-          onChange={(e) => onChange({ ...filters, language: e.target.value || undefined })}
+          onChange={(e) => onChange({ ...filters, language: e.target.value || undefined } as FiltersState)}
           aria-label="language-filter-input"
         />
       </div>

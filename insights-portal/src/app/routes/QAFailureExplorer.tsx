@@ -23,13 +23,58 @@ export default function QAFailureExplorer() {
     else if (selectedMetric && !metricKeys.includes(selectedMetric)) setSelectedMetric(metricKeys[0] || '')
   }, [metricKeys, selectedMetric])
 
+  // Sort (Faithfulness first; fallback to selectedMetric)
+  type SortDir = 'none' | 'asc' | 'desc'
+  const [sortDir, setSortDir] = React.useState<SortDir>('none')
+  const faithfulnessKey = React.useMemo(
+    () => metricKeys.find(k => k.toLowerCase() === 'faithfulness') || '',
+    [metricKeys]
+  )
+
+  const sortKey = React.useMemo(
+    () => (faithfulnessKey || selectedMetric || ''),
+    [faithfulnessKey, selectedMetric]
+  )
+
+  const sortLabel = React.useMemo(() => {
+    if (faithfulnessKey) return 'Faithfulness'
+    const meta = getMetricMeta(selectedMetric as any)
+    return meta?.key || 'Metric'
+  }, [faithfulnessKey, selectedMetric])
+
+  const viewItems = React.useMemo(() => {
+    // base filter + search
+    const base = (() => {
+      const base0 = applyFilters(items, filters)
+      if (!query.trim()) return base0
+      const q = query.toLowerCase()
+      return base0.filter((it) => (it.user_input || '').toLowerCase().includes(q))
+    })()
+    if (sortDir === 'none' || !sortKey) return base
+    // stable sort with index fallback; NaN/undefined push to bottom
+    return [...base]
+      .map((it, idx) => {
+        const vRaw = it?.metrics?.[sortKey]
+        const v = typeof vRaw === 'number' ? vRaw : Number(vRaw)
+        const score = Number.isFinite(v) ? v : Number.NaN
+        return { it, idx, score }
+      })
+      .sort((a, b) => {
+        const aNaN = Number.isNaN(a.score)
+        const bNaN = Number.isNaN(b.score)
+        if (aNaN && bNaN) return a.idx - b.idx
+        if (aNaN) return 1
+        if (bNaN) return -1
+        const diff = a.score - b.score
+        if (diff !== 0) return sortDir === 'asc' ? diff : -diff
+        return a.idx - b.idx
+      })
+      .map(x => x.it)
+  }, [items, filters, query, sortDir, sortKey])
+
   // Filters and search
-  const filteredItems = React.useMemo(() => {
-    const base = applyFilters(items, filters)
-    if (!query.trim()) return base
-    const q = query.toLowerCase()
-    return base.filter((it) => (it.user_input || '').toLowerCase().includes(q))
-  }, [items, filters, query])
+  // filteredItems -> viewItems (includes sort)
+  const filteredItems = viewItems
 
   // Virtualization
   const rowHeight = 44
@@ -76,6 +121,8 @@ export default function QAFailureExplorer() {
             <option value={k} key={k}>{getMetricMeta(k as any).key}</option>
           ))}
         </select>
+        
+
         <input placeholder="Search question" value={query} onChange={(e) => setQuery(e.target.value)} style={{ minWidth: 240 }} aria-label="qa-search-input" data-testid={TID.qa.search} />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {baseCols.map((c) => (
@@ -96,6 +143,28 @@ export default function QAFailureExplorer() {
         </div>
         <button onClick={exportVisible} data-testid="qa-export-csv">Export CSV</button>
         <button onClick={exportVisibleXlsx} data-testid="qa-export-xlsx">Export XLSX</button>
+
+         {/* Sort selector */}
+        <div
+          style={{
+            marginLeft: 'auto', 
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}
+        >
+          <label>Sort</label>
+          <select
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value as SortDir)}
+            aria-label="sort-selector"
+            data-testid="qa-sort"
+          >
+            <option value="none">None</option>
+            <option value="asc" disabled={!sortKey}>{`${sortLabel} ↑`}</option>
+            <option value="desc" disabled={!sortKey}>{`${sortLabel} ↓`}</option>
+          </select>
+        </div>
       </div>
 
       {/* Active filter chips */}

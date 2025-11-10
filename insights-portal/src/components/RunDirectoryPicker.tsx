@@ -4,6 +4,7 @@ import { usePortalStore } from '@/app/store/usePortalStore'
 import { parseSimpleYAML, extractThresholdsFromConfig } from '@/core/yaml'
 import WorkerModule from '../workers/parser.worker.ts?worker'
 import { defaultParseSummary } from './runloader.parse'
+import { useTranslation } from 'react-i18next'
 
 interface DetectedRun {
   runPath: string
@@ -17,6 +18,7 @@ interface DetectedRun {
 }
 
 export const RunDirectoryPicker: React.FC = () => {
+  const { t } = useTranslation()
   const setRunData = usePortalStore((s) => s.setRunData)
   const [runs, setRuns] = React.useState<DetectedRun[]>([])
   const [error, setError] = React.useState('')
@@ -56,14 +58,14 @@ export const RunDirectoryPicker: React.FC = () => {
           }
         }
       }
-  setRuns(Object.values(found))
-  setScannedOnce(true)
-  // Fast scan each detected summary JSON to estimate counts and coverage
-  setScanning(true)
-  // Dynamic import of the web worker for fast scan; cast to any to accommodate ?worker suffix without extra types
-  const WorkerCtor = (await import('../workers/parser.worker.ts?worker')).default as unknown as {
-    new (): Worker
-  }
+      setRuns(Object.values(found))
+      setScannedOnce(true)
+      // Fast scan each detected summary JSON to estimate counts and coverage
+      setScanning(true)
+      // Dynamic import of the web worker for fast scan; cast to any to accommodate ?worker suffix without extra types
+      const WorkerCtor = (await import('../workers/parser.worker.ts?worker')).default as unknown as {
+        new(): Worker
+      }
       await Promise.all(
         Object.values(found).map(async (r) => {
           if (!r.summaryJson) return
@@ -123,7 +125,7 @@ export const RunDirectoryPicker: React.FC = () => {
 
   const loadRunCsv = async (r: DetectedRun) => {
     if (!r.csvFile) return
-    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    const worker: Worker = new (WorkerModule as unknown as { new(): Worker })()
     await new Promise<void>((resolve, reject) => {
       worker.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
@@ -158,7 +160,7 @@ export const RunDirectoryPicker: React.FC = () => {
   const addToCompare = async (r: DetectedRun) => {
     if (!r.summaryJson) return
     // Parse via worker then add to runs map in store for multi-run compare
-    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    const worker: Worker = new (WorkerModule as unknown as { new(): Worker })()
     await new Promise<void>((resolve, reject) => {
       worker.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
@@ -183,7 +185,7 @@ export const RunDirectoryPicker: React.FC = () => {
 
   const addToCompareCsv = async (r: DetectedRun) => {
     if (!r.csvFile) return
-    const worker: Worker = new (WorkerModule as unknown as { new (): Worker })()
+    const worker: Worker = new (WorkerModule as unknown as { new(): Worker })()
     await new Promise<void>((resolve, reject) => {
       worker.onmessage = (ev: MessageEvent<any>) => {
         const msg = ev.data
@@ -208,19 +210,29 @@ export const RunDirectoryPicker: React.FC = () => {
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button onClick={onPickDir} disabled={busy}>{busy ? '掃描中…' : '選擇資料夾並掃描 runs'}</button>
+      <button onClick={onPickDir} disabled={busy}>
+        {busy ? t('progress.scanning') : t('actions.pickDirAndScan')}
+      </button>
       {error && <span style={{ color: 'crimson', marginLeft: 8 }}>{error}</span>}
       {!!runs.length && (
         <div style={{ marginTop: 8 }}>
-      <div>偵測到 {runs.length} 個 run：{scanning ? '（快速掃描中…）' : ''}</div>
+          <div>
+            {t('messages.detectedRuns', { count: runs.length })}{scanning ? ` ${t('progress.fastScanningSuffix')}` : ''}
+          </div>
           <ul>
             {runs.map((r) => (
               <li key={r.runPath} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <code style={{ opacity: 0.8 }}>{r.runPath}</code>
-                <span>· JSON: {r.summaryJson ? '✓' : '—'} · config.yaml: {r.configYaml ? '✓' : '—'} · items: {r.totalItems ?? '—'}</span>
+                <span>
+                  · {t('labels.json')}: {r.summaryJson ? '✓' : '—'} · {t('labels.configYaml')}: {r.configYaml ? '✓' : '—'} · {t('labels.items')}: {r.totalItems ?? '—'}
+                </span>
                 {r.artifactCounts && (
                   <span style={{ opacity: 0.8 }}>
-                    · artifacts: results {r.artifactCounts.resultJson}, csv {r.artifactCounts.csv}, other json {r.artifactCounts.otherJson}
+                    {t('messages.artifactsSummary', {
+                      results: r.artifactCounts.resultJson,
+                      csv: r.artifactCounts.csv,
+                      other: r.artifactCounts.otherJson
+                    })}
                   </span>
                 )}
                 {r.metricsCoverage && (
@@ -233,19 +245,19 @@ export const RunDirectoryPicker: React.FC = () => {
                         .join('\n') || undefined
                     }
                   >
-                    · coverage: {Object.entries(r.metricsCoverage)
+                    · {t('labels.coverage')}: {Object.entries(r.metricsCoverage)
                       .slice(0, 3)
                       .map(([k, v]) => `${k}:${Math.round((v as number) * 100)}%`)
                       .join(', ')}{Object.keys(r.metricsCoverage).length > 3 ? '…' : ''}
                   </span>
                 )}
-                <button onClick={() => loadRun(r)} disabled={!r.summaryJson}>載入</button>
+                <button onClick={() => loadRun(r)} disabled={!r.summaryJson}>{t('actions.load')}</button>
                 {!r.summaryJson && (
-                  <button onClick={() => loadRunCsv(r)} disabled={!r.csvFile}>載入 CSV</button>
+                  <button onClick={() => loadRunCsv(r)} disabled={!r.csvFile}>{t('actions.loadCsv')}</button>
                 )}
-                <button onClick={() => addToCompare(r)} disabled={!r.summaryJson}>加入比較</button>
+                <button onClick={() => addToCompare(r)} disabled={!r.summaryJson}>{t('actions.addToCompare')}</button>
                 {!r.summaryJson && (
-                  <button onClick={() => addToCompareCsv(r)} disabled={!r.csvFile}>加入比較 CSV</button>
+                  <button onClick={() => addToCompareCsv(r)} disabled={!r.csvFile}>{t('actions.addToCompareCsv')}</button>
                 )}
               </li>
             ))}
@@ -254,7 +266,7 @@ export const RunDirectoryPicker: React.FC = () => {
       )}
       {!busy && scannedOnce && runs.length === 0 && (
         <div style={{ marginTop: 8, opacity: 0.85 }}>
-          沒有找到相容的檔案（需要 ragas_enhanced_evaluation_results_*.json、portal summary，或 CSV）。
+          {t('messages.noCompatibleFound')}
         </div>
       )}
     </div>
