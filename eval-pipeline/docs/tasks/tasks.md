@@ -1818,7 +1818,7 @@ governance:
 ```yaml
 # TASK-070 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 2p
@@ -1832,11 +1832,15 @@ governance:
 		- Reconnect metric present
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	deliverables:
+		- services/ws/gateway.py
+		- services/tests/ws/test_gateway.py
 ```
 ```yaml
 # TASK-071 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 2p
@@ -1850,19 +1854,28 @@ governance:
 		- Resync fallback test
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	deliverables:
+		- services/ws/envelope.py
+		- services/tests/ws/test_envelope.py
 ```
 
 ```yaml
 # TASK-072 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/hooks/useEventStream.ts
 # TASK-073 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	notes: "Progressive downgrade in useEventStream.ts (MAX_CONSECUTIVE_FAILURES=5, DOWNGRADE_DURATION_MS=120000)"
 ```
 
 ### 5.8 Telemetry & Observability

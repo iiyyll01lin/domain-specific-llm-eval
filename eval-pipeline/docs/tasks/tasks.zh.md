@@ -1795,7 +1795,7 @@ governance:
 ```yaml
 # TASK-070 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 2p
@@ -1807,11 +1807,15 @@ governance:
 		- Handshake 測試
 		- 心跳 miss 降級
 		- 重連指標存在
+	completed_at: 2026-03-06
+	deliverables:
+		- services/ws/gateway.py
+		- services/tests/ws/test_gateway.py
 ```
 ```yaml
 # TASK-071 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 2p
@@ -1825,19 +1829,28 @@ governance:
 		- Resync 回退測試
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	deliverables:
+		- services/ws/envelope.py
+		- services/tests/ws/test_envelope.py
 ```
 
 ```yaml
 # TASK-072 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/hooks/useEventStream.ts
 # TASK-073 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 5
+	completed_at: 2026-03-06
+	notes: "漸進式降級邏輯在 useEventStream.ts (MAX_CONSECUTIVE_FAILURES=5, DOWNGRADE_DURATION_MS=120000)"
 ```
 
 ### 5.8 Telemetry 與可觀測
