@@ -244,3 +244,128 @@ docs/adr/ADR-003-subgraph-sampling-strategy.zh.md
 docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.zh.md
 docs/adr/ADR-005-telemetry-taxonomy.zh.md
 docs/adr/ADR-006-event-schema-versioning.zh.md
+
+# ============================================================================
+# 202603-rc1: Additional ignores for debug/temp files
+# ============================================================================
+# Sensitive patterns file (may contain real credentials)
+sensitive-patterns.txt
+
+# Database files
+services/data/
+eval-pipeline/data/
+
+# Debug and fix scripts at root level
+add_orchestrator_wrapper.py
+apply_pipeline_fixes.py
+comprehensive_nan_fix.py
+contextual_keyword_gate.py
+debug_auth_flow.py
+debug_csv_kg.py
+debug_data_formatter.py
+debug_data_structure.py
+debug_formatter_input.py
+debug_orchestrator_kg.py
+debug_step_by_step.py
+debug_synthesizer_property.py
+debug_testset_error.py
+debug_visualization_issue.py
+demonstrate_keybert_integration.py
+demonstrate_nan_fix.py
+download_models.py
+dynamic_ragas_gate_with_human_feedback.py
+enhanced_nan_handling.py
+enhanced_pipeline_orchestrator.py
+final_ragas_verification.py
+fix_all_nan_values.py
+fix_duplicate_methods.py
+fix_method_signature.py
+fix_multi_hop_scenarios.ipynb
+fix_nan_values.py
+fix_pipeline_imports.py
+fix_pipeline_issues.py
+fix_precise_duplicate.py
+fix_ragas_pipeline_errors.py
+fix_remaining_nan_files.py
+generate_dataset_configurable.py
+generate_synthetic_dataset_advanced.py
+generate_synthetic_dataset-simple.py
+generate_synthetic_dataset.py
+install_dependencies.py
+integrate_pipeline_bug_fixes_final.py
+integrate_pipeline_bug_fixes.py
+knowledge_graph_persistence_demo.ipynb
+local_dataset_generator.py
+ragas_fork_decision.sh
+regenerate_fixed_reports.py
+run_evaluation_only.py
+set_offline_env.py
+setup_nan_handling.py
+setup_offline_models.py
+strct-ds-eval-*.txt
+current_ragas_status.sh
+contextual_keyword_report*.txt
+
+# Eval-pipeline debug scripts and temp files
+eval-pipeline/demonstrate_working_pipeline.py
+eval-pipeline/download_spacy_models.py
+eval-pipeline/english_prompt_example.py
+eval-pipeline/evaluate_existing_testset.py
+eval-pipeline/evaluate_smt_rag_with_metrics.py
+eval-pipeline/global_tiktoken_patch.py
+eval-pipeline/implement_multihop_fixes.py
+eval-pipeline/make_executable.py
+eval-pipeline/optimize_ragas_multihop.py
+eval-pipeline/run_custom_testset.py
+eval-pipeline/run_enhanced_pipeline.py
+eval-pipeline/run_pipeline_clean.py
+eval-pipeline/run_pipeline_fixed.py
+eval-pipeline/run_with_fixes.py
+eval-pipeline/save_and_eval_demo.py
+eval-pipeline/reports/
+eval-pipeline/src/data/temp_config.yaml
+eval-pipeline/src/pipeline/bug_fixes.py
+eval-pipeline/src/pipeline/critical_bug_fixes.py
+eval-pipeline/src/pipeline/enhanced_orchestrator_backup.py
+eval-pipeline/src/pipeline/enhanced_orchestrator_phase2.py
+eval-pipeline/src/pipeline/orchestrator.py.bak
+eval-pipeline/src/pipeline/refactored_enhanced_orchestrator.py
+eval-pipeline/src/utils/orchestrator_fixes.py
+eval-pipeline/src/utils/ragas_fixes.py
+eval-pipeline/src/utils/ragas_testset_fixes.py
+eval-pipeline/src/utils/spacy_fixes.py
+eval-pipeline/test_documents/
+eval-pipeline/tests/
+
+# Root-level dev/status markdown files
+DATA_VALIDATION.md
+ENHANCED_PIPELINE_USAGE.md
+GIT_COMMIT_MESSAGE.md
+HANDOVER_ISSUES_RESOLVED.md
+IMPLEMENTATION_STATUS_REPORT.md
+NaN_HANDLING_SOLUTION.md
+RAGAS_FIX_DOCUMENTATION.md
+ROOT_CAUSE_FIXED.md
+
+# Root-level config dir (has actual config + templates)
+# Only template is exempt via negation
+config/pipeline_config.yaml
+
+# Root-level data dir (SQLite DBs)
+data/
+
+# eval-pipeline additional ignores
+eval-pipeline/analyze_multihop_results.py
+eval-pipeline/REVERSION_COMPLETE.py
+eval-pipeline/README_CENTRALIZED.md
+eval-pipeline/STANDARDIZED_DIRECTORY_STRUCTURE.md
+eval-pipeline/SYNTAX_ERRORS_FIXED.md
+eval-pipeline/QUICK_TEST_CONFIG_10_ITEMS.md
+eval-pipeline/config/pipeline_config_quick_test.yaml
+eval-pipeline/config/test_output_parser_config.yaml
+eval-pipeline/config/test_pipeline_config.yaml
+eval-pipeline/config/rag_evaluation_config.yaml
+eval-pipeline/config/examples/
+
+# Additional files to ignore
+eval-pipeline/INTEGRATION_SUCCESS_REPORT.md

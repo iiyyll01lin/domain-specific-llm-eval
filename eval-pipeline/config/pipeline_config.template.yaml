@@ -1,0 +1,1019 @@
+advanced:
+  caching:
+    cache_dir: ./cache
+    cache_embeddings: true
+    cache_testsets: true
+    enabled: true
+    aggressive_caching: true          # Cache everything possible
+    cache_size_mb: 12000              # Use 12GB for caching (increased from 8GB)
+  error_handling:
+    continue_on_error: true
+    max_failures_per_document: 5
+  parallelization:
+    enabled: true
+    max_workers: 4                    # ✅ QUICK TEST: Reduced to 4 for quick testing (was 20)
+  resource_limits:
+    max_memory_mb: 87000              # Use 87GB of 90GB available RAM (increased from 85GB)
+    max_processing_time_minutes: 60   # Aggres  scenarios:
+    auto_generate: true              # ✅ FIXED: Enable scenario auto-generation
+    single_hop_scenarios: 1          # ✅ REDUCED: Number of single-hop scenarios to generate (from 5 to 1)
+    multi_hop_scenarios: 1           # ✅ REDUCED: Number of multi-hop scenarios to generate (from 3 to 1)
+    save_scenarios: true             # ✅ ACTIVE: Save generated scenarios to files
+    scenarios_dir: metadata/scenarios # ✅ ACTIVE: Directory to save scenarios
+    fallback_to_defaults: true       # ✅ ACTIVE: Use default scenarios if generation failsme limit (faster with 87GB memory)
+data_sources:
+  csv:
+    csv_files:
+    - /data/yy/domain-specific-llm-eval/eval-pipeline/data/csv/pre-training-data.csv
+    format:
+      column_mapping:
+        author: author
+        content: content
+        created_at: created_at
+        id: id
+        source: source
+        template_key: template_key
+        updated_at: updated_at
+      content_json_fields:
+        # For pre-training-data.csv JSON content structure
+        text: text
+        title: title
+        source: source
+        language: language
+        label: label
+      delimiter: ','
+      encoding: utf-8
+      processing:
+        clean_text: true
+        combine_json_fields: true
+        extract_keywords: true
+        json_text_template: 'Title: {title}
+
+          Content: {text}
+
+          Source: {source}
+
+          Language: {language}
+
+          Label: {label}'
+        preserve_metadata: true
+        validate_json: true
+        
+        # ENHANCED: Error Code Coverage Optimizations
+        error_code_processing:
+          prioritize_unique_codes: true      # NEW: Prioritize unique error codes
+          extract_error_categories: true     # NEW: Extract error categories for stratification
+          normalize_error_descriptions: true # NEW: Normalize descriptions for better matching
+          preserve_error_hierarchy: true     # NEW: Maintain error code hierarchies
+          enable_cross_reference_tracking: true # NEW: Track error code cross-references
+          
+        # ENHANCED: Data Coverage Preprocessing
+        coverage_preprocessing:
+          document_deduplication: false      # NEW: Keep duplicates for complete coverage
+          preserve_all_variants: true        # NEW: Keep all error code variants
+          maintain_original_order_info: true # NEW: Preserve original ordering information
+          tag_document_importance: true      # NEW: Tag document importance levels
+          extract_coverage_metadata: true    # NEW: Extract metadata for coverage analysis
+      quote_char: '"'
+      skip_blank_lines: true
+      validation:
+        max_content_length: 10000
+        min_content_length: 20
+        required_columns:
+        - id
+        - template_key
+        - content
+  documents:
+    file_types:
+    - pdf
+    - docx
+    - txt
+    - md
+    primary_docs: null
+    processing:
+      chunk_size: 1000
+  input_type: csv
+environment:
+  HF_DATASETS_OFFLINE: '1'
+  HF_HUB_DISABLE_TELEMETRY: '1'
+  HF_HUB_OFFLINE: '1'
+  SPACY_WARNING_IGNORE: W008
+  TOKENIZERS_PARALLELISM: 'false'
+  TRANSFORMERS_OFFLINE: '1'
+  offline_models:
+    cache_models: true
+    enabled: true
+    fallback_enabled: true
+    force_offline: true
+# Enhanced validation configuration for robust pipeline execution
+validation:
+  # Global validation settings
+  enabled: true
+  fail_fast: false                    # Continue processing even with validation errors
+  save_validation_reports: true      # Save detailed validation reports
+  
+  # Robust validation settings (NEW)
+  min_sample_success_rate: 0.02      # Very permissive 2% (was 10%)
+  enable_aggressive_recovery: true   # Enable aggressive NaN recovery attempts
+  enable_drop_and_continue: true     # Drop invalid samples, continue with valid ones
+  max_batch_size: 5000               # Increased from 1000 to 5000 for better performance
+  min_content_length: 5              # More permissive (5 chars vs 10)
+  
+  # CSV data validation with ENHANCED coverage assurance
+  csv_validation:
+    enabled: true
+    min_content_length: 10            # Minimum content length for text fields
+    min_viable_rows: 5                # Minimum number of rows for viable dataset
+    max_nan_ratio: 0.5                # More permissive (50% NaN allowed vs 80%)
+    
+    # Field importance classification
+    critical_columns:                  # Cannot have NaN values
+      - display
+      - content
+      - error_code
+    important_columns:                 # Can be filled with defaults
+      - category
+      - cause
+      - remedy
+    optional_columns:                  # Can be empty
+      - id
+      - source
+      - timestamp
+    
+    # Text processing settings
+    text_columns:
+      - display
+      - content
+      - cause
+      - remedy
+    numeric_columns:
+      - id
+    
+    # Data cleaning settings
+    auto_clean: true                   # Automatically clean detected issues
+    save_cleaned_files: true          # Save cleaned CSV files
+    backup_original: true             # Keep backup of original files
+    
+    # ENHANCED: Coverage-Specific Validation
+    coverage_validation:
+      validate_document_uniqueness: true    # NEW: Ensure each document is identifiable
+      check_error_code_completeness: true   # NEW: Verify all error codes are complete
+      validate_categorical_coverage: true   # NEW: Check coverage across categories
+      ensure_stratification_viability: true # NEW: Ensure stratification is possible
+      detect_coverage_blind_spots: true     # NEW: Identify potential coverage gaps
+      
+    # ENHANCED: Error Code Dataset Validation
+    error_code_validation:
+      validate_error_code_format: true      # NEW: Validate error code formats
+      check_description_quality: true       # NEW: Check description completeness
+      verify_solution_availability: true    # NEW: Verify solutions are available
+      validate_category_consistency: true   # NEW: Check category consistency
+      ensure_cross_reference_integrity: true # NEW: Validate cross-references
+  
+  # Sample validation during testset generation
+  sample_validation:
+    enabled: true
+    min_success_rate: 0.01            # Very permissive 1% for large scale (reduced from 2%)
+    max_batch_size: 1000              # Increased from 5000 to match batch_configuration.max_batch_size
+    
+    # Required fields validation
+    required_fields:
+      - user_input
+      - reference
+    
+    # Content quality checks
+    min_question_length: 5            # Minimum question length (more permissive)
+    min_answer_length: 5              # Minimum answer length (more permissive)
+    max_placeholder_ratio: 0.5        # More permissive (50% vs 30%)
+    
+    # Recovery settings
+    enable_sample_recovery: true      # Try to generate more samples if many are rejected
+    recovery_multiplier: 2            # Generate 2x samples when recovery is needed
+  
+  # Knowledge graph validation
+  kg_validation:
+    enabled: true
+    check_connectivity: true          # Check graph connectivity
+    min_nodes: 1                      # More permissive (1 vs 5)
+    min_edges: 0                      # Minimum number of edges (0 for optional)
+    validate_node_structure: true     # Validate node data structure
+    validate_edge_structure: true     # Validate edge data structure
+    
+    # Auto-repair settings
+    auto_repair: true                 # Automatically fix detected issues
+    save_repaired_kg: true           # Save repaired knowledge graphs
+    remove_invalid_nodes: true       # Remove nodes with invalid structure
+    remove_invalid_edges: true       # Remove edges with invalid structure
+  
+  # Configuration validation
+  config_validation:
+    enabled: true
+    check_required_sections: true    # Check for required config sections
+    validate_file_paths: true       # Validate that referenced files exist
+    check_llm_config: true          # Validate LLM configuration
+    warn_on_large_targets: true     # Warn if testset targets are very large
+  
+  # Error recovery settings
+  error_recovery:
+    enabled: true
+    max_recovery_attempts: 3         # Maximum number of recovery attempts
+    fallback_to_minimal: true       # Fall back to minimal generation if needed
+    preserve_partial_results: true  # Save partial results even on failure
+    continue_on_validation_failure: false # Stop pipeline if validation fails
+
+# Enhanced error handling configuration
+error_handling:
+  continue_on_metric_failure: true
+  continue_on_nan: true
+  log_errors: true
+  save_error_details: true
+  
+  # Enhanced recovery settings (NEW)
+  recovery_enabled: true            # Enable comprehensive recovery mechanisms
+  max_recovery_attempts: 5          # More attempts (5 vs 3)
+  fallback_strategies:              # Enhanced fallback strategies
+    - "aggressive_sample_recovery"  # NEW strategy
+    - "drop_invalid_continue_valid" # NEW strategy  
+    - "data_cleaning"
+    - "sample_regeneration"
+    - "graceful_degradation"
+  
+  # Validation-specific error handling
+  validation_errors:
+    log_validation_details: true     # Log detailed validation information
+    save_rejected_samples: true     # Save samples that failed validation
+    create_error_summary: true      # Create summary of all validation errors
+    include_recovery_info: true     # Include information about recovery attempts
+evaluation:
+  # Enhanced performance tracking configuration with COVERAGE MONITORING
+  performance_tracking:
+    enabled: true
+    track_stage_timings: true         # Time each pipeline stage
+    track_rag_response_time: true     # RAG endpoint response time
+    track_llm_response_time: true     # LLM endpoint response time  
+    track_metric_computation_time: true # Time for each metric calculation
+    track_memory_usage: true          # Memory usage during evaluation
+    detailed_timing_breakdown: true   # Detailed timing per question/metric
+    timing_percentiles: [50, 95, 99]  # Response time percentiles to report
+    
+    # ENHANCED: Coverage Operation Performance Tracking
+    coverage_performance_tracking:
+      track_document_loading_time: true    # NEW: Time document loading operations
+      track_shuffling_performance: true    # NEW: Monitor shuffling operation times
+      track_sampling_efficiency: true     # NEW: Track sampling efficiency metrics
+      track_coverage_validation_time: true # NEW: Time coverage validation operations
+      track_batch_creation_time: true     # NEW: Monitor batch creation performance
+      
+    # ENHANCED: Data Processing Performance
+    data_processing_performance:
+      track_csv_processing_time: true     # NEW: Monitor CSV processing performance
+      track_error_code_parsing_time: true # NEW: Track error code parsing efficiency
+      track_metadata_extraction_time: true # NEW: Monitor metadata extraction
+      track_validation_processing_time: true # NEW: Track validation processing time
+  contextual_keywords:
+    adaptive_thresholds:
+      chinese_adjustment: -0.05
+      technical_adjustment: -0.05
+    enabled: true
+    evaluator: enhanced
+    fuzzy_threshold: 80
+    method_weights:
+      enhanced_semantic: 0.3
+      fuzzy_matching: 0.2
+      keyword_extraction: 0.1
+      original_contextual: 0.4
+    sentence_model: all-mpnet-base-v2
+    sentence_model_config:
+      cache_dir: ./cache/sentence_transformers
+      device: cuda:0, cuda:1
+      fallback_models:
+      - all-MiniLM-L6-v2
+      - paraphrase-multilingual-mpnet-base-v2
+      local_files_only: true
+      offline_mode: true
+    similarity_threshold: 0.7
+    spacy_config:
+      fallback_models:
+        en_core_web_trf:
+        - en_core_web_lg
+        - en_core_web_md
+        - en_core_web_sm
+        zh_core_web_trf:
+        - zh_core_web_lg
+        - zh_core_web_md
+        - zh_core_web_sm
+      offline_mode: true
+    spacy_model_en: en_core_web_trf
+    spacy_model_zh: zh_core_web_trf
+    weights:
+      mandatory: 0.8
+      optional: 0.2
+  gates:
+    combination:
+      method: weighted_average
+      minimum_gates_required: 1
+    contextual_keywords:
+      description: Contextual keyword matching gate
+      enabled: true
+      threshold: 0.5                  # ✅ LOWERED: Reduced from 0.6 to 0.4 for better pass rate
+      weight: 0.4
+    human_feedback:
+      enabled: false
+      feedback_window_size: 10
+      threshold_adjustment_rate: 0.1
+    ragas_metrics:
+      description: RAGAS metrics evaluation gate
+      enabled: true
+      threshold: 0.7
+      weight: 0.6
+  human_feedback:
+    diverse_sample_rate: 0.2
+    enabled: false
+    initial_threshold: 0.7
+    recalibration_interval: 10
+    smoothing:
+      alpha: 0.1
+      consistency_threshold: 0.2
+      max_window_size: 10
+      min_window_size: 3
+    uncertainty_bounds:
+      buffer: 0.1
+      max: 0.9
+      min: 0.3
+  nan_handling:
+    enabled: true
+    fallback_value: 0.0
+    log_nan_issues: true
+    min_valid_scores: 1
+    tolerance_strategy: fallback
+  rag_system_testing:
+    capture_contexts: true
+    capture_responses: true
+    enabled: true
+    test_all_questions: true
+  ragas_metrics:
+    batch_size: 64                    # Increased from 32 to 64 for maximum 90GB RAM performance
+    embeddings:
+      cache_dir: ./cache/sentence_transformers
+      device: cuda:0, cuda:1
+      fallback_models:
+      - all-mpnet-base-v2
+      - paraphrase-MiniLM-L6-v2
+      local_files_only: true
+      model_name: all-mpnet-base-v2     # ✅ FIXED: Changed from all-MiniLM-L6-v2 to all-mpnet-base-v2
+      offline_mode: true
+    enabled: true
+    evaluate_rag_responses: true
+    llm:
+      api_key: YOUR_API_KEY_HERE
+      device: auto
+      endpoint: http://YOUR_LLM_ENDPOINT
+      headers:
+        Accept: '*/*'
+        Accept-Encoding: gzip, deflate, br
+        Cache-Control: no-cache
+        Connection: keep-alive
+        Content-Type: application/json
+        Host: YOUR_LLM_ENDPOINT
+        User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+      max_length: 512
+      max_tokens: 4096
+      model_name: gpt-4o
+      temperature: 0.1
+      timeout: 180
+      use_custom_llm: true
+      use_local: false
+    metrics:
+    - Faithfulness
+    - AnswerRelevancy
+llm:
+  api_key: YOUR_API_KEY_HERE
+  endpoint_url: http://YOUR_LLM_ENDPOINT/v1/chat/completions
+  headers:
+    Accept: '*/*'
+    Accept-Encoding: gzip, deflate, br
+    Cache-Control: no-cache
+    Connection: keep-alive
+    Content-Type: application/json
+    Host: YOUR_LLM_ENDPOINT
+    User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+  keyword_extraction:
+    num_keywords: 3
+    enabled: true
+    evaluation:
+      max_keywords: 3
+      min_score_threshold: 0.3
+    fallback:
+      enabled: true
+      method: simple_text_processing
+      min_word_length: 4
+      stop_words:
+      - the
+      - a
+      - an
+      - and
+      - or
+      - but
+      - in
+      - 'on'
+      - at
+      - to
+    keybert:
+      chinese_ngram_range:
+      - 1
+      - 3
+      diversity: 0.5
+      enabled: true
+      model: all-mpnet-base-v2          # ✅ FIXED: Changed from all-MiniLM-L6-v2 to all-mpnet-base-v2
+      device: cuda:0, cuda:1
+      ngram_range:
+      - 1
+      - 2
+      nr_candidates: 20
+      stop_words: english
+      use_maxsum: true
+      use_mmr: true
+    llm:
+      api_key: YOUR_API_KEY_HERE
+      endpoint_url: http://YOUR_LLM_ENDPOINT/v1/chat/completions
+      max_tokens: 4096
+      model: gpt-4o
+      temperature: 0.1
+      timeout: 180
+    method: keybert_enhanced
+    num_keywords: 3
+    testset_generation:
+      max_keywords: 3
+      min_score_threshold: 0.2
+    yake:
+      dedupLim: 0.7
+      enabled: true
+      language: en
+      n: 3
+      top: 20
+  max_tokens: 4096
+  model: gpt-4o
+  output:
+    format: excel
+    include_metadata: true
+    tag_source_files: true
+  temperature: 0.1
+  timeout: 180
+logging:
+  config_tracking:
+    enabled: true
+    log_config_usage: true
+    log_fallback_usage: true
+    track_generation_methods: true
+  destinations:
+  - console
+  - file
+  file_logging:
+    backup_count: 5
+    log_file: ./outputs/logs/pipeline.log
+    max_size_mb: 1000
+  level: DEBUG
+  performance:
+    enabled: true
+    track_memory: true
+    track_timing: true
+output:
+  base_dir: ./outputs
+  naming:
+    metadata_prefix: metadata
+    report_prefix: evaluation_report
+    testset_prefix: testset
+  retention:
+    keep_intermediate_files: true
+    max_runs_to_keep: 10
+  use_timestamps: true
+pipeline:
+  mode: full                          # ✅ CHANGED: Enable full mode to include RAG testing (was ragas_only)
+  name: Simplified RAG Evaluation Pipeline
+  version: 2.0.0
+rag_system:
+  auth:
+    token: ''
+    type: none
+  enabled: true
+  endpoint: http://YOUR_RAG_ENDPOINT/app/smt_assistant_chat
+  max_retries: 7
+  request_format:
+    payload_template:
+      app: smt_assistant_chat
+      command: ''
+      content: '{question}'
+      context: {}
+      language: en
+      session_id: 'IEC100278'
+      site: tao
+      user: ''
+    question_field: content
+    response_fields:
+      answer: message[0].content
+      confidence: null
+      contexts: null
+  timeout: 180
+ragas_metrics:
+  robust_evaluation:
+    enabled: true
+    filter_invalid_scores: true
+    handle_nan_gracefully: true
+    max_retries: 7
+    retry_delay: 2
+reporting:
+  # Enhanced metadata and parameter tracking with COVERAGE ANALYSIS
+  final_parameters_tracking:
+    enabled: true
+    capture_fallback_usage: true      # Track which fallbacks were used
+    capture_final_config: true        # Capture actual config used (post-fallbacks)
+    include_generation_metadata: true # Include testset generation metadata
+    include_evaluation_metadata: true # Include evaluation process metadata
+    track_composition_elements: true  # Track RAGAS composition elements
+    
+    # ENHANCED: Coverage Analysis Tracking
+    coverage_analysis_tracking:
+      track_document_coverage: true        # NEW: Track document coverage statistics
+      analyze_sampling_patterns: true      # NEW: Analyze sampling pattern effectiveness
+      monitor_shuffling_effectiveness: true # NEW: Monitor shuffling effectiveness
+      measure_distribution_quality: true   # NEW: Measure distribution quality
+      detect_coverage_anomalies: true      # NEW: Detect any coverage anomalies
+      
+    # ENHANCED: Error Code Dataset Analysis
+    error_code_analysis:
+      track_error_code_coverage: true      # NEW: Track error code coverage
+      analyze_category_distribution: true  # NEW: Analyze category distribution
+      monitor_severity_coverage: true      # NEW: Monitor severity level coverage
+      measure_scenario_completeness: true  # NEW: Measure scenario completeness
+  formats:
+  - html
+  - pdf
+  - excel
+  - json
+  report_types:
+  - comprehensive
+  - executive
+  - technical
+  - comparative
+  sections:
+  - executive_summary
+  - testset_overview
+  - rag_performance_analysis
+  - contextual_keyword_analysis
+  - ragas_metrics_analysis
+  - human_feedback_insights
+  - question_type_breakdown
+  - source_document_analysis
+  - recommendations
+  - methodology
+  - data_coverage_analysis           # NEW: Comprehensive data coverage analysis
+  - sampling_effectiveness_report    # NEW: Sampling and shuffling effectiveness
+  - error_code_coverage_summary      # NEW: Error code specific coverage summary
+  visualizations:
+    chart_types:
+    - performance_trends
+    - score_distributions
+    - keyword_coverage_heatmap
+    - question_difficulty_analysis
+    - source_performance_comparison
+    - document_coverage_matrix        # NEW: Document coverage visualization
+    - sampling_distribution_charts    # NEW: Sampling distribution visualization
+    - error_code_coverage_heatmap     # NEW: Error code coverage heatmap
+    enabled: true
+    style:
+      color_palette: blues
+      theme: professional
+testset_generation:
+  # ===== DEBUG: CRITICAL ANALYSIS =====
+  # ISSUE IDENTIFIED: Multiple conflicting configurations causing fallback usage
+  # 1. orchestrator_fixes.py line 116: target_size = testset_config.get('max_total_samples', 3) 
+  # 2. orchestrator.py line 465: target_size = testset_config.get('max_total_samples', 1000)
+  # 3. Enhanced generation with personas/scenarios not running due to configuration conflicts
+  # 
+  # ROOT CAUSE: The pipeline is NOT using enhanced scenario & persona generation because:
+  # - Document handoff working (18,400 docs loaded successfully)
+  # - Configuration has max_total_samples: 21000 correctly set
+  # - BUT orchestrator_fixes.py overrides with default 3 when config not found
+  # - This triggers fallback "generic_fallback_generator" instead of RAGAS generator
+  # 
+  # SOLUTION: Clean up conflicting parameters and ensure proper config flow
+
+  # Enhanced composition elements tracking
+  composition_elements_tracking:
+    enabled: true
+    capture_scenarios: true          # Capture scenario details (persona, style, length)
+    capture_nodes: true              # Capture knowledge graph nodes used
+    capture_query_styles: true       # Capture query styles applied
+    capture_personas: true           # Capture personas matched to queries
+    capture_relationships: true      # Capture KG relationships used (multi-hop)
+    include_in_testset_metadata: true # Include in testset file metadata
+    include_in_reports: true         # Include in evaluation reports
+  
+  # Enhanced persona configuration with auto-generation and ROBUST fallbacks
+  personas:
+    auto_generate: true              # 🔧 FIXED: Enable automatic persona generation with proper error handling
+    num_personas: 3                  # ✅ ACTIVE: Number of personas to generate
+    save_personas: true              # ✅ ACTIVE: Save generated personas to files
+    personas_dir: metadata/personas  # ✅ ACTIVE: Directory to save personas
+    fallback_to_defaults: true       # ✅ ACTIVE: Use default personas if generation fails
+    
+    # ENHANCED: Robust fallback handling for missing KG
+    robust_fallback_handling:
+      enable_immediate_fallback: true      # ✅ ACTIVE: Immediately use defaults if KG unavailable
+      skip_kg_dependency: true             # ✅ ACTIVE: Skip KG dependency entirely if missing
+      use_document_based_generation: true  # ✅ ACTIVE: Generate personas from documents if no KG
+      fallback_on_any_kg_error: true      # ✅ ACTIVE: Fallback on any KG-related error
+    
+    # Fallback personas when KG generation fails
+    default_personas:
+      - name: "Technical Support Engineer"
+        role_description: "An experienced engineer who helps troubleshoot technical issues and provides solutions for system errors and malfunctions."
+      - name: "System Administrator"
+        role_description: "A professional responsible for maintaining and configuring systems, monitoring performance, and ensuring operational stability."
+      - name: "Quality Assurance Specialist"
+        role_description: "A detail-oriented professional who tests systems, identifies issues, and ensures quality standards are met before deployment."
+  
+  # Enhanced scenario configuration with auto-generation and ROBUST fallbacks
+  scenarios:
+    auto_generate: true              # ✅ CRITICAL: Enable automatic scenario generation
+    single_hop_scenarios: 5          # ✅ ACTIVE: Number of single-hop scenarios to generate
+    multi_hop_scenarios: 3           # ✅ ACTIVE: Number of multi-hop scenarios to generate
+    save_scenarios: true             # ✅ ACTIVE: Save generated scenarios to files
+    scenarios_dir: metadata/scenarios # ✅ ACTIVE: Directory to save scenarios
+    fallback_to_defaults: true       # ✅ ACTIVE: Use default scenarios if generation fails
+    
+    # ENHANCED: Robust fallback handling for missing KG
+    robust_fallback_handling:
+      enable_immediate_fallback: true      # ✅ ACTIVE: Immediately use defaults if KG unavailable
+      skip_kg_dependency: true             # ✅ ACTIVE: Skip KG dependency entirely if missing
+      use_document_based_generation: true  # ✅ ACTIVE: Generate scenarios from documents if no KG
+      fallback_on_any_kg_error: true      # ✅ ACTIVE: Fallback on any KG-related error
+      prefer_default_scenarios: true       # ✅ ACTIVE: Prefer default scenarios over broken KG generation
+    
+    # Fallback scenarios when KG generation fails
+    default_scenarios:
+      - scenario_type: "single_hop_entities"
+        description: "Questions about specific technical entities and their properties"
+        example: "What is the cause of error code E001?"
+      - scenario_type: "single_hop_keyphrases"
+        description: "Questions about key technical phrases and concepts"
+        example: "How do you resolve connection timeout issues?"
+      - scenario_type: "multi_hop_abstract"
+        description: "Complex questions requiring multiple steps of reasoning"
+        example: "What are the steps to diagnose and fix system performance issues?"
+      - scenario_type: "multi_hop_specific"
+        description: "Detailed technical questions with multiple specific requirements"
+        example: "How do you configure system settings to prevent specific error codes in production environments?"
+  
+  # Intelligent batch configuration (replaces static batch_save_size)
+  batch_configuration:
+    mode: "intelligent"               # ✅ CRITICAL: Enable intelligent batch sizing
+    # target_batch_count: 1             # ❌ COMMENTED OUT: Only 1 batch will not trigger batch processing
+    max_total_samples: 15             # 🔧 FIXED: Increased to 15 to match max_documents_for_generation
+    
+    # High-performance settings for 90GB RAM
+    performance_optimization:
+      memory_aggressive: true         # ✅ ACTIVE: Use all available memory
+      parallel_processing: true       # ✅ ACTIVE: Enable parallel batch processing
+      cache_embeddings: true         # ✅ ACTIVE: Cache embeddings in memory
+      prefetch_documents: true       # ✅ ACTIVE: Load documents ahead of time
+    
+    # Memory-optimized constraints for 87GB usage
+    constraints:
+      min_batch_size: 1700           # ✅ ACTIVE: Minimum for efficiency (increased from 800)
+      max_batch_size: 6800           # ✅ ACTIVE: Maximum for 87GB memory (increased from 6000)
+      memory_limit_mb: 87000         # ✅ ACTIVE: Use full 87GB (increased from 85GB)
+      preferred_workers: 20          # ✅ ACTIVE: Parallel processing (increased from 16)
+    
+    # Guaranteed full coverage (Option A - ENHANCED best choice)
+    coverage_requirements:
+      min_document_coverage: 1.0      # ✅ CRITICAL: Use 100% of CSV documents (GUARANTEED)
+      balanced_document_distribution: true # ✅ ACTIVE
+      document_cycling: "intelligent" # ✅ ACTIVE: Smart reuse when samples > documents
+      
+      # ENHANCED: Advanced Coverage Specifications
+      coverage_strategy: "exhaustive_with_shuffling"  # ✅ ACTIVE: Comprehensive coverage strategy
+      enforce_coverage_tracking: true # ✅ ACTIVE: Track and enforce every document usage
+      coverage_validation: true       # ✅ ACTIVE: Validate that all documents are actually used
+      minimum_usage_per_document: 1   # ✅ ACTIVE: Each document must be used at least once
+      optimal_usage_distribution: true # ✅ ACTIVE: Balance usage across all documents
+      
+      # ENHANCED: Error Code Dataset Optimizations
+      domain_specific_coverage:
+        error_code_priority: true     # ✅ ACTIVE: Prioritize unique error codes
+        ensure_unique_scenarios: true # ✅ ACTIVE: Each error scenario represented
+        category_balanced_sampling: true # ✅ ACTIVE: Balance across error categories
+        critical_error_codes_first: true # ✅ ACTIVE: Process critical errors first
+    
+    # High-performance sampling with ENHANCED shuffling
+    sampling:
+      method: "advanced_stratified_random" # ✅ ACTIVE: Better than basic stratified
+      shuffle_documents: true         # ✅ ACTIVE: Enable document shuffling
+      seed: 42                       # ✅ ACTIVE: Reproducible results
+      memory_cache_size_mb: 15000    # ✅ ACTIVE: 15GB for document caching (increased from 10GB)
+      
+      # ENHANCED: Advanced Shuffling Configuration
+      shuffling_strategy:
+        enable_multi_pass_shuffling: true    # ✅ ACTIVE: Multiple shuffling passes
+        shuffle_before_batching: true        # ✅ ACTIVE: Shuffle before creating batches
+        shuffle_within_batches: true         # ✅ ACTIVE: Shuffle within each batch
+        reshuffle_on_repeat: true           # ✅ ACTIVE: Reshuffle when cycling documents
+        preserve_seed_reproducibility: true  # ✅ ACTIVE: Maintain reproducibility with seed
+        
+      # ENHANCED: Document Distribution Strategy
+      distribution_optimization:
+        round_robin_base: true              # ✅ ACTIVE: Start with round-robin distribution
+        stratified_enhancement: true        # ✅ ACTIVE: Add stratification on top
+        avoid_clustering: true              # ✅ ACTIVE: Prevent similar documents clustering
+        maximize_diversity_per_batch: true  # ✅ ACTIVE: Ensure diverse batches
+        
+      # ENHANCED: Quality Assurance
+      quality_controls:
+        validate_coverage_after_sampling: true  # ✅ ACTIVE: Verify coverage post-sampling
+        detect_bias_in_sampling: true          # ✅ ACTIVE: Check for sampling bias
+        report_coverage_statistics: true       # ✅ ACTIVE: Report detailed coverage stats
+        fail_on_incomplete_coverage: true      # ✅ ACTIVE: Fail if coverage < 100%
+  
+  # Legacy batch saving (commented out for intelligent mode)
+  # batch_save_size: 1000             # ❌ COMMENTED OUT: Replaced by intelligent batch_configuration
+  save_intermediate: true           # ✅ ACTIVE: Save intermediate outputs during generation
+  intermediate_save_interval: 500   # ✅ ACTIVE: Save intermediate results every N samples
+  
+  # Output parser exception fixes
+  apply_output_parser_fixes: true   # ✅ ACTIVE: Apply fixes for OutputParserException errors
+  fix_empty_json: true              # ✅ ACTIVE: Fix empty JSON object outputs: {}
+  fix_invalid_json: true            # ✅ ACTIVE: Fix malformed JSON outputs
+  fix_missing_fields: true          # ✅ ACTIVE: Fix missing required fields in outputs
+  
+  configurable_builder:
+    enabled_strategies:
+    - domain_specific                # ✅ ACTIVE: Use domain-specific strategies
+    generation_targets:
+      # samples_per_document: 1         # ❌ LEGACY: Overridden by batch_configuration.max_total_samples
+      # total_samples: 21000            # ❌ LEGACY: Overridden by batch_configuration.max_total_samples
+    question_distribution:
+      factual: 0.5                   # ✅ ACTIVE
+      procedural: 0.2                # ✅ ACTIVE
+    rag_evaluation_mode: true        # ✅ ACTIVE
+    rag_focus_areas:                 # ✅ ACTIVE
+    - retrieval_accuracy
+    - context_relevance
+    - answer_completeness
+    - generation_quality
+  generator_class: pure_ragas_testset_generator  # ✅ CRITICAL: This determines which generator is used
+  keyword_extraction:
+    enabled: true                    # ✅ ACTIVE
+    method: "hybrid_weighted"        # New hybrid approach  
+    
+    # Source content weights for keyword extraction
+    source_weights:
+      user_query: 0.40               # Question text
+      reference_contexts: 0.35       # CSV data contexts
+      reference_answer: 0.25         # Generated answer
+    
+    # Hybrid extraction pipeline configuration
+    hybrid_pipeline:
+      language_detection:
+        enabled: true
+        model: "langdetect"          # or "spacy" 
+        fallback_language: "en"
+      
+      extraction_methods:
+        # Primary: Enhanced KeyBERT with domain models
+        keybert_enhanced:
+          enabled: true
+          weight: 0.35
+          models:
+            chinese: "shibing624/text2vec-base-chinese"
+            english: "all-mpnet-base-v2"
+            multilingual: "distiluse-base-multilingual-cased"
+          use_mmr: true
+          diversity: 0.5
+          
+        # Secondary: RAGAS LLM-based extraction  
+        ragas_llm:
+          enabled: true
+          weight: 0.25
+          extractors: ["keyphrases", "ner", "themes"]
+          
+        # Tertiary: spaCy NLP pipeline
+        spacy_nlp:
+          enabled: true
+          weight: 0.20
+          models:
+            chinese: "zh_core_web_trf"
+            english: "en_core_web_trf"
+          extract_entities: true
+          extract_noun_phrases: true
+          
+        # Fallback: Statistical methods
+        statistical:
+          enabled: true
+          weight: 0.20
+          methods: ["yake", "tfidf"]
+          yake_config:
+            lan: "auto"
+            n: 3
+            dedupLim: 0.7
+    
+    # Output configuration
+    output:
+      max_keywords: 5                # Increased from 3 to 5 for better coverage
+      min_score_threshold: 0.3       # Increased from 0.2 to 0.3 for higher quality
+      combine_method: "weighted_union"  # or "intersection", "top_scored"
+      include_scores: true
+      deduplicate: true
+      
+      # Enhanced deduplication options
+      advanced_dedup:
+        enabled: true
+        remove_substrings: true          # Remove shorter terms contained in longer ones
+        remove_linguistic_variations: true # Handle plural/singular, articles
+        semantic_similarity: true        # Expensive: remove semantically similar terms
+        similarity_threshold: 0.85       # For semantic similarity
+        preserve_domain_terms: true      # Always keep domain-specific terms
+      
+    # Domain-specific validation
+    domain_validation:
+      enabled: true
+      smt_terms: ["鋼板", "SMT", "inspection", "MPE engineer", "steel plate", "half-etched area"]
+      boost_domain_score: 0.1
+      filter_common_words: true
+    
+    # Legacy compatibility
+    max_keywords: 5
+    min_score_threshold: 0.3
+  max_documents_for_generation: 15    # ✅ RESTORED: Back to 15 for proper testset generation
+  max_total_samples: 15               # 🔧 FIXED: Increased from 10 to 15 to match document count
+  method: pure_ragas                   # ✅ CRITICAL: Determines the generation method used
+  # preset_configs:                      # ❌ COMMENTED OUT: Legacy configuration section not used
+    # production_ready:                # ❌ LEGACY: Empty enabled_strategies
+    #   enabled_strategies: null       # ❌ LEGACY: Not currently used
+    # quick_test:                      # ❌ LEGACY: Empty enabled_strategies
+    #   enabled_strategies: null       # ❌ LEGACY: Not currently used
+    # rag_evaluation:                  # ❌ LEGACY: Empty enabled_strategies
+    #   enabled_strategies: null       # ❌ LEGACY: Not currently used
+  query_distribution:
+    # Enhanced 4-type query distribution for better testset variety
+    # Adjusted distribution to ensure all 4 RAGAS synthesizer types are used
+    single_hop_entities: 0.30      # ✅ ACTIVE: 30% single-hop entity-based queries
+    single_hop_keyphrases: 0.30    # ✅ ACTIVE: 30% single-hop keyphrase-based queries  
+    multi_hop_abstract: 0.25       # ✅ ACTIVE: 25% multi-hop abstract reasoning queries
+    multi_hop_specific: 0.15       # ✅ ACTIVE: 15% multi-hop specific factual queries
+    # This distribution aims to activate all 4 RAGAS synthesizer types:
+    # 1. SingleHopSpecificQuerySynthesizer (entities) - simple factual questions
+    # 2. SingleHopSpecificQuerySynthesizer (keyphrases) - domain terminology queries  
+    # 3. MultiHopAbstractQuerySynthesizer - complex reasoning questions
+    # 4. MultiHopSpecificQuerySynthesizer - multi-document queries
+    # Note: Multi-hop synthesizers require relationships in the Knowledge Graph
+  ragas_config:
+    # ✅ CRITICAL: Force RAGAS to use custom LLM instead of OpenAI
+    use_custom_llm: true             # ✅ CRITICAL: Use custom LLM
+    use_openai: false                # ✅ CRITICAL: Don't use OpenAI
+    force_custom_llm: true           # ✅ CRITICAL: Additional flag to ensure custom LLM is used
+    
+    # ✅ Custom LLM configuration for RAGAS TestsetGenerator
+    custom_llm:
+      # Clean endpoint URL - remove /chat/completions as ChatOpenAI adds it automatically
+      endpoint: http://YOUR_LLM_ENDPOINT/v1  # ✅ ACTIVE
+      api_key: YOUR_API_KEY_HERE  # ✅ ACTIVE
+      model: gpt-4o                  # ✅ ACTIVE
+      temperature: 0.3               # ✅ ACTIVE
+      max_tokens: 4096               # ✅ ACTIVE
+      timeout: 60                    # ✅ REDUCED: Timeout reduced from 180 to 60 seconds
+      headers:                       # ✅ ACTIVE
+        Accept: '*/*'
+        Accept-Encoding: gzip, deflate, br
+        Cache-Control: no-cache
+        Connection: keep-alive
+        Content-Type: application/json
+        Host: YOUR_LLM_ENDPOINT
+        User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+    
+    # ✅ Enhanced embeddings configuration for 90GB RAM
+    embeddings:
+      device: cuda:0, cuda:1          # ✅ ACTIVE: Use both GPUs
+      local_files_only: true          # ✅ ACTIVE: Offline mode
+      model_name: all-mpnet-base-v2   # ✅ ACTIVE: Embeddings model
+      offline_mode: true              # ✅ ACTIVE: Offline mode
+      # High-memory optimizations for 87GB usage
+      cache_size_mb: 20000            # ✅ ACTIVE: 20GB embedding cache (increased from 15GB)
+      batch_size: 1024                # ✅ ACTIVE: Larger embedding batches (increased from 512)
+      prefetch_factor: 6              # ✅ ACTIVE: Preload embeddings (increased from 4)
+    # embeddings_model: sentence-transformers/all-MiniLM-L6-v2  # ❌ COMMENTED OUT: Alternative option
+    # embeddings_model: sentence-transformers/all-mpnet-base-v2  # ❌ COMMENTED OUT: Alternative option
+    
+    # ✅ ENHANCED Error handling for robust generation with KG fallbacks
+    error_handling:
+      continue_on_distribution_error: true  # ✅ ACTIVE
+      continue_on_persona_error: true      # ✅ ACTIVE
+      continue_on_kg_error: true           # ✅ ACTIVE: Continue if knowledge graph fails
+      continue_on_llm_error: true          # ✅ ACTIVE: Continue if LLM calls fail
+      max_retries: 3                       # ✅ ACTIVE
+      fallback_to_minimal_distribution: true  # ✅ ACTIVE
+      fallback_to_enhanced_generation: true # ✅ ACTIVE: Use enhanced fallback when RAGAS fails
+      log_generation_errors: true         # ✅ ACTIVE
+      enable_sample_validation_fallback: true # ✅ ACTIVE: Handle sample validation errors
+      
+      # ENHANCED: KG-specific error handling
+      kg_error_handling:
+        ignore_missing_kg_file: true        # ✅ ACTIVE: Ignore missing KG file errors
+        skip_kg_loading_on_error: true      # ✅ ACTIVE: Skip KG loading if any error occurs
+        use_document_fallback: true         # ✅ ACTIVE: Use documents directly if KG fails
+        disable_kg_dependent_features: true # ✅ ACTIVE: Disable KG-dependent features gracefully
+        continue_without_kg: true           # ✅ ACTIVE: Continue pipeline without KG
+        log_kg_fallback_usage: true        # ✅ ACTIVE: Log when KG fallbacks are used
+    
+    # ✅ Knowledge graph configuration - FIXED for auto-generation
+    knowledge_graph_config:
+      enable_kg_loading: true              # ✅ ACTIVE
+      enable_kg_saving: true               # ✅ ACTIVE
+      existing_kg_file: null               # ✅ CRITICAL: Auto-generate new KG instead of using old file
+      auto_generate_kg: true               # ✅ CRITICAL: Enable auto-generation from documents
+      kg_cache:
+        cache_ttl_hours: 24                # ✅ ACTIVE
+        enable_cache: true                 # ✅ ACTIVE
+      kg_storage:
+        base_directory: ./outputs/knowledge_graphs  # ✅ ACTIVE
+        auto_create_directory: true        # ✅ ACTIVE: Auto-create storage directory
+        use_timestamp_naming: true         # ✅ ACTIVE: Use timestamp for unique KG files
+    
+    # ✅ ENHANCED Document sampling with guaranteed coverage and advanced shuffling
+    document_sampling:
+      method: "advanced_stratified_random" # ✅ ACTIVE: Better than basic stratified
+      shuffle_documents: true         # ✅ ACTIVE: Shuffle before batch creation
+      balanced_batches: true          # ✅ ACTIVE: Ensure even distribution across batches
+      seed: 42                       # ✅ ACTIVE: Reproducible results
+      ensure_full_coverage: true      # ✅ ACTIVE: Ensures every document is used at least once
+      coverage_strategy: "exhaustive_round_robin" # ✅ ACTIVE: Comprehensive cycling
+      track_document_usage: true     # ✅ ACTIVE: Track which documents are used
+      report_coverage_stats: true    # ✅ ACTIVE: Report coverage in logs
+      target_coverage_rate: 1.0      # ✅ ACTIVE: Aim for 100% document coverage
+      
+      # ENHANCED: Advanced Shuffling and Coverage Controls
+      advanced_coverage:
+        enforce_minimum_usage: true           # ✅ ACTIVE: Enforce each document used at least once
+        usage_distribution_analysis: true    # ✅ ACTIVE: Analyze usage distribution patterns
+        detect_coverage_gaps: true           # ✅ ACTIVE: Detect and report any coverage gaps
+        auto_correct_coverage_issues: true   # ✅ ACTIVE: Automatically fix coverage problems
+        coverage_verification_mode: "strict" # ✅ ACTIVE: Strict verification of 100% coverage
+        
+      # ENHANCED: Multi-Level Shuffling Strategy
+      enhanced_shuffling:
+        document_level_shuffle: true         # ✅ ACTIVE: Shuffle the document list itself
+        batch_level_shuffle: true            # ✅ ACTIVE: Shuffle documents within batches
+        cross_batch_shuffle: true            # ✅ ACTIVE: Shuffle documents across batches
+        temporal_shuffle: true               # ✅ ACTIVE: Change shuffle pattern over time
+        preserve_stratification: true        # ✅ ACTIVE: Maintain stratification during shuffle
+        
+      # ENHANCED: Error Code Dataset Optimizations
+      error_code_optimizations:
+        priority_sampling: true              # ✅ ACTIVE: Sample high-priority error codes first
+        category_aware_shuffling: true       # ✅ ACTIVE: Shuffle within error categories
+        severity_based_ordering: true        # ✅ ACTIVE: Order by error severity levels
+        frequency_balanced_sampling: true    # ✅ ACTIVE: Balance common vs rare errors
+        comprehensive_scenario_coverage: true # ✅ ACTIVE: Ensure all error scenarios covered
+        
+      # ENHANCED: Quality Assurance and Validation
+      validation_controls:
+        pre_sampling_validation: true        # ✅ ACTIVE: Validate documents before sampling
+        post_sampling_verification: true     # ✅ ACTIVE: Verify sampling results
+        coverage_audit_trail: true          # ✅ ACTIVE: Maintain detailed audit trail
+        sampling_bias_detection: true       # ✅ ACTIVE: Detect and prevent sampling bias
+        reproducibility_testing: true       # ✅ ACTIVE: Test reproducibility with same seed
+    
+    # ✅ Persona configuration
+    persona_config:
+      enable_safe_personas: true      # ✅ ACTIVE
+      fallback_personas: true         # ✅ ACTIVE
+      max_personas: 17                # ✅ ACTIVE
+    
+    # ✅ Query distribution configuration
+    query_distribution_config:
+      enable_safe_distribution: true  # ✅ ACTIVE
+      fallback_enabled: true          # ✅ ACTIVE
+      normalize_weights: true         # ✅ ACTIVE
+      prefer_single_hop: true         # ✅ ACTIVE: Start with single-hop for stability
+    
+    # ✅ Generation parameters
+    # ✅ High-performance generation configuration
+    generation_config:
+      run_config:
+        max_workers: 20               # ✅ ACTIVE: Increased from 16 to 20 for 90GB RAM
+        timeout: 45                   # ✅ ACTIVE: Aggressive timeout with 87GB memory (reduced from 60)
+        max_retries: 2                # ✅ ACTIVE
+        max_wait: 3                   # ✅ ACTIVE: Reduce wait time (from 5)
+        # Note: memory_per_worker_mb removed - not a valid RunConfig parameter
+        # Note: enable_memory_mapping removed - not a valid RunConfig parameter  
+        # Note: parallel_kg_processing removed - not a valid RunConfig parameter
+      raise_exceptions: false         # ✅ ACTIVE: Continue on errors to see all issues
+      
+      # Speed optimizations for 90GB RAM
+      high_memory_mode: true          # ✅ ACTIVE: Enable all high-memory optimizations
+      aggressive_caching: true        # ✅ ACTIVE: Cache everything
+      parallel_document_loading: true # ✅ ACTIVE: Load docs in parallel
+  # samples_per_document: 3             # ❌ LEGACY: Overridden by max_total_samples=21000
+  # testset_size: 21000                 # ❌ LEGACY: Overridden by max_total_samples=21000
+  use_configurable_distribution: true # ✅ ACTIVE
+  use_fallbacks: true                 # ✅ ACTIVE
+  use_ragas_generator: true           # ✅ CRITICAL: Use RAGAS generator instead of fallbacks

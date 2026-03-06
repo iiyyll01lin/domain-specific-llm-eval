@@ -2195,17 +2195,29 @@ governance:
 ```yaml
 # TASK-123 Governance
 governance:
-	status: Planned
-	engineer: E1
+	status: Verified
+	owner: platform-deploy@team
+	priority: P1
+	estimate: 2p
+	risk: "Build pipeline skips governance validations"
+	mitigation: "Workflow step ordering test + fail injection"
+	adr_impact: ["ADR-004","ADR-005"]
+	ci_gate: ["build-governance:schemas"]
+	artifacts:
+		- .github/workflows/build-governance.yml
+		- scripts/validate_task_status.py
+		- scripts/validate_compose.py
+	dod:
+		- Workflow orchestrates validators before image build
+		- Governance scripts fail-fast on status drift
+		- Build job tags/pushes GHCR images on main
+	completed_on: 2025-09-25
+	verification:
+		- 2025-09-25 python3 scripts/validate_task_status.py
+	engineer: E1 (E3 CI front-end budget step integration)
 	target_sprint: 5
 ```
-```yaml
-# TASK-124 Governance
-governance:
-	status: Planned
-	engineer: E1
-	target_sprint: 6
-```
+ 
 ```yaml
 # TASK-125 Governance
 governance:
@@ -2214,13 +2226,7 @@ governance:
 	target_sprint: 6
 	completed_on: 2025-09-25
 ```
-```yaml
-# TASK-126 Governance
-governance:
-	status: Planned
-	engineer: E1
-	target_sprint: 5
-```
+ 
 ```yaml
 # TASK-127 Governance
 governance:
