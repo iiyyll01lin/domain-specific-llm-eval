@@ -31,8 +31,20 @@ export interface LifecycleConfig {
   evalBaseUrl: string
   reportingBaseUrl: string
   adapterBaseUrl: string
+  kgBaseUrl: string
   pollIntervalMs: number
   requestTimeoutMs: number
+}
+
+export interface KgJobItem {
+  kg_id: string
+  status: string
+  doc_count?: number
+  node_count?: number
+  edge_count?: number
+  created_at?: string
+  updated_at?: string
+  error_message?: string
 }
 
 export interface EvalRun {

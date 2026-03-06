@@ -1631,34 +1631,58 @@ governance:
 		- insights-portal/src/app/lifecycle/KmSummariesPanel.tsx
 # TASK-060 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/main.py (full FastAPI routes)
+		- services/kg/repository.py
+		- services/tests/kg/test_repository.py
 # TASK-061 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/extract.py
+		- services/tests/kg/test_extract.py
 # TASK-062 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py
+		- services/tests/kg/test_relationships.py
 # TASK-063 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/summary.py
+		- services/tests/kg/test_summary.py
 # TASK-064 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/app/lifecycle/KgPanel.tsx (feature-flagged)
 # TASK-066 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/subgraph.py
+		- services/tests/kg/test_subgraph.py
 # TASK-067 Governance
 governance:
 	status: Planned
@@ -1686,7 +1710,7 @@ governance:
 ```yaml
 # TASK-062a Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P1
 	estimate: 2p
@@ -1700,9 +1724,12 @@ governance:
 		- README KG props
 	engineer: E3 (E1 assist extraction perf)
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/extract.py (entities/keyphrases/sentences)
 # TASK-062b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P1
 	estimate: 1p
@@ -1716,9 +1743,12 @@ governance:
 		- Log includes counts
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py (JaccardRelBuilder, OverlapRelBuilder)
 # TASK-062c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 1p
@@ -1732,9 +1762,12 @@ governance:
 		- README fallback
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py (CosineRelBuilder with skip logic)
 # TASK-062d Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 1p
@@ -1748,12 +1781,15 @@ governance:
 		- Script usage README
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- scripts/kg_threshold_tune.py
 ```
 
 ```yaml
 # TASK-065 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 2p
@@ -1767,6 +1803,8 @@ governance:
 		- README visualization section
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	notes: "KgPanel.tsx is feature-flagged (window.ENABLE_KG_PANEL); Cytoscape lazy import deferred to TASK-065 followup"
 ```
 
 ### 5.7 WebSocket & Realtime

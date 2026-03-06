@@ -1636,42 +1636,68 @@ governance:
 		- insights-portal/src/app/lifecycle/KmSummariesPanel.tsx
 # TASK-060 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/main.py (完整 FastAPI 路由)
+		- services/kg/repository.py
+		- services/tests/kg/test_repository.py
 # TASK-061 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/extract.py
+		- services/tests/kg/test_extract.py
 # TASK-062 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py
+		- services/tests/kg/test_relationships.py
 # TASK-063 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/summary.py
+		- services/tests/kg/test_summary.py
 # TASK-064 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/app/lifecycle/KgPanel.tsx (feature-flagged)
 # TASK-065 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	notes: "KgPanel.tsx feature-flagged；Cytoscape lazy import 延後至後續"
 # TASK-066 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/subgraph.py
+		- services/tests/kg/test_subgraph.py
 # TASK-062a 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P1
 	estimate: 2p
@@ -1683,9 +1709,12 @@ governance:
 		- 節點含 entities/keyphrases
 		- 缺 embedding 標誌
 		- README 屬性說明
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/extract.py
 # TASK-062b 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P1
 	estimate: 1p
@@ -1697,9 +1726,12 @@ governance:
 		- >0 關係樣本
 		- 閾值設定文件
 		- 日誌含 count
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py (build_jaccard_relationships, build_overlap_relationships)
 # TASK-062c 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 1p
@@ -1711,9 +1743,12 @@ governance:
 		- 優雅跳過測試
 		- 計數顯示
 		- README fallback
+	completed_at: 2026-03-06
+	deliverables:
+		- services/kg/relationships.py (build_cosine_relationships with skip)
 # TASK-062d 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 1p
@@ -1725,12 +1760,15 @@ governance:
 		- 報告含 count/平均
 		- 調參文件
 		- 腳本說明
+	completed_at: 2026-03-06
+	deliverables:
+		- scripts/kg_threshold_tune.py
 ```
 
 ```yaml
 # TASK-065 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-kg@team
 	priority: P2
 	estimate: 2p
@@ -1742,6 +1780,8 @@ governance:
 		- 動態載入驗證
 		- 體積差異記錄
 		- README 可視化章節
+	completed_at: 2026-03-06
+	notes: "KgPanel.tsx 已加入 window.ENABLE_KG_PANEL feature flag；Cytoscape lazy import 延後至 Sprint 6"
 ```
 
 ### 5.7 WebSocket 與即時

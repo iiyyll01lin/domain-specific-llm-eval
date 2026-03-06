@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { RunParsed, Thresholds } from '@/core/types'
-import type { DocumentRow, EvalRun, KmSummary, ProcessingJob, ReportItem, TestsetJob } from '@/app/lifecycle/types'
+import type { DocumentRow, EvalRun, KgJobItem, KmSummary, ProcessingJob, ReportItem, TestsetJob } from '@/app/lifecycle/types'
 
 export interface FiltersState {
   language?: string | null
@@ -48,6 +48,8 @@ interface PortalState {
   setReports: (reports: ReportItem[]) => void
   kmSummaries: KmSummary[]
   setKmSummaries: (summaries: KmSummary[]) => void
+  kgJobs: KgJobItem[]
+  setKgJobs: (jobs: KgJobItem[]) => void
 }
 
 export const usePortalStore = create<PortalState>((set) => ({
@@ -128,4 +130,6 @@ export const usePortalStore = create<PortalState>((set) => ({
   setReports: (reports) => set({ reports }),
   kmSummaries: [],
   setKmSummaries: (summaries) => set({ kmSummaries: summaries }),
+  kgJobs: [],
+  setKgJobs: (jobs) => set({ kgJobs: jobs }),
 }))

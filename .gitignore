@@ -102,6 +102,7 @@ contextual_keyword_report*.xlsx
 !eval-pipeline/test_pipeline.py
 !eval-pipeline/validate_complete_pipeline.py
 !eval-pipeline/verify_document_loader.py
+!services/tests/**/test_*.py
 
 # ============================================================================
 # Project-Specific & Temporary Files

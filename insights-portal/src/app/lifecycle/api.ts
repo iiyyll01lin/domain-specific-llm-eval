@@ -1,5 +1,5 @@
 import { getLifecycleConfig } from './config'
-import type { DocumentRow, EvalRun, KmSummary, ProcessingJob, ReportItem, TestsetJob } from './types'
+import type { DocumentRow, EvalRun, KgJobItem, KmSummary, ProcessingJob, ReportItem, TestsetJob } from './types'
 
 interface FetchOptions {
   signal: AbortSignal
@@ -251,5 +251,41 @@ function normalizeKmSummary(raw: any): KmSummary {
     node_count: parseOptionalNumber(raw?.node_count),
     relationship_count: parseOptionalNumber(raw?.relationship_count),
     created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// KG Jobs (kg-service)
+// ---------------------------------------------------------------------------
+
+export async function fetchKgJobs(options: FetchOptions): Promise<KgJobItem[]> {
+  const { kgBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(() => controller.abort(), requestTimeoutMs)
+  try {
+    const res = await fetch(`${kgBaseUrl}/kg-jobs`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (!res.ok) throw new Error(`Failed to load KG jobs: ${res.status}`)
+    const payload = await res.json().catch(() => ([]))
+    const items = Array.isArray(payload) ? payload : Array.isArray((payload as any)?.items) ? (payload as any).items : []
+    return items.map(normalizeKgJobItem)
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
+
+function normalizeKgJobItem(raw: any): KgJobItem {
+  return {
+    kg_id: String(raw?.kg_id ?? ''),
+    status: String(raw?.status ?? ''),
+    doc_count: parseOptionalNumber(raw?.doc_count),
+    node_count: parseOptionalNumber(raw?.node_count),
+    edge_count: parseOptionalNumber(raw?.edge_count),
+    created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+    updated_at: typeof raw?.updated_at === 'string' ? raw.updated_at : undefined,
+    error_message: typeof raw?.error_message === 'string' ? raw.error_message : undefined,
   }
 }

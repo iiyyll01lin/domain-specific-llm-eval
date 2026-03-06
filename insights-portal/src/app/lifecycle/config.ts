@@ -10,6 +10,7 @@ declare global {
         eval?: string
         reporting?: string
         adapter?: string
+        kg?: string
       }
       polling?: {
         intervalMs?: number
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: LifecycleConfig = {
   evalBaseUrl: 'http://localhost:8004',
   reportingBaseUrl: 'http://localhost:8005',
   adapterBaseUrl: 'http://localhost:8006',
+  kgBaseUrl: 'http://localhost:8007',
   pollIntervalMs: 10_000,
   requestTimeoutMs: 10_000,
 }
@@ -36,6 +38,7 @@ const envTestset = typeof import.meta !== 'undefined' ? (import.meta as any)?.en
 const envEval = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_EVAL_BASE : undefined
 const envReporting = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_REPORTING_BASE : undefined
 const envAdapter = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_ADAPTER_BASE : undefined
+const envKg = typeof import.meta !== 'undefined' ? (import.meta as any)?.env?.VITE_KG_BASE : undefined
 const envInterval = typeof import.meta !== 'undefined' ? Number((import.meta as any)?.env?.VITE_LIFECYCLE_POLL_MS) : NaN
 const envTimeout = typeof import.meta !== 'undefined' ? Number((import.meta as any)?.env?.VITE_LIFECYCLE_TIMEOUT_MS) : NaN
 
@@ -48,6 +51,7 @@ const config: LifecycleConfig = {
   evalBaseUrl: sanitizeBase(globalCfg?.services?.eval) || sanitizeBase(envEval) || DEFAULT_CONFIG.evalBaseUrl,
   reportingBaseUrl: sanitizeBase(globalCfg?.services?.reporting) || sanitizeBase(envReporting) || DEFAULT_CONFIG.reportingBaseUrl,
   adapterBaseUrl: sanitizeBase(globalCfg?.services?.adapter) || sanitizeBase(envAdapter) || DEFAULT_CONFIG.adapterBaseUrl,
+  kgBaseUrl: sanitizeBase(globalCfg?.services?.kg) || sanitizeBase(envKg) || DEFAULT_CONFIG.kgBaseUrl,
   pollIntervalMs: resolveNumber(DEFAULT_CONFIG.pollIntervalMs, globalCfg?.polling?.intervalMs, envInterval),
   requestTimeoutMs: resolveNumber(DEFAULT_CONFIG.requestTimeoutMs, globalCfg?.polling?.requestTimeoutMs, envTimeout),
 }

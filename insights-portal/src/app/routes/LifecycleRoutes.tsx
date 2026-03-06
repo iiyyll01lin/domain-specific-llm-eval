@@ -6,6 +6,7 @@ import { TestsetsPanel } from '@/app/lifecycle/TestsetsPanel'
 import { EvalRunsPanel } from '@/app/lifecycle/EvalRunsPanel'
 import { ReportsPanel } from '@/app/lifecycle/ReportsPanel'
 import { KmSummariesPanel } from '@/app/lifecycle/KmSummariesPanel'
+import { KgPanel } from '@/app/lifecycle/KgPanel'
 
 const Placeholder: React.FC<{ title: string }> = ({ title }) => (
   <div style={{ padding: 24 }}>
@@ -21,7 +22,7 @@ export const LifecycleRoutes: React.FC = () => {
     <div style={{ display: 'grid', gap: 16 }}>
       <DocumentsPanel />
       <ProcessingPanel />
-      <Placeholder title="Knowledge Graph" />
+      <KgPanel />
       <TestsetsPanel />
       <EvalRunsPanel />
       <ReportsPanel />
