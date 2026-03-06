@@ -94,3 +94,29 @@ export interface TestsetJob {
   error_code?: string
   error_message?: string
 }
+
+/** Node in a KG subgraph response. */
+export interface SubgraphNode {
+  id: string
+  label: string
+  type?: string
+  truncated?: boolean
+}
+
+/** Edge in a KG subgraph response. */
+export interface SubgraphEdge {
+  source: string
+  target: string
+  relation?: string
+}
+
+/** Full subgraph payload returned by POST /kg-jobs/{kg_id}/subgraph. */
+export interface SubgraphResult {
+  kg_id: string
+  seed_node: string
+  depth: number
+  nodes: SubgraphNode[]
+  edges: SubgraphEdge[]
+  sampled?: boolean
+  total_nodes?: number
+}

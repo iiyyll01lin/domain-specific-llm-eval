@@ -1615,7 +1615,7 @@ governance:
 | TASK-064 | UI KG 摘要面板          | 顯示統計（旗標 true 時）               | 旗標 false 顯示 fallback | TASK-063     | insights-portal/... | UI-FR-016~018         |
 | TASK-065 | Lazy 視覺化 (Cytoscape) | 動態載入，節點上限 500                | chunk 分離、渲染成功      | TASK-064     | insights-portal/... | UI-FR-018, UI-NFR-006 |
 | TASK-066 | Subgraph API 草稿實作   | 決定性抽樣子圖                       | truncated flag 穩定      | TASK-063     | kg/subgraph.py      | Spec §27              |
-| TASK-067 | UI Subgraph 聚焦        | 節點/實體聚焦子圖請求                | 顯示 sampling pill       | TASK-066     | insights-portal/... | 未來增強              |
+| TASK-067 | UI Subgraph 聚焦        | 節點/實體聚焦子圖請求                | 顯示 sampling pill       | TASK-066     | insights-portal/src/app/lifecycle/KgPanel.tsx | ✅ 已完成         |
 
 #### TASK-062 子任務分解
 | 子ID      | 標題                 | 說明                                  | 驗收條件                               | 依賴      | 產出                         | 備註              |

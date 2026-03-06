@@ -1,5 +1,5 @@
 import { getLifecycleConfig } from './config'
-import type { DocumentRow, EvalRun, KgJobItem, KmSummary, ProcessingJob, ReportItem, TestsetJob } from './types'
+import type { DocumentRow, EvalRun, KgJobItem, KmSummary, ProcessingJob, ReportItem, SubgraphResult, TestsetJob } from './types'
 
 interface FetchOptions {
   signal: AbortSignal
@@ -287,5 +287,39 @@ function normalizeKgJobItem(raw: any): KgJobItem {
     created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
     updated_at: typeof raw?.updated_at === 'string' ? raw.updated_at : undefined,
     error_message: typeof raw?.error_message === 'string' ? raw.error_message : undefined,
+  }
+}
+
+export interface FetchSubgraphOptions {
+  signal: AbortSignal
+  kgId: string
+  seedNode: string
+  depth?: number
+  maxNodes?: number
+}
+
+export async function fetchSubgraph(options: FetchSubgraphOptions): Promise<SubgraphResult> {
+  const { kgBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(
+    () => controller.abort(),
+    requestTimeoutMs,
+  )
+  try {
+    const res = await fetch(`${kgBaseUrl}/kg-jobs/${encodeURIComponent(options.kgId)}/subgraph`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        seed_node: options.seedNode,
+        depth: options.depth ?? 2,
+        max_nodes: options.maxNodes ?? 50,
+      }),
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (res.status === 404) throw new Error(`KG job not found: ${options.kgId}`)
+    if (!res.ok) throw new Error(`Subgraph request failed: ${res.status}`)
+    return await res.json()
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
   }
 }

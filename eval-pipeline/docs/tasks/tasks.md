@@ -1617,7 +1617,7 @@ governance:
 | TASK-064 | UI KG Summary Panel                      | Show counts, histogram, top entities when flag true.             | Fallback text when flag false.                          | TASK-063     | insights-portal/src/...                          | UI-FR-016~018         |
 | TASK-065 | Lazy Visualization Component (Cytoscape) | Dynamic import graph view; sampling cap 500 nodes.               | Bundle diff shows isolated chunk; renders test graph.   | TASK-064     | insights-portal/src/components/KgVisualization/* | UI-FR-018, UI-NFR-006 |
 | TASK-066 | Subgraph API Draft Implementation        | Implement read-only deterministic sampled subgraph endpoint.     | Returns truncated flag & stable subset across calls.    | TASK-063     | kg/subgraph.py                                   | Spec §27              |
-| TASK-067 | UI Subgraph Focus Interaction            | Add entity focus form to request subgraph & overlay.             | Pill shows sampling/truncated; errors surfaced cleanly. | TASK-066     | insights-portal/src/...                          | Future enhancement    |
+| TASK-067 | UI Subgraph Focus Interaction            | Add entity focus form to request subgraph & overlay.             | Pill shows sampling/truncated; errors surfaced cleanly. | TASK-066     | insights-portal/src/app/lifecycle/KgPanel.tsx    | ✅ Completed          |
 
 #### TASK-062 Subtasks
 ```yaml
@@ -1685,7 +1685,8 @@ governance:
 		- services/tests/kg/test_subgraph.py
 # TASK-067 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-ui@team
 	priority: P3
 	estimate: 2p
@@ -1694,9 +1695,15 @@ governance:
 	adr_impact: []
 	ci_gate: ["ui-tests"]
 	dod:
-		- Focus form test
-		- Overlay renders test
-		- Accessibility check
+		- Focus form (SubgraphFocusForm) with seed node input, depth control
+		- SubgraphOverlay renders nodes/edges list
+		- SamplingPill shows sampled/full count with truncation indicator
+		- Accessibility: form labels + aria-label attributes
+		- Error surfaced via inline message (404 → "KG job not found")
+	deliverables:
+		- insights-portal/src/app/lifecycle/KgPanel.tsx
+		- insights-portal/src/app/lifecycle/types.ts (SubgraphNode/Edge/Result)
+		- insights-portal/src/app/lifecycle/api.ts (fetchSubgraph)
 	engineer: E3
 	target_sprint: 6
 ```
