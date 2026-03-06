@@ -85,6 +85,50 @@ class EventPublisher:
         }
         self.publish("testset.created", payload)
 
+    def run_completed(
+        self,
+        *,
+        run_id: str,
+        testset_id: str,
+        evaluation_item_count: int,
+        metrics_version: str,
+        kpi_path: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+    ) -> None:
+        """Emit run.completed event (TASK-035)."""
+        payload: Dict[str, Any] = {
+            "run_id": run_id,
+            "testset_id": testset_id,
+            "evaluation_item_count": evaluation_item_count,
+            "metrics_version": metrics_version,
+        }
+        if kpi_path:
+            payload["kpi_path"] = kpi_path
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        self.publish("run.completed", payload)
+
+    def report_completed(
+        self,
+        *,
+        run_id: str,
+        html_path: str,
+        pdf_path: Optional[str] = None,
+        template: str = "executive",
+        duration_ms: Optional[int] = None,
+    ) -> None:
+        """Emit report.completed event (TASK-043)."""
+        payload: Dict[str, Any] = {
+            "run_id": run_id,
+            "html_path": html_path,
+            "template": template,
+        }
+        if pdf_path:
+            payload["pdf_path"] = pdf_path
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        self.publish("report.completed", payload)
+
     def _default_transport(self, envelope: Dict[str, Any]) -> None:
         logger.info(
             "event emitted",

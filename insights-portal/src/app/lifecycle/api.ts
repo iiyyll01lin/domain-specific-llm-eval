@@ -1,5 +1,5 @@
 import { getLifecycleConfig } from './config'
-import type { DocumentRow, ProcessingJob, TestsetJob } from './types'
+import type { DocumentRow, EvalRun, KmSummary, ProcessingJob, ReportItem, TestsetJob } from './types'
 
 interface FetchOptions {
   signal: AbortSignal
@@ -141,4 +141,115 @@ function parseOptionalNumber(value: unknown): number | undefined {
     if (Number.isFinite(parsed)) return parsed
   }
   return undefined
+}
+
+// ---------------------------------------------------------------------------
+// Evaluations
+// ---------------------------------------------------------------------------
+
+export async function fetchEvalRuns(options: FetchOptions): Promise<EvalRun[]> {
+  const { evalBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(() => controller.abort(), requestTimeoutMs)
+  try {
+    const res = await fetch(`${evalBaseUrl}/eval-runs`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (!res.ok) throw new Error(`Failed to load eval runs: ${res.status}`)
+    const payload = await res.json().catch(() => ([]))
+    const items = Array.isArray(payload) ? payload : Array.isArray((payload as any)?.items) ? (payload as any).items : []
+    return items.map(normalizeEvalRun)
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+export async function fetchReports(options: FetchOptions): Promise<ReportItem[]> {
+  const { reportingBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(() => controller.abort(), requestTimeoutMs)
+  try {
+    const res = await fetch(`${reportingBaseUrl}/reports`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (!res.ok) throw new Error(`Failed to load reports: ${res.status}`)
+    const payload = await res.json().catch(() => ([]))
+    const items = Array.isArray(payload) ? payload : Array.isArray((payload as any)?.items) ? (payload as any).items : []
+    return items.map(normalizeReportItem)
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// KM Summaries (adapter service)
+// ---------------------------------------------------------------------------
+
+export async function fetchKmSummaries(options: FetchOptions): Promise<KmSummary[]> {
+  const { adapterBaseUrl, requestTimeoutMs } = getLifecycleConfig()
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(() => controller.abort(), requestTimeoutMs)
+  try {
+    const res = await fetch(`${adapterBaseUrl}/km-summaries`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (!res.ok) throw new Error(`Failed to load KM summaries: ${res.status}`)
+    const payload = await res.json().catch(() => ([]))
+    const items = Array.isArray(payload) ? payload : Array.isArray((payload as any)?.items) ? (payload as any).items : []
+    return items.map(normalizeKmSummary)
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Normalizers for new types
+// ---------------------------------------------------------------------------
+
+function normalizeEvalRun(raw: any): EvalRun {
+  return {
+    run_id: String(raw?.run_id ?? raw?.id ?? ''),
+    testset_id: String(raw?.testset_id ?? ''),
+    status: String(raw?.status ?? ''),
+    evaluation_item_count: parseOptionalNumber(raw?.evaluation_item_count),
+    metrics_version: typeof raw?.metrics_version === 'string' ? raw.metrics_version : undefined,
+    created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+    completed_at: typeof raw?.completed_at === 'string' ? raw.completed_at : undefined,
+    error_code: typeof raw?.error_code === 'string' ? raw.error_code : undefined,
+    error_message: typeof raw?.error_message === 'string' ? raw.error_message : undefined,
+  }
+}
+
+function normalizeReportItem(raw: any): ReportItem {
+  return {
+    run_id: String(raw?.run_id ?? ''),
+    template: String(raw?.template ?? ''),
+    html_available: Boolean(raw?.html_available ?? raw?.html_path),
+    pdf_available: Boolean(raw?.pdf_available ?? raw?.pdf_path),
+    html_path: typeof raw?.html_path === 'string' ? raw.html_path : undefined,
+    pdf_path: typeof raw?.pdf_path === 'string' ? raw.pdf_path : undefined,
+    created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+  }
+}
+
+function normalizeKmSummary(raw: any): KmSummary {
+  return {
+    schema: String(raw?.schema ?? raw?.schema_version ?? ''),
+    testset_id: typeof raw?.testset_id === 'string' ? raw.testset_id : undefined,
+    kg_id: typeof raw?.kg_id === 'string' ? raw.kg_id : undefined,
+    sample_count: parseOptionalNumber(raw?.sample_count),
+    node_count: parseOptionalNumber(raw?.node_count),
+    relationship_count: parseOptionalNumber(raw?.relationship_count),
+    created_at: typeof raw?.created_at === 'string' ? raw.created_at : undefined,
+  }
 }

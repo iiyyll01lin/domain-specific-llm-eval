@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="{{ lang | default('en') }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Evaluation – Technical Report: {{ run_id }}</title>
+  <style>
+    :root {
+      --brand:   #1a3a5c;
+      --accent:  #0076c6;
+      --ok:      #2e7d32;
+      --warn:    #f57c00;
+      --crit:    #c62828;
+      --bg:      #f0f4f8;
+      --card:    #ffffff;
+      --code:    #282c34;
+      --border:  #dee2e6;
+      --text:    #212529;
+      --muted:   #6c757d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    header {
+      background: var(--brand);
+      color: #fff;
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header .meta { font-size: 11px; opacity: .75; text-align: right; }
+    .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--brand); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .card h3 { font-size: 13px; font-weight: 600; margin: 16px 0 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 5px 7px; border-bottom: 2px solid var(--border); }
+    td { padding: 6px 7px; border-bottom: 1px solid var(--border); font-family: 'SFMono-Regular', Consolas, monospace; }
+    tr:last-child td { border-bottom: none; }
+    .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .tag-ok   { background: #e8f5e9; color: var(--ok); }
+    .tag-warn { background: #fff3e0; color: var(--warn); }
+    .tag-crit { background: #ffebee; color: var(--crit); }
+    .tag-neutral { background: #eceff1; color: var(--muted); }
+    code { font-family: 'SFMono-Regular', Consolas, monospace; background: #f1f3f5; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+    .kv-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 12px; }
+    .kv-list .k { color: var(--muted); white-space: nowrap; }
+    .kv-list .v { font-family: 'SFMono-Regular', Consolas, monospace; word-break: break-all; }
+    .progress-bar { background: #e9ecef; border-radius: 3px; height: 5px; overflow: hidden; width: 80px; display: inline-block; vertical-align: middle; }
+    .progress-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    pre { background: var(--code); color: #abb2bf; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 11px; line-height: 1.6; }
+    footer { text-align: center; font-size: 11px; color: var(--muted); margin: 32px 0 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div style="font-size:11px;opacity:.7;margin-bottom:3px">RAG EVALUATION PLATFORM · TECHNICAL REPORT</div>
+      <h1>Run Diagnostics: <code style="background:rgba(255,255,255,.15);color:#fff">{{ run_id }}</code></h1>
+    </div>
+    <div class="meta">
+      <div>Testset: {{ testset_id }}</div>
+      <div>Generated: {{ generated_at }}</div>
+      <div>Metrics v{{ metrics_version }}</div>
+      <div>Items: {{ evaluation_item_count }}</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Run metadata -->
+    <div class="card">
+      <h2>Run Metadata</h2>
+      <div class="kv-list">
+        <span class="k">run_id</span>      <span class="v">{{ run_id }}</span>
+        <span class="k">testset_id</span>  <span class="v">{{ testset_id }}</span>
+        <span class="k">metrics_version</span> <span class="v">{{ metrics_version }}</span>
+        <span class="k">item_count</span>  <span class="v">{{ evaluation_item_count }}</span>
+        <span class="k">created_at</span>  <span class="v">{{ created_at | default('—') }}</span>
+        <span class="k">completed_at</span><span class="v">{{ completed_at | default('—') }}</span>
+        {% if html_path %}
+        <span class="k">html_path</span>   <span class="v">{{ html_path }}</span>
+        {% endif %}
+        {% if pdf_path %}
+        <span class="k">pdf_path</span>    <span class="v">{{ pdf_path }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Metrics table – full precision -->
+    <div class="card">
+      <h2>Metric Distributions (Full Precision)</h2>
+      {% if metrics %}
+      <table>
+        <thead>
+          <tr>
+            <th>Metric Name</th>
+            <th>Mean</th><th>P50 (Median)</th><th>P95</th>
+            <th>Min</th><th>Max</th>
+            <th>Count</th><th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for metric in metrics %}
+          <tr>
+            <td><strong>{{ metric.name }}</strong></td>
+            <td>{{ '%.6f'|format(metric.mean)  if metric.mean   is not none else '—' }}</td>
+            <td>{{ '%.6f'|format(metric.p50)   if metric.p50    is not none else '—' }}</td>
+            <td>{{ '%.6f'|format(metric.p95)   if metric.p95    is not none else '—' }}</td>
+            <td>{{ '%.6f'|format(metric.min)   if metric.min is defined and metric.min is not none else '—' }}</td>
+            <td>{{ '%.6f'|format(metric.max)   if metric.max is defined and metric.max is not none else '—' }}</td>
+            <td>{{ metric.count }}</td>
+            <td>
+              <span class="progress-bar">
+                <span class="progress-bar-fill" style="width:{{ [(metric.mean or 0) * 100, 100] | min | int }}%"></span>
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--muted)">No metric data available for this run.</p>
+      {% endif %}
+    </div>
+
+    <!-- Counts / integrity -->
+    {% if counts %}
+    <div class="card">
+      <h2>Pipeline Counts</h2>
+      <table>
+        <thead><tr><th>Counter</th><th>Value</th></tr></thead>
+        <tbody>
+          {% for key, val in counts.items() %}
+          <tr><td><code>{{ key }}</code></td><td>{{ val }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <!-- Raw KPI JSON (for debugging) -->
+    <div class="card">
+      <h2>Raw KPI Payload</h2>
+      <pre>{{ kpi_json }}</pre>
+    </div>
+
+  </div>
+
+  <footer>
+    RAG Evaluation Platform · Technical Report · {{ generated_at }}
+  </footer>
+</body>
+</html>

@@ -906,9 +906,12 @@ governance:
 		- Execute pipeline emits kpis.json aligned with aggregation counts
 # TASK-035 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
+	deliverables:
+		- services/common/events.py (run_completed + report_completed methods)
 # TASK-036 Governance
 governance:
 	status: Completed
@@ -1488,7 +1491,7 @@ governance:
 ```yaml
 # TASK-040 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-reporting@team
 	priority: P1
 	estimate: 2p
@@ -1502,9 +1505,13 @@ governance:
 		- README usage
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
+	deliverables:
+		- services/adapter/normalize.py
+		- services/tests/adapter/test_normalize.py
 # TASK-041 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-reporting@team
 	priority: P1
 	estimate: 2p
@@ -1518,9 +1525,13 @@ governance:
 		- Placeholder coverage 100%
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
+	deliverables:
+		- services/reporting/templates/executive.html
+		- services/reporting/templates/technical.html
 # TASK-042 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-reporting@team
 	priority: P1
 	estimate: 1p
@@ -1534,9 +1545,13 @@ governance:
 		- Fallback logic documented
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
+	deliverables:
+		- services/reporting/pdf.py
+		- services/tests/adapter/test_pdf.py
 # TASK-043 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-reporting@team
 	priority: P2
 	estimate: 1p
@@ -1550,9 +1565,11 @@ governance:
 		- README event docs
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
+	notes: "report_completed() implemented in same PR as run_completed()"
 # TASK-044 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-ui@team
 	priority: P2
 	estimate: 2p
@@ -1566,9 +1583,13 @@ governance:
 		- Accessibility scan
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/app/lifecycle/ReportsPanel.tsx
+		- services/reporting/main.py (full routes)
 # TASK-045 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-reporting@team
 	priority: P2
 	estimate: 1p
@@ -1582,6 +1603,10 @@ governance:
 		- README summary format
 	engineer: E2
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- services/adapter/km_export.py
+		- services/tests/adapter/test_km_export.py
 ```
 | ID       | Title                                    | Description                                                      | Acceptance Criteria                                     | Dependencies | Artifacts                                        | Req Mapping           |
 |----------|------------------------------------------|------------------------------------------------------------------|---------------------------------------------------------|--------------|--------------------------------------------------|-----------------------|
@@ -1598,9 +1623,12 @@ governance:
 ```yaml
 # TASK-046 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E3
 	target_sprint: 4
+	completed_at: 2026-03-06
+	deliverables:
+		- insights-portal/src/app/lifecycle/KmSummariesPanel.tsx
 # TASK-060 Governance
 governance:
 	status: Planned

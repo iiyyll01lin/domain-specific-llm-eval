@@ -28,8 +28,43 @@ export interface LifecycleConfig {
   ingestionBaseUrl: string
   processingBaseUrl: string
   testsetBaseUrl: string
+  evalBaseUrl: string
+  reportingBaseUrl: string
+  adapterBaseUrl: string
   pollIntervalMs: number
   requestTimeoutMs: number
+}
+
+export interface EvalRun {
+  run_id: string
+  testset_id: string
+  status: string
+  evaluation_item_count?: number
+  metrics_version?: string
+  created_at?: string
+  completed_at?: string
+  error_code?: string
+  error_message?: string
+}
+
+export interface ReportItem {
+  run_id: string
+  template: string
+  html_available: boolean
+  pdf_available: boolean
+  html_path?: string
+  pdf_path?: string
+  created_at?: string
+}
+
+export interface KmSummary {
+  schema: string
+  testset_id?: string
+  kg_id?: string
+  sample_count?: number
+  node_count?: number
+  relationship_count?: number
+  created_at?: string
 }
 
 export interface TestsetJob {
