@@ -747,3 +747,19 @@ UI 於 KG 分頁提供「Focus Entity」介面：
 3. 引入事件 Envelope JSON Schema 驗證（client drop 不合規事件並計數）。  
 4. KM summary 增加 `source_run_ids[]` 以便後續多 run 聚合。  
 5. Subgraph API 回應中回傳 `sampling_method`（deterministic_hash / top_degree）提升可解釋性。  
+
+
+---
+
+## 附錄 A：架構決策紀錄 (ADR) 交叉引用
+
+| ADR | 標題 | 狀態 | 與本設計的關聯 |
+|-----|------|------|----------------|
+| [ADR-001](../../docs/adr/ADR-001-microservices-structure.md) | 微服務結構 | ✅ Accepted | §1 系統架構、服務邊界 |
+| [ADR-002](../../docs/adr/ADR-002-knowledge-graph-visualization-tech.md) | KG 視覺化技術 | ✅ Accepted | §20 KG 技術選型 (Cytoscape) |
+| [ADR-003](../../docs/adr/ADR-003-subgraph-sampling-strategy.md) | Subgraph 取樣策略 | ✅ Accepted | §27 Subgraph API 草稿 |
+| [ADR-004](../../docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.md) | Manifest 完整性 | ✅ Accepted | §28.16 建議 2 manifest.json |
+| [ADR-005](../../docs/adr/ADR-005-telemetry-taxonomy.md) | Telemetry 事件分類 | ✅ Accepted | §25 客戶端遙測 |
+| [ADR-006](../../docs/adr/ADR-006-event-schema-versioning.md) | 事件 Schema 版本控管 | ✅ Accepted | §25.3 Schema 演進 |
+
+> 上表與英文版 `design.ui.md` 保持一致。如 ADR 狀態變更，請同步更新此表。

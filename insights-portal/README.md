@@ -157,3 +157,84 @@ All exports embed (where format permits):
 - PWA/Electron packaging
 - Optional LLM rationale generation (off by default; privacy-first design)
 
+---
+
+## Lifecycle Module (TASK-067 / TASK-081)
+
+The `src/app/lifecycle/` module provides live pipeline-status views for the backend microservices.
+
+### Feature Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `window.ENABLE_KG_PANEL` | `false` | Show the KG Jobs panel with entity focus form |
+| `window.ENABLE_WS_PANEL` | `false` | Show WebSocket live-status panel |
+
+Set these in the browser console or via `public/config.js`:
+```js
+window.ENABLE_KG_PANEL = true
+```
+
+### KG Panel — Entity Focus (Subgraph)
+
+When `ENABLE_KG_PANEL` is set, completed KG jobs display an inline **Entity Focus** form:
+
+```
+Seed node: [___________]  Depth: [2]  [Fetch Subgraph]
+```
+
+Submitting calls `POST /kg-jobs/{id}/subgraph` and opens a modal overlay showing:
+- **Nodes list** with optional `type` label and ✂ truncation indicator
+- **Edges list** (`source → relation → target`)
+- **SamplingPill**: orange `Sampled N/total` pill when the backend sampled the subgraph;
+  green `Full N` pill when not sampled
+
+### Telemetry (TASK-081)
+
+All high-frequency UI events are batched and flushed via `src/telemetry/logEvent.ts`.
+
+```ts
+import { logEvent, configureTelemetry } from '@/telemetry/logEvent'
+
+// Configure once at app bootstrap:
+configureTelemetry({ endpoint: '/api/telemetry/events', batchSize: 20, flushIntervalMs: 5000 })
+
+// Log events:
+logEvent({ type: 'ui.kg.render', payload: { nodeCount: 42, durationMs: 120 } })
+logEvent({ type: 'ui.ws.connect' })
+```
+
+**Supported event types** (ADR-005 taxonomy):
+
+| Event type | Triggered when |
+|-----------|----------------|
+| `ui.page.load` | App first renders |
+| `ui.kg.render` | KG panel mounts |
+| `ui.kg.subgraph.fetch` | Subgraph fetch succeeds |
+| `ui.kg.subgraph.error` | Subgraph fetch fails |
+| `ui.ws.connect` | WebSocket opens |
+| `ui.ws.disconnect` | WebSocket closes |
+| `ui.eval.run` | Eval run triggered from UI |
+
+Events are flushed on batch fill, timer, or tab close (`visibilitychange`). Failures are silently discarded — telemetry **never** blocks user interactions.
+
+### API Configuration
+
+Backend URLs are read from `getLifecycleConfig()`:
+
+```ts
+// src/app/lifecycle/config.ts
+{
+  processingBaseUrl: 'http://localhost:8002',
+  testsetBaseUrl:    'http://localhost:8003',
+  evalBaseUrl:       'http://localhost:8005',
+  reportingBaseUrl:  'http://localhost:8006',
+  kgBaseUrl:         'http://localhost:8008',
+  wsBaseUrl:         'http://localhost:8009',
+  requestTimeoutMs:  30000,
+}
+```
+
+Override at runtime via `window.__LIFECYCLE_CONFIG__`.
+
+

@@ -2089,9 +2089,12 @@ governance:
 		- docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.md
 # TASK-114 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E3
 	target_sprint: 6
+	deliverables:
+		- insights-portal/README.md (Lifecycle Module section)
 # TASK-115 Governance
 governance:
 	status: Completed
@@ -2105,14 +2108,20 @@ governance:
 		- docs/adr/ADR-006-event-schema-versioning.zh.md
 # TASK-116 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E3
 	target_sprint: 6
+	deliverables:
+		- eval-pipeline/docs/design/design.ui.zh.md (ADR cross-reference table appended)
 # TASK-117 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- docs/adr/ADR-001.md through ADR-006.md (all Status: Accepted verified)
 # TASK-118 Governance
 governance:
 	status: Planned
@@ -2233,9 +2242,18 @@ governance:
 	completed_on: 2025-09-26
 # TASK-127 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
-	target_sprint: 5
+	target_sprint: 6
+	deliverables:
+		- deploy/helm/Chart.yaml
+		- deploy/helm/values.yaml
+		- deploy/helm/templates/deployment.yaml
+		- deploy/helm/templates/service.yaml
+		- deploy/helm/templates/hpa.yaml
+		- deploy/helm/templates/configmap.yaml
+		- deploy/helm/templates/_helpers.tpl
 # TASK-128 Governance
 governance:
 	status: Planned
