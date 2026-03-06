@@ -1351,7 +1351,8 @@ governance:
 ```yaml
 # TASK-032 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P1
 	estimate: 3p
@@ -1377,8 +1378,12 @@ governance:
 		- Deterministic alphabetical registry ordering
 		- /metrics exposes load duration + failure counters
 		- README metrics section documents plugin interface
+	deliverables:
+		- services/eval/metrics/__init__.py
+		- services/eval/metrics/interface.py
+		- services/eval/metrics/loader.py
+		- services/eval/metrics/baseline/
 	engineer: E2
-	target_sprint: 3
 ```
 
 #### TASK-032 Subtasks
@@ -1940,7 +1945,8 @@ governance:
 
 # TASK-083 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P2
 	estimate: 1p
@@ -1952,13 +1958,16 @@ governance:
 		- Manifest schema test
 		- Missing artifact failure
 		- README manifest section
+	deliverables:
+		- services/eval/manifest.py (generate_run_manifest)
+		- services/tests/eval/test_manifest.py (5 new tests)
 	engineer: E2
-	target_sprint: 6
 ```
 ```yaml
 # TASK-081 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-ui@team
 	priority: P2
 	estimate: 2p
@@ -1970,8 +1979,10 @@ governance:
 		- Batching test
 		- Event type coverage list
 		- README telemetry usage
+	deliverables:
+		- insights-portal/src/telemetry/logEvent.ts
+		- insights-portal/src/telemetry/logEvent.test.ts
 	engineer: E3
-	target_sprint: 6
 ```
 ```yaml
 # TASK-084 Governance
@@ -2044,14 +2055,27 @@ governance:
 		- scripts/generate_openapi_specs.py
 # TASK-111 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- docs/runbooks/ingestion.md
+		- docs/runbooks/processing.md
+		- docs/runbooks/eval.md
 # TASK-112 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- deploy/helm/Chart.yaml
+		- deploy/helm/values.yaml
+		- deploy/helm/templates/deployment.yaml
+		- deploy/helm/templates/service.yaml
+		- deploy/helm/templates/hpa.yaml
+		- deploy/helm/templates/configmap.yaml
 # TASK-113 Governance
 governance:
 	status: Completed
@@ -2070,9 +2094,15 @@ governance:
 	target_sprint: 6
 # TASK-115 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- docs/adr/ADR-005-telemetry-taxonomy.md
+		- docs/adr/ADR-005-telemetry-taxonomy.zh.md
+		- docs/adr/ADR-006-event-schema-versioning.md
+		- docs/adr/ADR-006-event-schema-versioning.zh.md
 # TASK-116 Governance
 governance:
 	status: Planned
@@ -2270,9 +2300,11 @@ governance:
 		- services/tests/test_common_ratelimit.py
 # TASK-100 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	notes: "Coverage measured at 89% statements (threshold ≥70%). Run: pytest --cov=services"
 # TASK-101 Governance
 governance:
 	status: Completed

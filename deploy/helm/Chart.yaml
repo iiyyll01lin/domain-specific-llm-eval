@@ -1,0 +1,13 @@
+apiVersion: v2
+name: domain-specific-llm-eval
+description: Domain-Specific LLM Evaluation Platform — all microservices umbrella chart
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - llm
+  - evaluation
+  - rag
+  - knowledge-graph
+maintainers:
+  - name: platform-deploy

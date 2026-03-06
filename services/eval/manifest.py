@@ -63,4 +63,84 @@ class EvaluationManifestBuilder:
         manifest = self.finalize(file_size=file_size)
         return json.dumps(manifest, ensure_ascii=False, indent=2)
 
-__all__ = ["EvaluationManifestBuilder"]
+
+# ---------------------------------------------------------------------------
+# Run-level artifact manifest  (TASK-083)
+# ---------------------------------------------------------------------------
+
+import os
+import datetime
+from pathlib import Path
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the SHA-256 hex digest of a file."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def generate_run_manifest(
+    run_id: str,
+    artifacts: List[str | Path],
+    *,
+    output_path: str | Path | None = None,
+) -> Dict[str, object]:
+    """Generate a run-level artifact manifest with sha256 checksums.
+
+    Parameters
+    ----------
+    run_id:
+        Unique identifier for the pipeline run.
+    artifacts:
+        Sequence of file paths that belong to this run.  Non-existent paths
+        are recorded with ``exists: false`` and no checksum.
+    output_path:
+        If provided, the manifest JSON is written to this path.
+
+    Returns
+    -------
+    dict
+        The manifest document (mirrors the written JSON).
+    """
+    artifact_records: List[Dict[str, object]] = []
+    for raw_path in artifacts:
+        p = Path(raw_path)
+        if not p.exists():
+            artifact_records.append({
+                "path": str(p),
+                "exists": False,
+            })
+        else:
+            artifact_records.append({
+                "path": str(p),
+                "exists": True,
+                "size_bytes": p.stat().st_size,
+                "checksum": {
+                    "algorithm": "sha256",
+                    "value": _sha256_file(p),
+                },
+            })
+
+    missing = [a for a in artifact_records if not a["exists"]]
+    manifest: Dict[str, object] = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "artifact_count": len(artifact_records),
+        "missing_count": len(missing),
+        "artifacts": artifact_records,
+    }
+
+    if output_path is not None:
+        dest = Path(output_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return manifest
+
+
+__all__ = ["EvaluationManifestBuilder", "generate_run_manifest"]
+

@@ -1,0 +1,52 @@
+{{/* Service for each microservice */}}
+{{- $services := list "ingestion" "processing" "testset" "eval" "reporting" "adapter" "kg" "ws" }}
+{{- range $svcName := $services }}
+{{- $svc := index $.Values $svcName }}
+{{- $svcType := ($svc.service).type | default $.Values.defaults.service.type }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $svcName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $svcName }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  type: {{ $svcType }}
+  selector:
+    app.kubernetes.io/name: {{ $svcName }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ ($svc.service).port | default $.Values.defaults.service.port }}
+      targetPort: {{ $svc.containerPort }}
+{{- end }}
+
+{{/* Insights Portal service */}}
+{{- if .Values.insightsPortal.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-insights-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: insights-portal
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: {{ .Values.insightsPortal.service.type }}
+  selector:
+    app.kubernetes.io/name: insights-portal
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.insightsPortal.service.port }}
+      targetPort: {{ .Values.insightsPortal.containerPort }}
+{{- end }}

@@ -1,0 +1,117 @@
+{{/* Deployment for each microservice */}}
+{{- $services := list "ingestion" "processing" "testset" "eval" "reporting" "adapter" "kg" "ws" }}
+{{- $defaults := .Values.defaults }}
+{{- range $svcName := $services }}
+{{- $svc := index $.Values $svcName }}
+{{- $merged := mergeOverwrite (deepCopy $defaults) $svc }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $svcName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $svcName }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  replicas: {{ $merged.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $svcName }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $svcName }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $svcName }}
+          image: "{{ $.Values.global.imageRegistry }}{{ $svc.image.repository }}:{{ $svc.image.tag | default "latest" }}"
+          imagePullPolicy: {{ $merged.image.pullPolicy }}
+          ports:
+            - containerPort: {{ $svc.containerPort }}
+              protocol: TCP
+          env:
+            {{- range $k, $v := $merged.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- if $.Values.config.auth.tokenSecretName }}
+            - name: AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.config.auth.tokenSecretName }}
+                  key: AUTH_TOKEN
+            {{- end }}
+            - name: RATE_LIMIT_RPM
+              value: {{ $.Values.config.rateLimitRpm | quote }}
+            - name: RATE_LIMIT_ENABLED
+              value: {{ $.Values.config.rateLimitEnabled | quote }}
+          readinessProbe:
+            httpGet:
+              path: {{ $merged.readinessProbe.path }}
+              port: {{ $svc.containerPort }}
+            initialDelaySeconds: {{ $merged.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $merged.readinessProbe.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ $merged.livenessProbe.path }}
+              port: {{ $svc.containerPort }}
+            initialDelaySeconds: {{ $merged.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ $merged.livenessProbe.periodSeconds }}
+          resources:
+            {{- toYaml $merged.resources | nindent 12 }}
+{{- end }}
+
+{{/* Insights Portal deployment */}}
+{{- if .Values.insightsPortal.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-insights-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: insights-portal
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.insightsPortal.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: insights-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: insights-portal
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: insights-portal
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.insightsPortal.image.repository }}:{{ .Values.insightsPortal.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.defaults.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.insightsPortal.containerPort }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.insightsPortal.readinessProbe.path }}
+              port: {{ .Values.insightsPortal.containerPort }}
+            initialDelaySeconds: {{ .Values.insightsPortal.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.insightsPortal.readinessProbe.periodSeconds }}
+          resources:
+            {{- toYaml .Values.defaults.resources | nindent 12 }}
+{{- end }}

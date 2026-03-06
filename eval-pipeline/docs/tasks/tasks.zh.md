@@ -1357,7 +1357,8 @@ governance:
 ```yaml
 # TASK-032 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P1
 	estimate: 3p
@@ -1383,6 +1384,11 @@ governance:
 		- registry 列表具 deterministic 排序 (名稱字母序)
 		- /metrics 暴露載入耗時與失敗計數
 		- README metrics 章節新增外掛接點說明
+	deliverables:
+		- services/eval/metrics/__init__.py
+		- services/eval/metrics/interface.py
+		- services/eval/metrics/loader.py
+		- services/eval/metrics/baseline/
 ```
 
 #### TASK-032 子任務分解
@@ -1904,7 +1910,8 @@ governance:
 
 # TASK-083 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P2
 	estimate: 1p
@@ -1916,11 +1923,15 @@ governance:
 		- Manifest schema 測試
 		- 缺少 artifact 失敗
 		- README manifest 章節
+	deliverables:
+		- services/eval/manifest.py (generate_run_manifest)
+		- services/tests/eval/test_manifest.py (5 new tests)
 ```
 ```yaml
 # TASK-081 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-ui@team
 	priority: P2
 	estimate: 2p
@@ -1932,8 +1943,10 @@ governance:
 		- 批次測試
 		- 事件型別覆蓋清單
 		- README telemetry 使用
+	deliverables:
+		- insights-portal/src/telemetry/logEvent.ts
+		- insights-portal/src/telemetry/logEvent.test.ts
 	engineer: E3
-	target_sprint: 6
 ```
 ```yaml
 # TASK-084 治理
@@ -2007,9 +2020,11 @@ governance:
 ```yaml
 # TASK-100 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	notes: "coverage 89% statements (閾值 ≥70%). 執行: pytest --cov=services"
 # TASK-101 治理
 governance:
 	status: Completed
@@ -2078,14 +2093,24 @@ governance:
 		- scripts/generate_openapi_specs.py
 # TASK-111 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- docs/runbooks/ingestion.md
+		- docs/runbooks/processing.md
+		- docs/runbooks/eval.md
 # TASK-112 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- deploy/helm/Chart.yaml
+		- deploy/helm/values.yaml
+		- deploy/helm/templates/
 # TASK-113 治理
 governance:
 	status: Completed
@@ -2104,9 +2129,15 @@ governance:
 	target_sprint: 5
 # TASK-115 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- docs/adr/ADR-005-telemetry-taxonomy.md
+		- docs/adr/ADR-005-telemetry-taxonomy.zh.md
+		- docs/adr/ADR-006-event-schema-versioning.md
+		- docs/adr/ADR-006-event-schema-versioning.zh.md
 # TASK-116 治理
 governance:
 	status: Planned
