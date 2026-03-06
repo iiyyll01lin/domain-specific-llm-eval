@@ -75,6 +75,16 @@ async def health() -> Dict[str, str]:
     return {"status": "ok", "service": SERVICE_NAME}
 
 
+@app.get("/healthz")
+async def healthz() -> Dict[str, str]:
+    return {"status": "ok", "service": SERVICE_NAME}
+
+
+@app.get("/readyz")
+async def readyz() -> Dict[str, str]:
+    return {"status": "ready", "service": SERVICE_NAME}
+
+
 @app.get("/")
 async def root() -> Dict[str, str]:
     return {"service": SERVICE_NAME, "version": "0.1.0"}

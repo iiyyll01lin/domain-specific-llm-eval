@@ -2159,14 +2159,25 @@ governance:
 		- docs/adr/ADR-001.md ～ ADR-006.md（Status: Accepted 確認）
 # TASK-118 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- events/schema_registry.json
+		- events/schemas/*.json
+		- scripts/validate_event_schemas.py
+		- services/tests/test_schema_validators.py
 # TASK-119 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- telemetry/telemetry_taxonomy.json
+		- scripts/validate_telemetry_taxonomy.py
+		- services/tests/test_schema_validators.py
 ```
 
 ### 5.12 容器化與部署強化 (Enhancements)
@@ -2261,39 +2272,67 @@ governance:
 		- deploy/helm/templates/_helpers.tpl
 # TASK-128 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- services/*/main.py (/healthz + /readyz 端點)
+		- services/ws/gateway.py (/healthz + /readyz 端點)
+		- deploy/helm/values.yaml (readinessProbe: /readyz, livenessProbe: /healthz)
 # TASK-129 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- docs/scaling.md (HPA 調校指南)
+		- deploy/helm/templates/hpa.yaml (已在 Sprint-6 完成)
 # TASK-130 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- .github/workflows/build-governance.yml (syft SBOM + anchore/sbom-action)
+		- sbom/ 目錄佔位
 # TASK-131 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- Dockerfile (ARG ENABLE_GPU=false，條件式 CUDA torch 安裝)
+		- deploy/helm/values.yaml (gpu: 區塊含 processing/kg GPU profiles)
 # TASK-132 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- scripts/validate_dev_parity.py (Python 版本 + 套件存在性檢查)
 # TASK-133 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- policy/naming.rego (事件鍵 + 指標名稱命名規則)
+		- policy/schema_registry.rego (Registry 完整性)
 # TASK-134 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- .gitleaks.toml (允許清單設定)
+		- .github/workflows/build-governance.yml (secrets-scan job)
 # TASK-122 治理
 governance:
 	status: Verified

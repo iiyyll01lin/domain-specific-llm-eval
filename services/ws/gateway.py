@@ -109,6 +109,16 @@ async def health() -> dict:
     return {"status": "ok", "service": SERVICE_NAME}
 
 
+@app.get("/healthz")
+async def healthz() -> dict:
+    return {"status": "ok", "service": SERVICE_NAME}
+
+
+@app.get("/readyz")
+async def readyz() -> dict:
+    return {"status": "ready", "service": SERVICE_NAME}
+
+
 @app.get("/")
 async def root() -> dict:
     return {

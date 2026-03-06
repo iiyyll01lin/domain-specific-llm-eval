@@ -34,6 +34,16 @@ async def health():
     return {"status": "ok", "service": SERVICE_NAME}
 
 
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok", "service": SERVICE_NAME}
+
+
+@app.get("/readyz")
+async def readyz():
+    return {"status": "ready", "service": SERVICE_NAME}
+
+
 @app.post(
     "/documents",
     status_code=status.HTTP_202_ACCEPTED,

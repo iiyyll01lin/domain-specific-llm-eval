@@ -29,11 +29,11 @@ defaults:
     type: ClusterIP
     port: 80
   readinessProbe:
-    path: /health
+    path: /readyz
     initialDelaySeconds: 10
     periodSeconds: 15
   livenessProbe:
-    path: /health
+    path: /healthz
     initialDelaySeconds: 20
     periodSeconds: 30
   env: {}
@@ -192,3 +192,19 @@ objectStore:
   enabled: false
   bucketName: "llm-eval-artifacts"
   secretName: "object-store-creds"  # keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+# ─── GPU build profile ────────────────────────────────────────────────────
+# Enable GPU support for the processing and kg services (embedding inference).
+# Requires nodes with NVIDIA drivers and device-plugin deployed.
+gpu:
+  enabled: false
+  # When enabled, the processing + kg Deployments get an nvidia.com/gpu resource request
+  # and the image is expected to be built with ENABLE_GPU=true.
+  processing:
+    enabled: false
+    resourceLimit: 1
+    imageTag: "gpu"    # Override image tag for GPU-enabled builds
+  kg:
+    enabled: false
+    resourceLimit: 1
+    imageTag: "gpu"

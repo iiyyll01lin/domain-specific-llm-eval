@@ -7,6 +7,8 @@ ARG PIP_EXTRA_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_NETWORK_CHECK_URL=https://pypi.org/simple/
 ARG PIP_NETWORK_TIMEOUT=5
+# GPU build profile: set ENABLE_GPU=true to install torch with CUDA support
+ARG ENABLE_GPU=false
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -55,6 +57,10 @@ RUN set -eux; \
         else \
             echo "⚠️  Skipping requirements install (offline)"; \
         fi; \
+    fi; \
+    if [ "${ENABLE_GPU}" = "true" ]; then \
+        echo "🔧 GPU profile: installing torch with CUDA 12.1 support"; \
+        pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 || echo "⚠️  GPU torch install failed; falling back to CPU torch"; \
     fi
 
 FROM python:3.11-slim-bookworm AS runtime

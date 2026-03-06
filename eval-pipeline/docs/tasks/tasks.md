@@ -2124,14 +2124,25 @@ governance:
 		- docs/adr/ADR-001.md through ADR-006.md (all Status: Accepted verified)
 # TASK-118 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- events/schema_registry.json
+		- events/schemas/*.json (5 schema files)
+		- scripts/validate_event_schemas.py
+		- services/tests/test_schema_validators.py (TestValidateEventSchemas)
 # TASK-119 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E3
 	target_sprint: 6
+	deliverables:
+		- telemetry/telemetry_taxonomy.json
+		- scripts/validate_telemetry_taxonomy.py
+		- services/tests/test_schema_validators.py (TestValidateTelemetryTaxonomy)
 ```
 
 ### 5.12 Containerization & Deployment Enhancements
@@ -2256,39 +2267,67 @@ governance:
 		- deploy/helm/templates/_helpers.tpl
 # TASK-128 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/*/main.py (added /healthz and /readyz endpoints)
+		- services/ws/gateway.py (added /healthz and /readyz endpoints)
+		- deploy/helm/values.yaml (readinessProbe: /readyz, livenessProbe: /healthz)
 # TASK-129 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- docs/scaling.md (HPA tuning guide, dry-run validation, startup probe docs)
+		- deploy/helm/templates/hpa.yaml (completed Sprint-6)
 # TASK-130 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- .github/workflows/build-governance.yml (syft SBOM + anchore/sbom-action step)
+		- sbom/ directory placeholder
 # TASK-131 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- Dockerfile (ARG ENABLE_GPU=false, conditional CUDA torch install)
+		- deploy/helm/values.yaml (gpu: section with processing/kg GPU profiles)
 # TASK-132 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- scripts/validate_dev_parity.py (Python version + package presence check)
 # TASK-133 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- policy/naming.rego (event key + metric naming enforcement)
+		- policy/schema_registry.rego (registry integrity enforcement)
 # TASK-134 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-07
 	engineer: E1
 	target_sprint: 6
+	deliverables:
+		- .gitleaks.toml (allowlist config)
+		- .github/workflows/build-governance.yml (secrets-scan job with gitleaks-action)
 # TASK-090 Governance
 governance:
 	status: Completed

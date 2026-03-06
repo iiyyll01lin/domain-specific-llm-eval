@@ -48,6 +48,27 @@ jobs:
       - name: Validate task governance snapshots
         run: python3 scripts/validate_task_status.py
 
+      - name: Validate event schema registry
+        run: python3 scripts/validate_event_schemas.py
+
+      - name: Validate telemetry taxonomy
+        run: python3 scripts/validate_telemetry_taxonomy.py
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks secrets scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
   security-scan:
     needs: validate
     runs-on: ubuntu-latest
@@ -71,7 +92,7 @@ jobs:
           path: trivy-fs.sarif
 
   build-and-push:
-    needs: [validate, security-scan]
+    needs: [validate, security-scan, secrets-scan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -92,6 +113,20 @@ jobs:
 
       - name: Build base image
         run: docker build -t ${{ env.IMAGE_LOCAL_NAME }}:dev .
+
+      - name: Generate SBOM (CycloneDX v1.5)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_LOCAL_NAME }}:dev
+          format: cyclonedx-json
+          output-file: sbom/sbom-main.json
+          artifact-name: sbom-cyclonedx
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom/sbom-main.json
 
       - name: Tag local variants
         env:

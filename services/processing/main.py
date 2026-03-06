@@ -41,6 +41,16 @@ async def health():
     return {"status": "ok", "service": SERVICE_NAME}
 
 
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok", "service": SERVICE_NAME}
+
+
+@app.get("/readyz")
+async def readyz():
+    return {"status": "ready", "service": SERVICE_NAME}
+
+
 @app.get("/metrics")
 async def metrics() -> Response:
     payload = generate_latest()
