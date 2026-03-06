@@ -1,0 +1,213 @@
+# Configurable Testset Generation Strategy Templates
+# Choose and adjust the following settings according to your needs
+
+# ============================================================================
+# TESTSET GENERATION STRATEGY SELECTION - Choose your strategy combination
+# ============================================================================
+
+# Strategy 1: Local-only generation (No external LLM API required)
+local_only_config:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "synthetic_local"      # Local synthetic generation
+      - "domain_specific"      # Domain-specific tests
+      - "edge_cases"          # Edge case testing
+      - "golden_standard"     # Golden standard tests
+    
+    # Question type distribution
+    strategies:
+      factual: 0.4           # 40% factual questions
+      reasoning: 0.2         # 20% reasoning questions
+      procedural: 0.2        # 20% procedural questions
+      troubleshooting: 0.2   # 20% troubleshooting questions
+    
+    samples_per_document: 20
+    max_total_samples: 100
+
+# Strategy 2: Hybrid generation (Requires LLM API, higher quality)
+hybrid_llm_config:
+  testset_generation:
+    method: "hybrid"
+    selected_strategies:
+      - "synthetic_llm"           # LLM synthetic generation
+      - "synthetic_local"         # Local synthetic generation
+      - "user_query_simulation"   # User query simulation
+      - "edge_cases"             # Edge case testing
+    
+    # Question type distribution
+    strategies:
+      factual: 0.3
+      reasoning: 0.3
+      multi_context: 0.2
+      conditional: 0.1
+      procedural: 0.1
+    
+    samples_per_document: 30
+    max_total_samples: 150
+    
+    # LLM configuration
+    use_ragas_generator: true
+    ragas_config:
+      use_custom_llm: true
+      custom_llm:
+        endpoint: "http://your-llm-endpoint/v1/chat/completions"
+        model: "your-model"
+        temperature: 0.3
+
+# Strategy 3: Quick test (Small sample size, fast verification)
+quick_test_config:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "domain_specific"
+      - "golden_standard"
+    
+    strategies:
+      factual: 0.6
+      procedural: 0.4
+    
+    samples_per_document: 5
+    max_total_samples: 20
+
+# Strategy 4: Comprehensive evaluation (All strategies, maximum coverage)
+comprehensive_config:
+  testset_generation:
+    method: "hybrid"
+    selected_strategies:
+      - "synthetic_llm"
+      - "synthetic_local"
+      - "domain_specific"
+      - "edge_cases"
+      - "user_query_simulation"
+      - "golden_standard"
+    
+    strategies:
+      factual: 0.25
+      reasoning: 0.25
+      multi_context: 0.2
+      conditional: 0.1
+      procedural: 0.1
+      troubleshooting: 0.1
+    
+    samples_per_document: 50
+    max_total_samples: 300
+
+# Strategy 5: RAG API specific testing (Specifically for evaluating RAG systems)
+rag_evaluation_config:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "domain_specific"      # Ensure domain relevance
+      - "edge_cases"          # Test boundary conditions
+      - "golden_standard"     # High-quality benchmarks
+    
+    # Question distribution specifically for RAG evaluation
+    strategies:
+      factual: 0.3           # Test retrieval accuracy
+      multi_context: 0.3     # Test multi-document integration capability
+      reasoning: 0.2         # Test generation quality
+      troubleshooting: 0.2   # Test practical utility
+    
+    samples_per_document: 25
+    max_total_samples: 100
+    
+    # Focus on RAG evaluation keywords
+    keyword_extraction:
+      focus_areas:
+        - "retrieval accuracy"   # Retrieval accuracy
+        - "generation quality"   # Generation quality
+        - "context relevance"    # Context relevance
+        - "answer completeness"  # Answer completeness
+
+# Strategy 6: Quick test for command line (referenced in run_pipeline.py)
+quick_test:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "domain_specific"
+      - "golden_standard"
+    
+    strategies:
+      factual: 0.6
+      procedural: 0.4
+    
+    samples_per_document: 5
+    max_total_samples: 20
+
+# Strategy 7: RAG evaluation for command line (referenced in run_pipeline.py)
+rag_evaluation:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "domain_specific"
+      - "edge_cases"
+      - "golden_standard"
+    
+    strategies:
+      factual: 0.3
+      multi_context: 0.3
+      reasoning: 0.2
+      troubleshooting: 0.2
+    
+    samples_per_document: 25
+    max_total_samples: 75
+
+# Strategy 8: Production ready for command line (referenced in run_pipeline.py)
+production_ready:
+  testset_generation:
+    method: "configurable"
+    selected_strategies:
+      - "synthetic_local"
+      - "domain_specific"
+      - "edge_cases"
+      - "golden_standard"
+      - "user_query_simulation"
+    
+    strategies:
+      factual: 0.25
+      reasoning: 0.25
+      multi_context: 0.2
+      procedural: 0.15
+      troubleshooting: 0.1
+      conditional: 0.05
+    
+    samples_per_document: 30
+    max_total_samples: 150
+
+# ============================================================================
+# Document configuration - Specify your test documents
+# ============================================================================
+data_sources:
+  documents:
+    primary_docs:
+      - "path/to/your/document1.pdf"
+      - "path/to/your/document2.txt"
+    
+    # Optional: Additional document directories
+    # additional_dirs:
+    #   - "data/documents/"
+
+# ============================================================================
+# Output configuration
+# ============================================================================
+output:
+  format: ["csv", "excel", "json"]  # Choose output formats
+  include_metadata: true            # Include generation metadata
+  include_keywords: true            # Include keyword analysis
+  
+# ============================================================================
+# Usage instructions
+# ============================================================================
+# 
+# 1. Choose one of the above configurations, or mix and match
+# 2. Modify data_sources to point to your documents
+# 3. Run: python src/data/configurable_testset_builder.py
+# 4. Or use config file: python run_custom_testset.py --config local_only_config
+#
+# Strategy explanations:
+# - local_only_config: Suitable for environments without external APIs
+# - hybrid_llm_config: Suitable when you have LLM API access, need high quality
+# - quick_test_config: Suitable for quick verification
+# - comprehensive_config: Suitable for comprehensive evaluation
+# - rag_evaluation_config: Specifically for evaluating RAG API quality

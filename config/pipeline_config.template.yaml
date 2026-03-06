@@ -1,0 +1,638 @@
+advanced:
+  caching:
+    cache_dir: ./cache
+    cache_embeddings: true
+    cache_testsets: true
+    enabled: true
+  error_handling:
+    continue_on_error: true
+    max_failures_per_document: 5
+  parallelization:
+    enabled: true
+    max_workers: 4
+  resource_limits:
+    max_memory_mb: 4096
+    max_processing_time_minutes: 60
+data_sources:
+  # CSV data source configuration (primary data source)
+  csv:
+    enabled: true  # Enable CSV as primary data source
+    csv_files:
+      - "data/csv/pre-training-data.csv"
+    format:
+      encoding: "utf-8"
+      processing:
+        parse_json_content: true      # Parse JSON content in CSV cells
+        clean_text: true
+        extract_keywords: true
+        preserve_metadata: true
+        validate_content: true
+    content_columns:
+      # Column names that contain the main content
+      primary_content: ["content", "text", "description"]
+      secondary_content: ["summary", "notes", "details"]
+      metadata_columns: ["id", "category", "type", "source"]
+    limits:
+      max_rows_per_file: 1000         # Limit rows per CSV file
+      max_content_length: 10000       # Max characters per content cell
+      skip_empty_rows: true
+      skip_invalid_json: false        # Set to true to skip invalid JSON
+      
+  # Backup document files source (for reference)
+  documents:
+    enabled: false  # Disabled to use CSV as primary source
+    # document_files: ['data/documents/document_0.txt', 'data/documents/document_1.txt', 'data/documents/document_2.txt', 'data/documents/document_3.txt', 'data/documents/document_4.txt', 'data/documents/document_5.txt', 'data/documents/document_6.txt', 'data/documents/document_7.txt', 'data/documents/document_8.txt', 'data/documents/document_9.txt', 'data/documents/document_10.txt', 'data/documents/document_11.txt', 'data/documents/document_12.txt', 'data/documents/document_13.txt', 'data/documents/document_14.txt', 'data/documents/document_15.txt', 'data/documents/document_16.txt', 'data/documents/document_17.txt', 'data/documents/document_18.txt', 'data/documents/document_19.txt', 'data/documents/document_20.txt', 'data/documents/document_21.txt', 'data/documents/document_22.txt', 'data/documents/document_23.txt', 'data/documents/document_24.txt', 'data/documents/document_25.txt', 'data/documents/document_26.txt', 'data/documents/document_27.txt', 'data/documents/document_28.txt', 'data/documents/document_29.txt', 'data/documents/document_30.txt', 'data/documents/document_31.txt', 'data/documents/document_32.txt', 'data/documents/document_33.txt', 'data/documents/document_34.txt', 'data/documents/document_35.txt', 'data/documents/document_36.txt', 'data/documents/document_37.txt', 'data/documents/document_38.txt', 'data/documents/document_39.txt', 'data/documents/document_40.txt', 'data/documents/document_41.txt', 'data/documents/document_42.txt', 'data/documents/document_43.txt', 'data/documents/document_44.txt', 'data/documents/document_45.txt', 'data/documents/document_46.txt', 'data/documents/document_47.txt', 'data/documents/document_48.txt', 'data/documents/document_49.txt', 'data/documents/document_50.txt', 'data/documents/document_51.txt', 'data/documents/document_52.txt']
+    format:
+      encoding: utf-8
+      processing:
+        clean_text: true
+        extract_keywords: true
+        preserve_metadata: true
+        chunk_size: 1000
+        overlap: 200
+environment:
+  HF_DATASETS_OFFLINE: '1'
+  HF_HUB_DISABLE_TELEMETRY: '1'
+  HF_HUB_OFFLINE: '1'
+  SPACY_WARNING_IGNORE: W008
+  TOKENIZERS_PARALLELISM: 'false'
+  TRANSFORMERS_OFFLINE: '1'
+  offline_models:
+    cache_models: true
+    enabled: true
+    fallback_enabled: true
+    force_offline: true
+error_handling:
+  continue_on_metric_failure: true
+  continue_on_nan: true
+  log_errors: true
+  save_error_details: true
+evaluation:
+  # Enhanced performance tracking configuration
+  performance_tracking:
+    enabled: true
+    track_stage_timings: true         # Time each pipeline stage
+    track_rag_response_time: true     # RAG endpoint response time
+    track_llm_response_time: true     # LLM endpoint response time  
+    track_metric_computation_time: true # Time for each metric calculation
+    track_memory_usage: true          # Memory usage during evaluation
+    detailed_timing_breakdown: true   # Detailed timing per question/metric
+    timing_percentiles: [50, 95, 99]  # Response time percentiles to report
+  contextual_keywords:
+    adaptive_thresholds:
+      chinese_adjustment: -0.05
+      technical_adjustment: -0.05
+    enabled: true
+    evaluator: enhanced
+    fuzzy_threshold: 80
+    method_weights:
+      enhanced_semantic: 0.3
+      fuzzy_matching: 0.2
+      keyword_extraction: 0.1
+      original_contextual: 0.4
+    sentence_model: all-mpnet-base-v2
+    sentence_model_config:
+      cache_dir: ./cache/sentence_transformers
+      device: cuda:0, cuda:1
+      fallback_models:
+      - all-MiniLM-L6-v2
+      - paraphrase-multilingual-mpnet-base-v2
+      local_files_only: true
+      offline_mode: true
+    similarity_threshold: 0.7
+    spacy_config:
+      fallback_models:
+        en_core_web_trf:
+        - en_core_web_lg
+        - en_core_web_md
+        - en_core_web_sm
+        zh_core_web_trf:
+        - zh_core_web_lg
+        - zh_core_web_md
+        - zh_core_web_sm
+      offline_mode: true
+    spacy_model_en: en_core_web_trf
+    spacy_model_zh: zh_core_web_trf
+    weights:
+      mandatory: 0.8
+      optional: 0.2
+  gates:
+    combination:
+      method: weighted_average
+      minimum_gates_required: 1
+    contextual_keywords:
+      description: Contextual keyword matching gate
+      enabled: true
+      threshold: 0.6
+      weight: 0.4
+    human_feedback:
+      enabled: false
+      feedback_window_size: 10
+      threshold_adjustment_rate: 0.1
+    ragas_metrics:
+      description: RAGAS metrics evaluation gate
+      enabled: true
+      threshold: 0.7
+      weight: 0.6
+  human_feedback:
+    diverse_sample_rate: 0.2
+    enabled: false
+    initial_threshold: 0.7
+    recalibration_interval: 10
+    smoothing:
+      alpha: 0.1
+      consistency_threshold: 0.2
+      max_window_size: 10
+      min_window_size: 3
+    uncertainty_bounds:
+      buffer: 0.1
+      max: 0.9
+      min: 0.3
+  nan_handling:
+    enabled: true
+    fallback_value: 0.0
+    log_nan_issues: true
+    min_valid_scores: 1
+    tolerance_strategy: fallback
+  rag_system_testing:
+    capture_contexts: true
+    capture_responses: true
+    enabled: true
+    test_all_questions: true
+  ragas_metrics:
+    batch_size: 2
+    embeddings:
+      cache_dir: ./cache/sentence_transformers
+      device: cuda:0, cuda:1
+      fallback_models:
+      - all-mpnet-base-v2
+      - paraphrase-MiniLM-L6-v2
+      local_files_only: true
+      model_name: all-MiniLM-L6-v2
+      offline_mode: true
+    enabled: true
+    evaluate_rag_responses: true
+    llm:
+      api_key: YOUR_API_KEY_HERE
+      device: auto
+      endpoint: http://YOUR_LLM_ENDPOINT
+      headers:
+        Accept: '*/*'
+        Accept-Encoding: gzip, deflate, br
+        Cache-Control: no-cache
+        Connection: keep-alive
+        Content-Type: application/json
+        Host: YOUR_LLM_ENDPOINT
+        User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+      max_length: 512
+      max_tokens: 4096
+      model_name: gpt-4o
+      temperature: 0.1
+      timeout: 180
+      use_custom_llm: true
+      use_local: false
+    metrics:
+    - Faithfulness
+    - AnswerRelevancy
+llm:
+  api_key: YOUR_API_KEY_HERE
+  endpoint_url: http://YOUR_LLM_ENDPOINT/v1/chat/completions
+  headers:
+    Accept: '*/*'
+    Accept-Encoding: gzip, deflate, br
+    Cache-Control: no-cache
+    Connection: keep-alive
+    Content-Type: application/json
+    Host: YOUR_LLM_ENDPOINT
+    User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+  keyword_extraction:
+    num_keywords: 3
+    enabled: true
+    evaluation:
+      max_keywords: 3
+      min_score_threshold: 0.3
+    fallback:
+      enabled: true
+      method: simple_text_processing
+      min_word_length: 4
+      stop_words:
+      - the
+      - a
+      - an
+      - and
+      - or
+      - but
+      - in
+      - 'on'
+      - at
+      - to
+    keybert:
+      chinese_ngram_range:
+      - 1
+      - 3
+      diversity: 0.5
+      enabled: true
+      model: all-MiniLM-L6-v2
+      ngram_range:
+      - 1
+      - 2
+      nr_candidates: 20
+      stop_words: english
+      use_maxsum: true
+      use_mmr: true
+    llm:
+      api_key: YOUR_API_KEY_HERE
+      endpoint_url: http://YOUR_LLM_ENDPOINT/v1/chat/completions
+      max_tokens: 4096
+      model: gpt-4o
+      temperature: 0.1
+      timeout: 180
+    method: keybert_enhanced
+    num_keywords: 3
+    testset_generation:
+      max_keywords: 3
+      min_score_threshold: 0.2
+    yake:
+      dedupLim: 0.7
+      enabled: true
+      language: en
+      n: 3
+      top: 20
+  max_tokens: 4096
+  model: gpt-4o
+  output:
+    format: excel
+    include_metadata: true
+    tag_source_files: true
+  temperature: 0.1
+  timeout: 180
+logging:
+  config_tracking:
+    enabled: true
+    log_config_usage: true
+    log_fallback_usage: true
+    track_generation_methods: true
+  destinations:
+  - console
+  - file
+  file_logging:
+    backup_count: 5
+    log_file: ./outputs/logs/pipeline.log
+    max_size_mb: 1000
+  level: DEBUG
+  performance:
+    enabled: true
+    track_memory: true
+    track_timing: true
+output:
+  base_dir: ./outputs
+  naming:
+    metadata_prefix: metadata
+    report_prefix: evaluation_report
+    testset_prefix: testset
+  retention:
+    keep_intermediate_files: true
+    max_runs_to_keep: 10
+  use_timestamps: true
+pipeline:
+  mode: ragas_only
+  name: Simplified RAG Evaluation Pipeline
+  version: 2.0.0
+rag_system:
+  auth:
+    token: ''
+    type: none
+  enabled: true
+  endpoint: http://YOUR_RAG_ENDPOINT/app/smt_assistant_chat
+  max_retries: 7
+  request_format:
+    payload_template:
+      app: smt_assistant_chat
+      command: ''
+      content: '{question}'
+      context: {}
+      language: en
+      session_id: ''
+      site: tao
+      user: ''
+    question_field: content
+    response_fields:
+      answer: message[0].content
+      confidence: null
+      contexts: null
+  timeout: 180
+ragas_metrics:
+  robust_evaluation:
+    enabled: true
+    filter_invalid_scores: true
+    handle_nan_gracefully: true
+    max_retries: 7
+    retry_delay: 2
+reporting:
+  # Enhanced metadata and parameter tracking
+  final_parameters_tracking:
+    enabled: true
+    capture_fallback_usage: true      # Track which fallbacks were used
+    capture_final_config: true        # Capture actual config used (post-fallbacks)
+    include_generation_metadata: true # Include testset generation metadata
+    include_evaluation_metadata: true # Include evaluation process metadata
+    track_composition_elements: true  # Track RAGAS composition elements
+  formats:
+  - html
+  - pdf
+  - excel
+  - json
+  report_types:
+  - comprehensive
+  - executive
+  - technical
+  - comparative
+  sections:
+  - executive_summary
+  - testset_overview
+  - rag_performance_analysis
+  - contextual_keyword_analysis
+  - ragas_metrics_analysis
+  - human_feedback_insights
+  - question_type_breakdown
+  - source_document_analysis
+  - recommendations
+  - methodology
+  visualizations:
+    chart_types:
+    - performance_trends
+    - score_distributions
+    - keyword_coverage_heatmap
+    - question_difficulty_analysis
+    - source_performance_comparison
+    enabled: true
+    style:
+      color_palette: blues
+      theme: professional
+testset_generation:
+  # Enhanced composition elements tracking
+  composition_elements_tracking:
+    enabled: true
+    capture_scenarios: true          # Capture scenario details (persona, style, length)
+    capture_nodes: true              # Capture knowledge graph nodes used
+    capture_query_styles: true       # Capture query styles applied
+    capture_personas: true           # Capture personas matched to queries
+    capture_relationships: true      # Capture KG relationships used (multi-hop)
+    include_in_testset_metadata: true # Include in testset file metadata
+    include_in_reports: true         # Include in evaluation reports
+  configurable_builder:
+    enabled_strategies:
+    - domain_specific
+    generation_targets:
+      # samples_per_document: 1         # ❌ LEGACY: Overridden by max_total_samples
+      # total_samples: 3                # ❌ LEGACY: Overridden by max_total_samples
+    question_distribution:
+      factual: 0.5
+      procedural: 0.2
+    rag_evaluation_mode: true
+    rag_focus_areas:
+    - retrieval_accuracy
+    - context_relevance
+    - answer_completeness
+    - generation_quality
+  generator_class: pure_ragas_testset_generator
+  keyword_extraction:
+    enabled: true
+    method: "hybrid_weighted"  # New hybrid approach
+    
+    # Source content weights for keyword extraction
+    source_weights:
+      user_query: 0.40        # Question text
+      reference_contexts: 0.35 # CSV data contexts
+      reference_answer: 0.25   # Generated answer
+    
+    # Hybrid extraction pipeline configuration
+    hybrid_pipeline:
+      language_detection:
+        enabled: true
+        model: "langdetect"     # or "spacy" 
+        fallback_language: "en"
+      
+      extraction_methods:
+        # Primary: Enhanced KeyBERT with domain models
+        keybert_enhanced:
+          enabled: true
+          weight: 0.35
+          models:
+            chinese: "shibing624/text2vec-base-chinese"
+            english: "all-mpnet-base-v2"
+            multilingual: "distiluse-base-multilingual-cased"
+          use_mmr: true
+          diversity: 0.5
+          
+        # Secondary: RAGAS LLM-based extraction  
+        ragas_llm:
+          enabled: true
+          weight: 0.25
+          extractors: ["keyphrases", "ner", "themes"]
+          
+        # Tertiary: spaCy NLP pipeline
+        spacy_nlp:
+          enabled: true
+          weight: 0.20
+          models:
+            chinese: "zh_core_web_trf"
+            english: "en_core_web_trf"
+          extract_entities: true
+          extract_noun_phrases: true
+          
+        # Fallback: Statistical methods
+        statistical:
+          enabled: true
+          weight: 0.20
+          methods: ["yake", "tfidf"]
+          yake_config:
+            lan: "auto"
+            n: 3
+            dedupLim: 0.7
+    
+    # Output configuration
+    output:
+      max_keywords: 3  # Reduce if getting too many low-quality
+      min_score_threshold: 0.17  # Lower if too aggressive
+      combine_method: "weighted_union"  # or "intersection", "top_scored"
+      include_scores: true
+      deduplicate: true
+      
+      # Enhanced deduplication options
+      advanced_dedup:
+        exact_duplicates: true           # Remove identical keywords
+        substring_duplicates: true       # Remove shorter keywords contained in longer ones
+        linguistic_variations: true      # Remove plurals, articles, etc.
+        semantic_similarity: true        # Expensive: remove semantically similar terms
+        similarity_threshold: 0.85       # For semantic similarity
+        preserve_domain_terms: true      # Always keep domain-specific terms
+        
+        # Semantic deduplication embedding models configuration
+        semantic_models:
+          # Primary model for multilingual support (Chinese + English)
+          primary:
+            model_name: "distiluse-base-multilingual-cased"
+            device: "cuda:0"
+            cache_dir: "./cache/sentence_transformers"
+            offline_mode: true
+            local_files_only: true
+            fallback_enabled: true
+            
+          # Chinese-specific model for better Chinese semantic understanding
+          chinese_specific:
+            model_name: "shibing624/text2vec-base-chinese"
+            device: "cuda:0"
+            cache_dir: "./cache/sentence_transformers"
+            offline_mode: true
+            local_files_only: true
+            enabled: true
+            
+          # English-specific high-quality model
+          english_specific:
+            model_name: "all-mpnet-base-v2"
+            device: "cuda:0"
+            cache_dir: "./cache/sentence_transformers"
+            offline_mode: true
+            local_files_only: true
+            enabled: true
+            
+          # Fast fallback model
+          fallback:
+            model_name: "all-MiniLM-L6-v2"
+            device: "cpu"  # Use CPU for fallback
+            cache_dir: "./cache/sentence_transformers"
+            offline_mode: true
+            local_files_only: true
+            
+        # Semantic deduplication strategy
+        semantic_strategy:
+          method: "adaptive_language"  # adaptive_language, best_available, specific_model, context_aware, adaptive_strategy
+          language_detection: true
+          chinese_threshold: 0.88      # Higher threshold for Chinese (more strict)
+          english_threshold: 0.85      # Standard threshold for English
+          mixed_language_threshold: 0.87  # Threshold for mixed content
+          batch_processing: true
+          max_batch_size: 32
+          
+          # Advanced intelligent features (NEW)
+          enable_performance_monitoring: true
+          enable_embedding_cache: true
+          enable_model_health_checks: true
+          enable_batch_optimization: true
+          enable_advanced_threshold_adjustment: true
+          enable_context_aware_selection: true
+      
+    # Domain-specific validation
+    domain_validation:
+      enabled: true
+      smt_terms: ["鋼板", "SMT", "inspection", "MPE engineer", "steel plate", "half-etched area"]
+      boost_domain_score: 0.1
+      filter_common_words: true
+    
+    # Legacy compatibility
+    max_keywords: 3
+    min_score_threshold: 0.2
+  max_documents_for_generation: 10
+  max_total_samples: 10              # ✅ CRITICAL: MASTER setting - reduced from 21000 to prevent infinite loop
+  method: pure_ragas
+  # preset_configs:                      # ❌ COMMENTED OUT: Legacy configuration section not used
+    # production_ready:                # ❌ LEGACY: Empty enabled_strategies
+      # enabled_strategies: null      # ❌ LEGACY: No strategies defined  
+    # quick_test:                     # ❌ LEGACY: Empty enabled_strategies
+      # enabled_strategies: null      # ❌ LEGACY: No strategies defined
+    # rag_evaluation:                 # ❌ LEGACY: Empty enabled_strategies  
+      # enabled_strategies: null      # ❌ LEGACY: No strategies defined
+  query_distribution:
+    # Enhanced 4-type query distribution for better testset variety
+    # Adjusted distribution to ensure all 4 RAGAS synthesizer types are used
+    single_hop_entities: 0.30      # 30% single-hop entity-based queries
+    single_hop_keyphrases: 0.30    # 30% single-hop keyphrase-based queries  
+    multi_hop_abstract: 0.25       # 25% multi-hop abstract reasoning queries
+    multi_hop_specific: 0.15       # 15% multi-hop specific factual queries
+    # This distribution aims to activate all 4 RAGAS synthesizer types:
+    # 1. SingleHopSpecificQuerySynthesizer (entities) - simple factual questions
+    # 2. SingleHopSpecificQuerySynthesizer (keyphrases) - domain terminology queries  
+    # 3. MultiHopAbstractQuerySynthesizer - complex reasoning questions
+    # 4. MultiHopSpecificQuerySynthesizer - multi-document queries
+    # Note: Multi-hop synthesizers require relationships in the Knowledge Graph
+  ragas_config:
+    # ✅ CRITICAL: Force RAGAS to use custom LLM instead of OpenAI
+    use_custom_llm: true
+    use_openai: false
+    force_custom_llm: true  # Additional flag to ensure custom LLM is used
+    
+    # ✅ Custom LLM configuration for RAGAS TestsetGenerator
+    custom_llm:
+      # Clean endpoint URL - remove /chat/completions as ChatOpenAI adds it automatically
+      endpoint: http://YOUR_LLM_ENDPOINT/v1
+      api_key: YOUR_API_KEY_HERE
+      model: gpt-4o
+      temperature: 0.3
+      max_tokens: 4096
+      timeout: 180
+      headers:
+        Accept: '*/*'
+        Accept-Encoding: gzip, deflate, br
+        Cache-Control: no-cache
+        Connection: keep-alive
+        Content-Type: application/json
+        Host: YOUR_LLM_ENDPOINT
+        User-Agent: PostmanRuntime-ApipostRuntime/1.1.0
+    
+    # ✅ Embeddings configuration (offline-compatible)
+    embeddings:
+      device: cuda:0, cuda:1
+      local_files_only: true
+      model_name: all-mpnet-base-v2
+      # device: cpu  # Use CPU for better compatibility
+      local_files_only: true
+      offline_mode: true
+    # embeddings_model: sentence-transformers/all-MiniLM-L6-v2
+    # embeddings_model: sentence-transformers/all-mpnet-base-v2
+    
+    # ✅ Error handling for robust generation
+    error_handling:
+      continue_on_distribution_error: true
+      continue_on_persona_error: true
+      max_retries: 3
+      fallback_to_minimal_distribution: true
+      log_generation_errors: true
+    
+    # ✅ Knowledge graph configuration
+    knowledge_graph_config:
+      enable_kg_loading: true
+      enable_kg_saving: true
+      # existing_kg_file: outputs/run_20250804_232841_ebfcb569/testsets/knowledge_graphs/knowledge_graph_20250804_232841.json
+      kg_cache:
+        cache_ttl_hours: 24
+        enable_cache: true
+      kg_storage:
+        base_directory: ./outputs/knowledge_graphs
+    
+    # ✅ Persona configuration
+    persona_config:
+      enable_safe_personas: true
+      fallback_personas: true
+      max_personas: 3
+    
+    # ✅ Query distribution configuration
+    query_distribution_config:
+      enable_safe_distribution: true
+      fallback_enabled: true
+      normalize_weights: true
+      prefer_single_hop: true  # Start with single-hop for stability
+    
+    # ✅ Generation parameters
+    generation_config:
+      run_config:
+        max_workers: 2
+        timeout: 120
+        max_retries: 2
+        max_wait: 10
+      raise_exceptions: true  # Raise exceptions to see real RAGAS errors
+  # samples_per_document: 3              # ❌ LEGACY: Overridden by max_total_samples=21000
+  # testset_size: 21000                # ❌ LEGACY: Overridden by max_total_samples=21000
+  use_configurable_distribution: true
+  use_fallbacks: true
+  use_ragas_generator: true
