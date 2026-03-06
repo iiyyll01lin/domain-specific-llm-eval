@@ -1,0 +1,139 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "reporting-service",
+    "version": "0.1.0",
+    "description": "Report generation (HTML/PDF) from evaluation results."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "List report jobs",
+        "operationId": "list_report_jobs",
+        "responses": {
+          "200": {
+            "description": "Report list"
+          }
+        }
+      }
+    },
+    "/reports": {
+      "post": {
+        "summary": "Create report job",
+        "operationId": "create_report_job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted"
+          }
+        }
+      },
+      "get": {
+        "summary": "List completed reports",
+        "operationId": "list_reports",
+        "responses": {
+          "200": {
+            "description": "Report list"
+          }
+        }
+      }
+    },
+    "/reports/{run_id}/{template}/html": {
+      "get": {
+        "summary": "Get HTML report",
+        "operationId": "get_html_report",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "template",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML content"
+          }
+        }
+      }
+    },
+    "/reports/{run_id}/{template}/pdf": {
+      "get": {
+        "summary": "Get PDF report",
+        "operationId": "get_pdf_report",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "template",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF content"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ReportJobRequest": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "default": "default"
+          }
+        }
+      }
+    }
+  }
+}

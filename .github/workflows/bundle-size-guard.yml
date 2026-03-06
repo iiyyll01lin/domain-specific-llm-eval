@@ -1,0 +1,83 @@
+name: bundle-size-guard
+
+on:
+  pull_request:
+    paths:
+      - 'insights-portal/src/**'
+      - 'insights-portal/package*.json'
+      - 'insights-portal/vite.config.*'
+  push:
+    branches: [ main ]
+    paths:
+      - 'insights-portal/src/**'
+  workflow_dispatch:
+
+jobs:
+  bundle-size:
+    name: "Bundle size & perf guard"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: insights-portal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: insights-portal/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Check bundle size budgets
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 scripts/check_bundle_size.py \
+            --build-dir insights-portal/dist/assets \
+            --budget-kb 300 \
+            --report insights-portal/dist/bundle-size-report.json
+
+      - name: Upload bundle size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-size-report
+          path: insights-portal/dist/bundle-size-report.json
+          retention-days: 30
+
+      - name: Post size diff comment (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'insights-portal/dist/bundle-size-report.json';
+            if (!fs.existsSync(reportPath)) return;
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const rows = report.chunks
+              .filter(c => c.is_kg_chunk)
+              .map(c => `| ${c.name} | ${c.raw_kb.toFixed(1)} KB | ${c.gz_kb.toFixed(1)} KB | ${c.budget_kb} KB | ${c.ok ? '✅' : '❌'} |`);
+            if (!rows.length) return;
+            const body = [
+              '## 📦 KG Bundle Size Report',
+              '',
+              '| Chunk | Raw | GZ | Budget | Status |',
+              '|-------|-----|-----|--------|--------|',
+              ...rows,
+              '',
+              `Budget policy: KG panel chunks must be ≤ ${report.budget_kb} KB gzipped.`,
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

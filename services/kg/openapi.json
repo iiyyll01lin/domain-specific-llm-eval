@@ -1,0 +1,173 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "kg-service",
+    "version": "0.1.0",
+    "description": "Knowledge-graph extraction, subgraph sampling, and storage."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "List KG jobs",
+        "operationId": "list_kg_jobs",
+        "responses": {
+          "200": {
+            "description": "KG job list"
+          }
+        }
+      }
+    },
+    "/kg-jobs": {
+      "post": {
+        "summary": "Create KG extraction job",
+        "operationId": "create_kg_job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KgJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted"
+          }
+        }
+      }
+    },
+    "/kg-jobs/{kg_id}": {
+      "get": {
+        "summary": "Get KG job status",
+        "operationId": "get_kg_job",
+        "parameters": [
+          {
+            "name": "kg_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KG job detail"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/kg-jobs/{kg_id}/summary": {
+      "get": {
+        "summary": "Get KG summary statistics",
+        "operationId": "get_kg_summary",
+        "parameters": [
+          {
+            "name": "kg_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KG summary"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/kg-jobs/{kg_id}/subgraph": {
+      "post": {
+        "summary": "Extract subgraph by seed node",
+        "operationId": "get_kg_subgraph",
+        "parameters": [
+          {
+            "name": "kg_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubgraphRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Subgraph JSON"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "KgJobRequest": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "max_entities": {
+            "type": "integer",
+            "default": 500
+          }
+        }
+      },
+      "SubgraphRequest": {
+        "type": "object",
+        "required": [
+          "seed_node"
+        ],
+        "properties": {
+          "seed_node": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 2
+          },
+          "max_nodes": {
+            "type": "integer",
+            "default": 50
+          }
+        }
+      }
+    }
+  }
+}

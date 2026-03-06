@@ -1911,7 +1911,8 @@ governance:
 
 # TASK-082 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P2
 	estimate: 1p
@@ -1925,6 +1926,10 @@ governance:
 		- Docs budget policy
 	engineer: E3
 	target_sprint: 5
+	deliverables:
+		- scripts/check_bundle_size.py
+		- .github/workflows/bundle-size-guard.yml
+		- services/tests/test_bundle_size.py
 
 # TASK-083 Governance
 governance:
@@ -2017,9 +2022,19 @@ governance:
 ```yaml
 # TASK-110 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/processing/openapi.json
+		- services/testset/openapi.json
+		- services/eval/openapi.json
+		- services/reporting/openapi.json
+		- services/adapter/openapi.json
+		- services/kg/openapi.json
+		- services/ws/openapi.json
+		- scripts/generate_openapi_specs.py
 # TASK-111 Governance
 governance:
 	status: Planned
@@ -2032,9 +2047,15 @@ governance:
 	target_sprint: 5
 # TASK-113 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- docs/adr/ADR-001-microservices-structure.md
+		- docs/adr/ADR-002-knowledge-graph-visualization-tech.md
+		- docs/adr/ADR-003-subgraph-sampling-strategy.md
+		- docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.md
 # TASK-114 Governance
 governance:
 	status: Planned
@@ -2264,14 +2285,21 @@ governance:
 		- benchmarks/baseline.json
 # TASK-103 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- load/locustfile.py
+		- load/README.md
 # TASK-104 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- chaos/plan.md
 ```yaml
 # TASK-120 Governance
 governance:

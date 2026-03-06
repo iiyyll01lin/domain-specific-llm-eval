@@ -1,0 +1,94 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ws-service",
+    "version": "0.1.0",
+    "description": "WebSocket gateway for real-time pipeline event streaming."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Service info & topic list",
+        "operationId": "root_get",
+        "responses": {
+          "200": {
+            "description": "Service metadata"
+          }
+        }
+      }
+    },
+    "/ui/events": {
+      "get": {
+        "summary": "WebSocket event stream (upgrade required)",
+        "operationId": "ui_events_ws",
+        "description": "WebSocket endpoint. Send `Upgrade: websocket` header. Query param `topics` is a comma-separated list of pipeline topics to subscribe to (e.g. `ingestion,processing,eval`).",
+        "parameters": [
+          {
+            "name": "topics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated topic list"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "Switching Protocols \u2014 WebSocket upgrade"
+          },
+          "400": {
+            "description": "Unknown topic requested"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "required": [
+          "type",
+          "seq",
+          "ts"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "welcome",
+              "heartbeat",
+              "data",
+              "error"
+            ]
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ts": {
+            "type": "number"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

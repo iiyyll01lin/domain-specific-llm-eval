@@ -71,6 +71,8 @@ temp/
 !package.json
 !*template*.json
 !*example*.json
+!benchmarks/*.json
+!services/*/openapi.json
 
 # ============================================================================
 # Development and Testing Files

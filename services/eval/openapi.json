@@ -1,0 +1,103 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "eval-service",
+    "version": "0.1.0",
+    "description": "RAG evaluation against testsets using RAGAS metrics."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "operationId": "metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eval-jobs": {
+      "post": {
+        "summary": "Create evaluation job",
+        "operationId": "create_eval_job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "List evaluation jobs",
+        "operationId": "list_eval_jobs",
+        "responses": {
+          "200": {
+            "description": "Job list"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "EvalJobRequest": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "testset_id"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "testset_id": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "faithfulness",
+              "answer_relevancy"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

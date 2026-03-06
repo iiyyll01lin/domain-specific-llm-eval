@@ -1884,7 +1884,8 @@ governance:
 
 # TASK-082 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P2
 	estimate: 1p
@@ -1896,6 +1897,10 @@ governance:
 		- 預算失敗測試
 		- Diff 報告 artifact
 		- 文檔預算政策
+	deliverables:
+		- scripts/check_bundle_size.py
+		- .github/workflows/bundle-size-guard.yml
+		- services/tests/test_bundle_size.py
 
 # TASK-083 治理
 governance:
@@ -2024,14 +2029,21 @@ governance:
 		- benchmarks/baseline.json
 # TASK-103 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- load/locustfile.py
+		- load/README.md
 # TASK-104 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- chaos/plan.md
 ```
 
 ### 5.11 文件與營運就緒
@@ -2051,9 +2063,19 @@ governance:
 ```yaml
 # TASK-110 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- services/processing/openapi.json
+		- services/testset/openapi.json
+		- services/eval/openapi.json
+		- services/reporting/openapi.json
+		- services/adapter/openapi.json
+		- services/kg/openapi.json
+		- services/ws/openapi.json
+		- scripts/generate_openapi_specs.py
 # TASK-111 治理
 governance:
 	status: Planned
@@ -2066,9 +2088,15 @@ governance:
 	target_sprint: 5
 # TASK-113 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- docs/adr/ADR-001-microservices-structure.md
+		- docs/adr/ADR-002-knowledge-graph-visualization-tech.md
+		- docs/adr/ADR-003-subgraph-sampling-strategy.md
+		- docs/adr/ADR-004-manifest-integrity-and-artifact-traceability.md
 # TASK-114 治理
 governance:
 	status: Planned

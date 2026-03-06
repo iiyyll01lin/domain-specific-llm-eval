@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "processing-service",
+    "version": "0.1.0",
+    "description": "Chunking, keyphrase extraction and embedding for ingested documents."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "operationId": "metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/processing-jobs": {
+      "post": {
+        "summary": "Create processing job",
+        "operationId": "create_processing_job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessingJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "List processing jobs",
+        "operationId": "list_processing_jobs",
+        "responses": {
+          "200": {
+            "description": "Job list"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProcessingJobRequest": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "chunk_size": {
+            "type": "integer",
+            "default": 512
+          },
+          "chunk_overlap": {
+            "type": "integer",
+            "default": 64
+          }
+        }
+      }
+    }
+  }
+}
