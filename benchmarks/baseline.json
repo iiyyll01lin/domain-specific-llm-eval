@@ -1,0 +1,20 @@
+{
+  "captured_at": "2026-03-06T08:21:12Z",
+  "config": {
+    "n_docs": 10
+  },
+  "extraction": {
+    "n_samples": 10,
+    "mean_ms": 625.41,
+    "median_ms": 14.4,
+    "p95_ms": 6123.69,
+    "max_ms": 6123.69
+  },
+  "relationship_building": {
+    "n_samples": 5,
+    "mean_ms": 0.02,
+    "median_ms": 0.02,
+    "p95_ms": 0.03,
+    "max_ms": 0.03
+  }
+}

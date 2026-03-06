@@ -1890,7 +1890,8 @@ governance:
 ```yaml
 # TASK-080 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P1
 	estimate: 1p
@@ -1904,6 +1905,9 @@ governance:
 		- README metrics listing
 	engineer: E1 (E2 review metric names)
 	target_sprint: 5
+	deliverables:
+		- services/common/metrics.py
+		- services/tests/test_common_metrics.py
 
 # TASK-082 Governance
 governance:
@@ -1960,7 +1964,8 @@ governance:
 ```yaml
 # TASK-084 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 1p
@@ -1974,6 +1979,9 @@ governance:
 		- Config toggle documented
 	engineer: E3
 	target_sprint: 5
+	deliverables:
+		- services/ws/schema.py
+		- services/tests/ws/test_schema.py
 ```
 
 ### 5.9 Security & Privacy (Phase 2 Prep)
@@ -2207,19 +2215,31 @@ governance:
 	target_sprint: 6
 # TASK-090 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/auth.py
+		- services/tests/test_common_auth.py
 # TASK-091 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/redact.py
+		- services/tests/test_common_redact.py
 # TASK-092 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/ratelimit.py
+		- services/tests/test_common_ratelimit.py
 # TASK-100 Governance
 governance:
 	status: Planned
@@ -2227,14 +2247,21 @@ governance:
 	target_sprint: 5
 # TASK-101 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- scripts/e2e_smoke.sh
 # TASK-102 Governance
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- scripts/capture_perf_baseline.py
+		- benchmarks/baseline.json
 # TASK-103 Governance
 governance:
 	status: Planned

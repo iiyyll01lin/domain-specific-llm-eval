@@ -1865,7 +1865,8 @@ governance:
 ```yaml
 # TASK-080 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-observability@team
 	priority: P1
 	estimate: 1p
@@ -1877,6 +1878,9 @@ governance:
 		- /metrics 暴露計數器
 		- 直方圖測試
 		- README 指標列表
+	deliverables:
+		- services/common/metrics.py
+		- services/tests/test_common_metrics.py
 
 # TASK-082 治理
 governance:
@@ -1929,7 +1933,8 @@ governance:
 ```yaml
 # TASK-084 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	owner: platform-realtime@team
 	priority: P1
 	estimate: 1p
@@ -1943,6 +1948,9 @@ governance:
 		- 旗標開關文件
 	engineer: E3
 	target_sprint: 5
+	deliverables:
+		- services/ws/schema.py
+		- services/tests/ws/test_schema.py
 ```
 
 ### 5.9 安全與隱私 (Phase 2 準備)
@@ -1955,19 +1963,31 @@ governance:
 ```yaml
 # TASK-090 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/auth.py
+		- services/tests/test_common_auth.py
 # TASK-091 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/redact.py
+		- services/tests/test_common_redact.py
 # TASK-092 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E1
 	target_sprint: 5
+	deliverables:
+		- services/common/ratelimit.py
+		- services/tests/test_common_ratelimit.py
 ```
 
 ### 5.10 測試與強化
@@ -1987,14 +2007,21 @@ governance:
 	target_sprint: 5
 # TASK-101 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- scripts/e2e_smoke.sh
 # TASK-102 治理
 governance:
-	status: Planned
+	status: Completed
+	completed_at: 2026-03-06
 	engineer: E2
 	target_sprint: 5
+	deliverables:
+		- scripts/capture_perf_baseline.py
+		- benchmarks/baseline.json
 # TASK-103 治理
 governance:
 	status: Planned
