@@ -1,8 +1,10 @@
 from functools import lru_cache
 
+import os
+
 from fastapi import Depends, FastAPI, Response, status
 from fastapi.exceptions import RequestValidationError
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Gauge, generate_latest
 
 from services.common.config import configure_service, settings
 from services.common.errors import (
@@ -13,6 +15,7 @@ from services.common.errors import (
 )
 from services.common.middleware import TraceMiddleware
 from services.ingestion.repository import IngestionRepository
+from services.processing.stages import embed_executor as _embed_executor  # noqa: F401
 from services.processing.repository import ProcessingRepository
 from services.processing.schemas import ProcessingJobRequest, ProcessingJobResponse
 
@@ -24,6 +27,16 @@ app.add_middleware(TraceMiddleware)
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(Exception, generic_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+try:
+    GPU_ENABLED = Gauge(
+        "gpu_enabled",
+        "Whether GPU execution profile is enabled for the service.",
+        labelnames=("service",),
+    )
+except ValueError:
+    GPU_ENABLED = REGISTRY._names_to_collectors["gpu_enabled"]
+GPU_ENABLED.labels(service=SERVICE_NAME).set(1 if os.environ.get("GPU_ENABLED", "false").lower() == "true" else 0)
 
 
 @lru_cache

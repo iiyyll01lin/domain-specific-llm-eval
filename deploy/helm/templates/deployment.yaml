@@ -4,6 +4,17 @@
 {{- range $svcName := $services }}
 {{- $svc := index $.Values $svcName }}
 {{- $merged := mergeOverwrite (deepCopy $defaults) $svc }}
+{{- $gpu := dict "enabled" false "limit" 0 "imageTag" ($svc.image.tag | default "latest") }}
+{{- if and $.Values.gpu.enabled (eq $svcName "processing") $.Values.gpu.processing.enabled }}
+{{- $_ := set $gpu "enabled" true }}
+{{- $_ := set $gpu "limit" $.Values.gpu.processing.resourceLimit }}
+{{- $_ := set $gpu "imageTag" $.Values.gpu.processing.imageTag }}
+{{- end }}
+{{- if and $.Values.gpu.enabled (eq $svcName "kg") $.Values.gpu.kg.enabled }}
+{{- $_ := set $gpu "enabled" true }}
+{{- $_ := set $gpu "limit" $.Values.gpu.kg.resourceLimit }}
+{{- $_ := set $gpu "imageTag" $.Values.gpu.kg.imageTag }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -33,7 +44,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $svcName }}
-          image: "{{ $.Values.global.imageRegistry }}{{ $svc.image.repository }}:{{ $svc.image.tag | default "latest" }}"
+          image: "{{ $.Values.global.imageRegistry }}{{ $svc.image.repository }}:{{ $gpu.imageTag }}"
           imagePullPolicy: {{ $merged.image.pullPolicy }}
           ports:
             - containerPort: {{ $svc.containerPort }}
@@ -54,6 +65,8 @@ spec:
               value: {{ $.Values.config.rateLimitRpm | quote }}
             - name: RATE_LIMIT_ENABLED
               value: {{ $.Values.config.rateLimitEnabled | quote }}
+            - name: GPU_ENABLED
+              value: {{ ternary "true" "false" $gpu.enabled | quote }}
           readinessProbe:
             httpGet:
               path: {{ $merged.readinessProbe.path }}
@@ -68,6 +81,12 @@ spec:
             periodSeconds: {{ $merged.livenessProbe.periodSeconds }}
           resources:
             {{- toYaml $merged.resources | nindent 12 }}
+            {{- if $gpu.enabled }}
+            limits:
+              nvidia.com/gpu: {{ $gpu.limit }}
+            requests:
+              nvidia.com/gpu: {{ $gpu.limit }}
+            {{- end }}
 {{- end }}
 
 {{/* Insights Portal deployment */}}

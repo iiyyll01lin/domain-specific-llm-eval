@@ -54,6 +54,17 @@ jobs:
       - name: Validate telemetry taxonomy
         run: python3 scripts/validate_telemetry_taxonomy.py
 
+      - name: Validate dev/CI parity snapshot
+        run: python3 scripts/validate_dev_parity.py --skip-installed-packages --report-json parity-report.json --report-md parity-report.md
+
+      - name: Set up OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Validate OPA governance policies
+        run: bash scripts/validate_policies.sh
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
@@ -128,11 +139,14 @@ jobs:
           name: sbom-cyclonedx
           path: sbom/sbom-main.json
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       - name: Tag local variants
         env:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          bash scripts/tag_image.sh IMAGE_NAME=${{ env.IMAGE_LOCAL_NAME }} BASE_TAG=dev VERSION=${VERSION}
+          IMAGE_NAME=${{ env.IMAGE_LOCAL_NAME }} BASE_TAG=dev VERSION=${VERSION} bash scripts/tag_image.sh
 
       - name: Tag remote variants
         env:
@@ -175,3 +189,49 @@ jobs:
           docker push ${{ env.IMAGE_REMOTE_NAME }}:dev
           docker push ${{ env.IMAGE_REMOTE_NAME }}:v${VERSION}
           docker push ${{ env.IMAGE_REMOTE_NAME }}:git-${SHA}
+
+      - name: Sign images when cosign key is available
+        if: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          mkdir -p attest
+          printf '%s' "$COSIGN_PRIVATE_KEY" > cosign.key
+          cosign sign --yes --key cosign.key ${{ env.IMAGE_REMOTE_NAME }}:v${VERSION}
+          cosign sign --yes --key cosign.key ${{ env.IMAGE_REMOTE_NAME }}:git-${SHA}
+          rm -f cosign.key
+
+      - name: Warn when signing is skipped
+        if: ${{ secrets.COSIGN_PRIVATE_KEY == '' }}
+        run: |
+          mkdir -p attest
+          printf '{"status":"unsigned","reason":"COSIGN_PRIVATE_KEY not configured"}\n' > attest/unsigned.intoto.jsonl
+          echo "::warning::COSIGN_PRIVATE_KEY not configured; image signing skipped"
+
+      - name: Generate supply-chain diff and provenance
+        env:
+          GIT_SHA: ${{ steps.meta.outputs.sha }}
+          BUILD_VERSION: ${{ steps.meta.outputs.version }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: |
+          python3 scripts/generate_supplychain_artifacts.py \
+            --sbom sbom/sbom-main.json \
+            --diff sbom/sbom-diff.json \
+            --provenance attest/provenance.intoto.jsonl \
+            --retain 5
+
+      - name: Upload supply-chain artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-artifacts
+          if-no-files-found: ignore
+          path: |
+            sbom/sbom-main.json
+            sbom/sbom-diff.json
+            attest/provenance.intoto.jsonl
+            attest/unsigned.intoto.jsonl

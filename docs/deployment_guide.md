@@ -82,5 +82,11 @@ Outputs JSON with failure reasons (non-zero exit on problems).
 - TASK-127: Helm chart decomposition & toggleable services.
 - TASK-128: Health/readiness probe standardisation across compose + Helm.
 
-## 10. Security Considerations (Preview)
-Upcoming governance work will add SBOM & Trivy integration, optional Cosign signing, and policy-as-code gates.
+## 10. GPU Profile & Parity Validation
+- GPU-enabled builds use `ENABLE_GPU=true` in the Docker build and Helm `gpu.*` values to switch the `processing` and `kg` services onto GPU-tagged images.
+- Runtime sets `GPU_ENABLED=true` for those services and exposes `gpu_enabled{service=...}` in Prometheus output.
+- `scripts/validate_dev_parity.py` now supports JSON/Markdown reports, snapshot comparison, extensions fingerprints, and drift whitelisting.
+
+## 11. Security Considerations
+- Governance workflow now includes policy-as-code validation via OPA, gitleaks secret scanning, CycloneDX SBOM generation, SBOM diff output, and provenance emission.
+- When `COSIGN_PRIVATE_KEY` is available in CI, images are signed automatically after push.

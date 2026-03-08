@@ -13,3 +13,4 @@ def test_metrics_endpoint_exposes_prometheus_metrics() -> None:
     body = response.text
     assert "processing_embedding_batch_duration_seconds" in body
     assert "processing_embedding_error_total" in body
+    assert 'gpu_enabled{service="processing-service"}' in body

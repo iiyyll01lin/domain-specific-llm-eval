@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Gauge, generate_latest
 from pydantic import BaseModel, Field
 
 from services.common.config import configure_service
@@ -41,6 +43,16 @@ app.add_middleware(TraceMiddleware)
 app.add_exception_handler(ServiceError, service_error_handler)
 app.add_exception_handler(Exception, generic_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+
+try:
+    GPU_ENABLED = Gauge(
+        "gpu_enabled",
+        "Whether GPU execution profile is enabled for the service.",
+        labelnames=("service",),
+    )
+except ValueError:
+    GPU_ENABLED = REGISTRY._names_to_collectors["gpu_enabled"]
+GPU_ENABLED.labels(service=SERVICE_NAME).set(1 if os.environ.get("GPU_ENABLED", "false").lower() == "true" else 0)
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +198,12 @@ async def healthz() -> Dict[str, str]:
 @app.get("/readyz")
 async def readyz() -> Dict[str, str]:
     return {"status": "ready", "service": SERVICE_NAME}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    payload = generate_latest()
+    return Response(content=payload, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/")
