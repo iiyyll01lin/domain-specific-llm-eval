@@ -16,6 +16,156 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 This project provides a comprehensive solution for domain-specific LLM agents' response evaluation that cannot be solely solved by standard LLM-based metrics. **NEW: Complete RAGAS Integration with Custom LLM API** provides professional-grade testset generation and evaluation using your own LLM endpoints.
 
+## Use This Repo
+
+This repository currently has two practical entry points:
+
+1. `eval-pipeline/`
+    Use this when you want to generate testsets from CSV data and run offline evaluation with RAGAS.
+2. `services/`
+    Use this when you want the microservice-style API surface, reporting layer, KG endpoints, metrics, compose deployment, and governance checks.
+
+If you only want the fastest path to value, start with `eval-pipeline/`. If you want something closer to a deployable platform, use the service layer plus compose/Helm.
+
+## What You Can Get From It
+
+- Generate domain-specific evaluation datasets from CSV or curated document inputs.
+- Run RAGAS-based evaluation against your own LLM or RAG endpoint.
+- Produce structured outputs such as evaluation items, KPI summaries, HTML reports, PDF reports, and KG summaries.
+- Validate governance controls: schema checks, telemetry taxonomy checks, policy checks, secrets scans, SBOM/provenance generation, and parity validation.
+- Run a local service stack for ingestion, processing, testset generation, evaluation, reporting, adapter, and KG APIs.
+
+## Quick Start
+
+### Path A: Batch Evaluation Pipeline
+
+Use this if your goal is testset generation and evaluation rather than service deployment.
+
+```bash
+cd eval-pipeline
+python3 test_ragas_integration.py
+python3 run_pipeline.py --stage testset-generation
+python3 run_pipeline.py --stage evaluation
+```
+
+Use this path when you already have CSV inputs and a target LLM or RAG endpoint and want to benefit from the repo quickly.
+
+### Path B: Service Layer Smoke Validation
+
+Use this if you want to verify the current service architecture and artifact chain locally.
+
+```bash
+python3 scripts/e2e_smoke.py
+bash scripts/e2e_smoke.sh
+```
+
+This validates the checked-in service contracts, repository-backed workers, persistence pipeline, and reporting flow.
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.11 is the expected runtime for the containerized stack.
+- Docker and Docker Compose are required for the service deployment path.
+- `requirements.txt` contains the Python dependencies used by the service layer.
+
+Install local dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Important Runtime Configuration
+
+The microservice layer expects object storage configuration. Before running the real service stack, provide these environment variables through `.env`, a compose env file, or exported shell variables:
+
+- `OBJECT_STORE_ENDPOINT`
+- `OBJECT_STORE_ACCESS_KEY`
+- `OBJECT_STORE_SECRET_KEY`
+- `OBJECT_STORE_BUCKET`
+- `OBJECT_STORE_USE_SSL`
+
+For local MinIO-style deployments, an HTTP endpoint plus a development bucket is sufficient.
+
+## Deploy The Service Stack
+
+### Compose
+
+Baseline multi-service startup:
+
+```bash
+make compose
+```
+
+Hot-reload development mode:
+
+```bash
+make dev
+```
+
+Service ports:
+
+- `8001` ingestion
+- `8002` processing
+- `8003` testset
+- `8004` eval
+- `8005` reporting
+- `8006` adapter
+- `8007` kg
+
+Validate the compose definition before starting:
+
+```bash
+make validate-compose
+```
+
+### Image Build And Tagging
+
+```bash
+make build
+make build-tag
+DRY_RUN=1 make tag
+```
+
+This produces `dev`, semantic version, and `git-<sha>` tags using the repository `VERSION` file.
+
+### Helm / Kubernetes
+
+The repo includes Helm manifests under `deploy/helm/` for the service stack. Start with a dry run:
+
+```bash
+helm template rag-eval deploy/helm
+```
+
+Use Helm when you want toggles for services such as KG and GPU-related runtime wiring for `processing` and `kg`.
+
+## Recommended Workflow
+
+If you are evaluating a domain model or RAG system for the first time:
+
+1. Start in `eval-pipeline/` and confirm the RAGAS integration works with your LLM endpoint.
+2. Generate a small testset and run evaluation end-to-end.
+3. Use the service layer only after you need API endpoints, observability, report delivery, or deployment packaging.
+4. Before CI or deployment, run the validators and smoke flow locally.
+
+Suggested validation commands:
+
+```bash
+python3 scripts/validate_event_schemas.py
+python3 scripts/validate_telemetry_taxonomy.py
+python3 scripts/validate_dev_parity.py --skip-installed-packages
+bash scripts/e2e_smoke.sh
+```
+
+## Where To Read Next
+
+- `eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`: detailed RAGAS setup and pipeline usage.
+- `docs/deployment_guide.md`: compose, image, GPU, parity, and deployment notes.
+- `docs/security.md`: secrets scan, SBOM, signing, and provenance flow.
+- `eval-pipeline/docs/tasks/tasks.md`: implementation and governance status.
+
 ## 🎯 Key Features
 
 ### **✅ RAGAS Integration (NEW)**
