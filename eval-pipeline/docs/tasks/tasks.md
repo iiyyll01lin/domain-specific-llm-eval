@@ -2460,56 +2460,56 @@ governance:
 ```yaml
 # TASK-127 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 5
 ```
 ```yaml
 # TASK-128 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 5
 ```
 ```yaml
 # TASK-129 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 5
 ```
 ```yaml
 # TASK-130 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
 ```yaml
 # TASK-131 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
 ```yaml
 # TASK-132 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
 ```yaml
 # TASK-133 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
 ```yaml
 # TASK-134 Governance
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
@@ -2632,7 +2632,7 @@ governance:
 	```yaml
 	# TASK-127 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-deploy@team
 		priority: P1
 		estimate: 2p
@@ -2646,9 +2646,10 @@ governance:
 			- README values table
 		engineer: E1
 		target_sprint: 5
+		completed_at: 2026-03-07
 	# TASK-128 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-deploy@team
 		priority: P1
 		estimate: 1p
@@ -2662,9 +2663,10 @@ governance:
 			- Startup probe doc
 		engineer: E1
 		target_sprint: 5
+		completed_at: 2026-03-07
 	# TASK-129 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-deploy@team
 		priority: P2
 		estimate: 1p
@@ -2678,9 +2680,10 @@ governance:
 			- Tuning guide
 		engineer: E1
 		target_sprint: 6
+		completed_at: 2026-03-07
 	# TASK-131 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-deploy@team
 		priority: P3
 		estimate: 1p
@@ -2694,13 +2697,14 @@ governance:
 			- README GPU section
 		engineer: E1
 		target_sprint: 6
+		completed_at: 2026-03-08
 	# TASK-132 Governance (Engineer Assignment)
 	governance:
 		engineer: E1
 		target_sprint: 6
 	# TASK-133 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-governance@team
 		priority: P2
 		estimate: 2p
@@ -2714,9 +2718,10 @@ governance:
 			- README policy section
 		engineer: E1 (E2 consult for metrics)
 		target_sprint: 6
+		completed_at: 2026-03-08
 	# TASK-134 Governance
 	governance:
-		status: Planned
+		status: Completed
 		owner: platform-secops@team
 		priority: P1
 		estimate: 1p
@@ -2730,10 +2735,11 @@ governance:
 			- Allowlist doc
 		engineer: E1
 		target_sprint: 5
+		completed_at: 2026-03-07
 	```
 # TASK-132 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2745,12 +2751,16 @@ governance:
 		- Drift exit code test
 		- JSON parity report
 		- README parity section
+	completed_at: 2026-03-08
+	deliverables:
+		- scripts/validate_dev_parity.py
+		- services/tests/test_validate_dev_parity.py
 ```
 
 ```yaml
 # TASK-130 Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 4p
@@ -2781,6 +2791,7 @@ governance:
 		- Deployment guide updated with SBOM / signing section
 	engineer: E1 (secops partnering)
 	target_sprint: 6
+	completed_at: 2026-03-08
 ```
 
 #### TASK-126 Subtasks
@@ -2794,7 +2805,7 @@ governance:
 ```yaml
 # TASK-126a Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2806,9 +2817,10 @@ governance:
 		- Add/remove file reload test
 		- Prod disabled assertion
 		- README reload section
+	completed_at: 2026-03-08
 # TASK-126b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P1
 	estimate: 1p
@@ -2820,9 +2832,10 @@ governance:
 		- Blocked import test
 		- Security event log
 		- README sandbox doc
+	completed_at: 2026-03-08
 # TASK-126c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2834,9 +2847,10 @@ governance:
 		- Skip incompatible test
 		- Warning log check
 		- Manifest schema doc
+	completed_at: 2026-03-08
 # TASK-126d Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2848,6 +2862,7 @@ governance:
 		- Failure event test
 		- Metrics increment
 		- README telemetry
+	completed_at: 2026-03-08
 ```
 
 #### TASK-130 Subtasks
@@ -2861,7 +2876,7 @@ governance:
 ```yaml
 # TASK-130a Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -2873,9 +2888,10 @@ governance:
 		- SBOM file exists
 		- Schema validation pass
 		- README SBOM section
+	completed_at: 2026-03-07
 # TASK-130b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -2887,9 +2903,10 @@ governance:
 		- New vuln detection test
 		- Exit code logic test
 		- Docs diff usage
+	completed_at: 2026-03-08
 # TASK-130c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
@@ -2901,9 +2918,10 @@ governance:
 		- Cosign verify test
 		- Warning on unsigned
 		- Docs signing usage
+	completed_at: 2026-03-08
 # TASK-130d Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
@@ -2915,6 +2933,7 @@ governance:
 		- Prune test
 		- Attestation present
 		- README retention note
+	completed_at: 2026-03-08
 ```
 
 #### TASK-132 Subtasks
@@ -2928,7 +2947,7 @@ governance:
 ```yaml
 # TASK-132a Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2940,9 +2959,10 @@ governance:
 		- Version diff test
 		- JSON report present
 		- README parity section
+	completed_at: 2026-03-08
 # TASK-132b Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2954,9 +2974,10 @@ governance:
 		- Drift flag test
 		- Allowlist doc
 		- Report diff section
+	completed_at: 2026-03-08
 # TASK-132c Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P2
 	estimate: 1p
@@ -2968,9 +2989,10 @@ governance:
 		- Fingerprint report
 		- Diff test
 		- README fingerprint doc
+	completed_at: 2026-03-08
 # TASK-132d Governance
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P2
 	estimate: 1p
@@ -2982,6 +3004,7 @@ governance:
 		- Whitelist annotation
 		- MD + JSON outputs
 		- README whitelist policy
+	completed_at: 2026-03-08
 ```
 
 ## 6. Requirement Coverage Summary

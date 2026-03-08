@@ -1290,7 +1290,7 @@ governance:
 ```yaml
 # TASK-034a 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
@@ -1304,9 +1304,10 @@ governance:
 		- 文件更新
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
 # TASK-034b 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P1
 	estimate: 1p
@@ -1320,9 +1321,10 @@ governance:
 		- README 衛生說明
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
 # TASK-034c 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P2
 	estimate: 1p
@@ -1336,9 +1338,10 @@ governance:
 		- 文件更新
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
 # TASK-034d 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-eval@team
 	priority: P2
 	estimate: 1p
@@ -1352,6 +1355,7 @@ governance:
 		- README metrics 更新
 	engineer: E2
 	target_sprint: 3
+	completed_at: 2026-03-06
 ```
 
 ```yaml
@@ -2365,42 +2369,42 @@ governance:
 	completed_on: 2025-09-26
 # TASK-127 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
-# TASK-128 治理
+# TASK-127 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 # TASK-129 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
-# TASK-130 治理
+# TASK-129 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 # TASK-131 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
-# TASK-132 治理
+# TASK-131 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 # TASK-133 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
-# TASK-134 治理
+# TASK-133 治理
 governance:
-	status: Planned
+	status: Completed
 	engineer: E1
 	target_sprint: 6
 ```
@@ -2552,7 +2556,7 @@ governance:
 	target_sprint: 5
 # TASK-127 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 2p
@@ -2566,9 +2570,10 @@ governance:
 		- README values 表格
 	engineer: E1
 	target_sprint: 5
+	completed_at: 2026-03-07
 # TASK-128 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-deploy@team
 	priority: P1
 	estimate: 1p
@@ -2582,9 +2587,10 @@ governance:
 		- Startup probe 文件
 	engineer: E1
 	target_sprint: 5
+	completed_at: 2026-03-07
 # TASK-129 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-deploy@team
 	priority: P2
 	estimate: 1p
@@ -2598,9 +2604,10 @@ governance:
 		- 調優指南
 	engineer: E1
 	target_sprint: 6
+	completed_at: 2026-03-07
 # TASK-131 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-deploy@team
 	priority: P3
 	estimate: 1p
@@ -2614,9 +2621,10 @@ governance:
 		- README GPU 章節
 	engineer: E1
 	target_sprint: 6
+	completed_at: 2026-03-08
 # TASK-132 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2630,10 +2638,11 @@ governance:
 		- README parity 章節
  	engineer: E1
  	target_sprint: 6
+	completed_at: 2026-03-08
 ```yaml
 # TASK-133 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-governance@team
 	priority: P2
 	estimate: 2p
@@ -2647,9 +2656,10 @@ governance:
 		- README policy 章節
 	engineer: E1 (E2 metrics 諮詢)
 	target_sprint: 6
+	completed_at: 2026-03-08
 # TASK-134 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -2663,13 +2673,37 @@ governance:
 		- Allowlist 文件
 	engineer: E1
 	target_sprint: 5
+	completed_at: 2026-03-07
+```
+
+```yaml
+# TASK-121 治理
+governance:
+	status: Verified
+	owner: platform-deploy@team
+	priority: P1
+	estimate: 1p
+	risk: "熱重載缺失降低迭代速度"
+	mitigation: "使用 bind mount 與 --reload 開發覆寫"
+	adr_impact: ["ADR-001"]
+	ci_gate: []
+	artifacts:
+		- docker-compose.dev.override.yml
+		- docs/DOCKER_README.md
+	dod:
+		- 程式碼修改 3 秒內反映
+		- Bind mount 驗證
+		- 開發流程文件化
+	completed_on: 2025-09-25
+	engineer: E1
+	target_sprint: 5
 ```
 ```
 
 ```yaml
 # TASK-130 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 4p
@@ -2698,6 +2732,7 @@ governance:
 		- 提供 cosign 驗證示例指令於 security.md
 		- 簽章缺失時 workflow 標註 annotation
 		- README 部署章節新增 SBOM / 簽章說明
+	completed_at: 2026-03-08
 ```
 
 #### TASK-126 子任務分解
@@ -2711,7 +2746,7 @@ governance:
 ```yaml
 # TASK-126a 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2723,9 +2758,10 @@ governance:
 		- 新增/刪除檔即載入
 		- 生產停用驗證
 		- README 重載章節
+	completed_at: 2026-03-08
 # TASK-126b 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P1
 	estimate: 1p
@@ -2737,9 +2773,10 @@ governance:
 		- 阻擋 import 測試
 		- 安全事件日誌
 		- README sandbox
+	completed_at: 2026-03-08
 # TASK-126c 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2751,9 +2788,10 @@ governance:
 		- 跳過不相容測試
 		- 警告日誌
 		- Manifest schema 文件
+	completed_at: 2026-03-08
 # TASK-126d 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-extensions@team
 	priority: P2
 	estimate: 1p
@@ -2765,6 +2803,7 @@ governance:
 		- 失敗事件測試
 		- 指標遞增
 		- README telemetry
+	completed_at: 2026-03-08
 ```
 
 #### TASK-130 子任務分解
@@ -2778,7 +2817,7 @@ governance:
 ```yaml
 # TASK-130a 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -2790,9 +2829,10 @@ governance:
 		- SBOM 檔存在
 		- Schema 驗證通過
 		- README SBOM 章節
+	completed_at: 2026-03-07
 # TASK-130b 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P1
 	estimate: 1p
@@ -2804,9 +2844,10 @@ governance:
 		- 新漏洞檢測測試
 		- 退出碼邏輯
 		- Docs diff 使用
+	completed_at: 2026-03-08
 # TASK-130c 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
@@ -2818,9 +2859,10 @@ governance:
 		- cosign verify 測試
 		- 未簽章警告
 		- 文件簽章說明
+	completed_at: 2026-03-08
 # TASK-130d 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-secops@team
 	priority: P2
 	estimate: 1p
@@ -2832,6 +2874,7 @@ governance:
 		- Prune 測試
 		- Attestation 存在
 		- README 保留說明
+	completed_at: 2026-03-08
 ```
 
 #### TASK-132 子任務分解
@@ -2845,7 +2888,7 @@ governance:
 ```yaml
 # TASK-132a 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2857,9 +2900,10 @@ governance:
 		- 版本差異測試
 		- JSON 報告存在
 		- README parity 章節
+	completed_at: 2026-03-08
 # TASK-132b 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P1
 	estimate: 1p
@@ -2871,9 +2915,10 @@ governance:
 		- 漂移標誌測試
 		- 白名單文件
 		- diff 報告段落
+	completed_at: 2026-03-08
 # TASK-132c 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P2
 	estimate: 1p
@@ -2885,9 +2930,10 @@ governance:
 		- 指紋報告
 		- Diff 測試
 		- README 指紋說明
+	completed_at: 2026-03-08
 # TASK-132d 治理
 governance:
-	status: Planned
+	status: Completed
 	owner: platform-parity@team
 	priority: P2
 	estimate: 1p
@@ -2899,6 +2945,7 @@ governance:
 		- 白名單註記
 		- MD+JSON 輸出
 		- README 白名單政策
+	completed_at: 2026-03-08
 ```
 
 ## 6. 需求覆蓋摘要
