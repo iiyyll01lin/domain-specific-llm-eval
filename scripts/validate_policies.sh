@@ -2,6 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+TMP_POLICY_INPUTS="$(mktemp)"
+export TMP_POLICY_INPUTS
+
+cleanup() {
+    rm -f "$TMP_POLICY_INPUTS"
+}
+
+trap cleanup EXIT
 
 if ! command -v opa >/dev/null 2>&1; then
   echo "OPA is required for policy validation. Install it or run via CI." >&2
@@ -12,7 +20,7 @@ cd "$ROOT_DIR"
 
 opa test policy
 
-python3 <<'PY' > /tmp/policy_inputs.json
+python3 <<'PY' > "$TMP_POLICY_INPUTS"
 import json
 from pathlib import Path
 
@@ -26,11 +34,12 @@ PY
 
 python3 <<'PY'
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-payloads = json.loads(Path("/tmp/policy_inputs.json").read_text(encoding="utf-8"))
+payloads = json.loads(Path(os.environ["TMP_POLICY_INPUTS"]).read_text(encoding="utf-8"))
 
 for event in payloads["events"]:
     result = subprocess.run(
