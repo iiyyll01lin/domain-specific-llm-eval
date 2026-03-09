@@ -69,6 +69,7 @@ Use `bash scripts/e2e_smoke.sh` when you want the real compose-backed path. It s
 
 - Python 3.11 is the expected runtime for the containerized stack.
 - Docker and Docker Compose are required for the service deployment path.
+- Node.js 18.18+ / 20.x LTS is required for `insights-portal/` builds and tests.
 - `requirements.txt` contains the Python dependencies used by the service layer.
 
 Install local dependencies:

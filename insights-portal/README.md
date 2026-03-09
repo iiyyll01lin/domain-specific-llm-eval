@@ -37,8 +37,10 @@ This guide shows how to generate a portal-ready summary JSON from evaluation art
 
 ## Prerequisites
 - Python 3.8+
-- Node.js LTS (for the portal UI)
+- Node.js 18.18+ / 20.x LTS (for the portal UI)
 - A run folder with `evaluations-pre/` (e.g., `eval-pipeline/outputs/<run-id>/evaluations-pre`)
+
+> Note: Node.js 12 is too old for the current TypeScript/Vite toolchain and will fail during `npm run build`.
 
 ## Generate a portal-ready summary JSON
 - The converter aggregates per-question metrics from `ragas_enhanced_detailed_calculations_*.json` and produces `{ items: [...] }`.
