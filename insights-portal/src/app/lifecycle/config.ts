@@ -75,23 +75,3 @@ function resolveNumber(fallback: number, ...candidates: Array<number | undefined
   }
   return fallback
 }
-
-export function getLifecycleConfig(): LifecycleConfig {
-  return config
-}
-
-function sanitizeBase(input?: string | null): string | undefined {
-  if (!input) return undefined
-  const trimmed = input.trim()
-  if (!trimmed) return undefined
-  return trimmed.replace(/\/$/, '')
-}
-
-function resolveNumber(fallback: number, ...candidates: Array<number | undefined | null>): number {
-  for (const candidate of candidates) {
-    if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
-      return candidate
-    }
-  }
-  return fallback
-}

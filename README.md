@@ -225,6 +225,7 @@ bash scripts/e2e_smoke.sh
 
 - `eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`: detailed RAGAS setup and pipeline usage.
 - `docs/deployment_guide.md`: compose, image, GPU, parity, and deployment notes.
+- `docs/runbooks/compose_e2e_operator_checklist.md`: GHCR login, mirror setup, Node runtime, and compose-backed smoke checklist.
 - `docs/security.md`: secrets scan, SBOM, signing, and provenance flow.
 - `eval-pipeline/docs/tasks/tasks.md`: implementation and governance status.
 

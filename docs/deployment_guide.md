@@ -54,9 +54,11 @@ Hot reload override uses `docker-compose.dev.override.yml` layering in volumes &
 - CI publishes the shared service image to `ghcr.io/<owner>/rag-eval` on `main` pushes.
 - All service containers reuse that single image and switch entrypoints with the `SERVICE` environment variable.
 - For the full operator flow, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).
+- For an executable end-to-end runbook covering GHCR login, mirror env files, smoke commands, and success criteria, see [docs/runbooks/compose_e2e_operator_checklist.md](docs/runbooks/compose_e2e_operator_checklist.md).
 - Convenience targets:
 	- `make compose-prebuilt PREBUILT_ENV_FILE=.env.prebuilt`
 	- `make smoke-prebuilt PREBUILT_ENV_FILE=.env.prebuilt`
+	- start from `.env.mirror.example` when you need a dedicated mirror-backed compose env file.
 
 ## 5. Tagging Strategy
 - Semantic tag: `vX.Y.Z` (from VERSION file)

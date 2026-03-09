@@ -56,7 +56,7 @@ export const KgGraph: React.FC<KgGraphProps> = ({ summary, fetchFullGraph, heigh
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>Knowledge Graph (Summary)</h3>
         {mode === 'summary' && (
-          <button onClick={enableGraph} disabled={mode==='loading'} data-testid="kg-enable-btn">Enable Graph</button>
+          <button onClick={enableGraph} data-testid="kg-enable-btn">Enable Graph</button>
         )}
       </header>
       <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>Nodes: {summary.node_count} · Relationships: {summary.relationship_count}</div>

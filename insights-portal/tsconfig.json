@@ -11,14 +11,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "types": ["vitest/globals"],
     "paths": {
-      "@/*": ["src/*"],
-      "@/components/*": ["src/components/*"],
-      "@/app/*": ["src/app/*"],
-      "@/core/*": ["src/core/*"]
+      "@/*": ["./src/*"],
+      "@/components/*": ["./src/components/*"],
+      "@/app/*": ["./src/app/*"],
+      "@/core/*": ["./src/core/*"]
     }
   },
   "include": ["src", "index.html"],
