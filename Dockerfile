@@ -44,24 +44,21 @@ RUN set -eux; \
     if python -c "import os, urllib.request; urllib.request.urlopen(os.environ.get('PIP_NETWORK_CHECK_URL','https://pypi.org/simple/'), timeout=float(os.environ.get('PIP_NETWORK_TIMEOUT','5')))" >/dev/null 2>&1; then \
         network_available=1; \
     else \
-        echo "⚠️  PyPI unreachable, enabling offline installation mode"; \
+        echo "PyPI unreachable during image build" >&2; \
     fi; \
     if [ "${network_available}" -eq 1 ]; then \
-        python -m pip install --no-cache-dir --default-timeout=30 --retries=3 --upgrade pip setuptools wheel || echo "⚠️  Skipping pip upgrade (transient failure)"; \
+        python -m pip install --no-cache-dir --default-timeout=30 --retries=3 --upgrade pip setuptools wheel; \
     else \
-        echo "⚠️  Skipping pip upgrade (offline)"; \
+        exit 1; \
     fi; \
     if [ -f requirements.txt ]; then \
-        if [ "${network_available}" -eq 1 ]; then \
-            pip install --no-cache-dir --default-timeout=90 --retries=5 -r requirements.txt || echo "⚠️  Requirements installation encountered issues"; \
-        else \
-            echo "⚠️  Skipping requirements install (offline)"; \
-        fi; \
+        pip install --no-cache-dir --default-timeout=90 --retries=5 -r requirements.txt; \
     fi; \
     if [ "${ENABLE_GPU}" = "true" ]; then \
         echo "🔧 GPU profile: installing torch with CUDA 12.1 support"; \
         pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 || echo "⚠️  GPU torch install failed; falling back to CPU torch"; \
-    fi
+    fi; \
+    python -c "import fastapi, uvicorn, pydantic" >/dev/null
 
 FROM python:3.11-slim-bookworm AS runtime
 

@@ -11,26 +11,26 @@ import future.keywords.in
 
 required_event_fields := {"name", "version", "schema_file", "sha256"}
 
-deny[msg] {
+deny contains msg if {
     event := input.events[_]
     field := required_event_fields[_]
     not field in object.keys(event)
     msg := sprintf("Event '%v' is missing required field '%v'", [event, field])
 }
 
-deny[msg] {
+deny contains msg if {
     event := input.events[_]
     event.sha256 == "TBD"
     msg := sprintf("Event '%v' has sha256 == 'TBD' — run validate_event_schemas.py to populate hashes", [event.name])
 }
 
-deny[msg] {
+deny contains msg if {
     event := input.events[_]
     not regex.match(`^\d+\.\d+\.\d+$`, event.version)
     msg := sprintf("Event '%v' version '%v' is not valid semver (expected X.Y.Z)", [event.name, event.version])
 }
 
-deny[msg] {
+deny contains msg if {
     # Check for duplicate event name + version combinations
     event_a := input.events[i]
     event_b := input.events[j]

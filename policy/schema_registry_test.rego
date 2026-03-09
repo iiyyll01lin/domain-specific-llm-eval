@@ -22,11 +22,11 @@ invalid_registry := {
   ]
 }
 
-test_valid_schema_registry {
+test_valid_schema_registry if {
   deny with input as valid_registry == []
 }
 
-test_invalid_schema_registry {
+test_invalid_schema_registry if {
   messages := deny with input as invalid_registry
   count(messages) >= 2
 }

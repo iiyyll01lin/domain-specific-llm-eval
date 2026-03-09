@@ -24,7 +24,7 @@ Owner: platform-secops@team
 4. **PyPI mirror & offline guard**  
    - Optional build args (`PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`) allow routing through an internal mirror when required.
    - `PIP_NETWORK_CHECK_URL` + `PIP_NETWORK_TIMEOUT` provide a fast connectivity probe; run `docker build --build-arg PIP_NETWORK_TIMEOUT=3 .` and observe the "PyPI unreachable" log when air-gapped.
-   - Offline detection should skip the dependency install step within two timeout windows, preventing 15s×n retries.
+   - Offline detection now fails the build explicitly with `PyPI unreachable during image build`; use the internal mirror build args or a prebuilt image from connected CI instead of allowing a partial image.
 
 5. **Configurable model cache**  
    - Build argument `MODELS_CACHE` defaults to `/var/cache/rag-models`.
@@ -41,6 +41,12 @@ Owner: platform-secops@team
 8. **Base image patching**  
    - Verify Dockerfile references `python:3.11-slim-bookworm` (builder and runtime stages).
    - `apt-get upgrade -y --no-install-recommends` executes before package install to ensure latest security updates.
+
+## Compose / Smoke-Test Notes
+- `docker-compose.services.yml` now forwards the mirror-related build args into Docker builds and tags the service image with `SERVICE_IMAGE_NAME:SERVICE_IMAGE_TAG` (default `rag-eval:dev`).
+- `bash scripts/e2e_smoke.sh` supports two deployment paths:
+   1. local build path (default), which now fails fast if Docker cannot reach a package source;
+   2. prebuilt image path with `SMOKE_USE_PREBUILT_IMAGE=1`, after pulling a CI-built image.
 
 ## Operational Notes
 - Override `MODELS_CACHE` during build via `--build-arg MODELS_CACHE=/data/models` to align with external volume mounts.

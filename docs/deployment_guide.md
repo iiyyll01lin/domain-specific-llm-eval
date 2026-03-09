@@ -43,6 +43,10 @@ Hot reload override uses `docker-compose.dev.override.yml` layering in volumes &
 	- `LOG_LEVEL=INFO`
 	- `SERVICE_HOST=0.0.0.0`
 	- `SERVICE_PORT=8000`
+- Optional deployment overrides:
+	- `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_NETWORK_CHECK_URL`, `PIP_NETWORK_TIMEOUT` for Docker builds that must use an internal PyPI mirror.
+	- `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG` to pin compose to a prebuilt image.
+	- `SMOKE_USE_PREBUILT_IMAGE=1` when rerunning [scripts/e2e_smoke.sh](scripts/e2e_smoke.sh) against a pulled prebuilt image instead of building locally.
 - Need a step-by-step dev loop? Refer to `docs/DOCKER_README.md` for hot reload expectations.
 
 ## 5. Tagging Strategy
@@ -67,7 +71,7 @@ Outputs JSON with failure reasons (non-zero exit on problems).
 - Base image pinned to `python:3.11-slim-bookworm` and upgraded during build; security patches apply before the runtime is sealed.
 - Runtime executes as the configurable non-root user (`rag`, UID/GID build args) with `/app`, `${MODELS_CACHE_PATH}`, and `${EXTENSIONS_DIR}` owned by that account.
 - Dependency installation stays in a single layer with `pip --no-cache-dir`, `PIP_DISABLE_PIP_VERSION_CHECK`, and `PYTHONDONTWRITEBYTECODE` to avoid cache bloat and stray bytecode.
-- Network-aware pip guard: build args (`PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_NETWORK_CHECK_URL`, `PIP_NETWORK_TIMEOUT`) allow mirror selection and skip dependency installation quickly when PyPI is unreachable, preventing long retry storms during offline builds.
+- Network-aware pip guard: build args (`PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_NETWORK_CHECK_URL`, `PIP_NETWORK_TIMEOUT`) allow mirror selection and fail fast with `PyPI unreachable during image build` when no reachable package source exists, preventing broken partial images and long retry storms.
 - Build arg `MODELS_CACHE` keeps the model cache path configurable (default `/var/cache/rag-models`) and is exposed as a named volume for persistence.
 - Hardening verification steps and remediation checklist remain in `docs/hardening_checklist.md`.
 

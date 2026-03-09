@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TMP_POLICY_INPUTS="$(mktemp)"
 export TMP_POLICY_INPUTS
+OPA_CMD=(opa)
 
 cleanup() {
     rm -f "$TMP_POLICY_INPUTS"
@@ -12,13 +13,20 @@ cleanup() {
 trap cleanup EXIT
 
 if ! command -v opa >/dev/null 2>&1; then
-  echo "OPA is required for policy validation. Install it or run via CI." >&2
-  exit 1
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "OPA is not installed and docker is unavailable for fallback execution." >&2
+        exit 1
+    fi
+    echo "OPA binary not found; using dockerized OPA image via docker." >&2
+    OPA_CMD=(docker run --rm -i -v "$ROOT_DIR:/workspace" -w /workspace openpolicyagent/opa:latest)
 fi
+
+OPA_CMD_JSON="$(printf '%s\n' "${OPA_CMD[@]}" | python3 -c 'import json, sys; print(json.dumps([line.rstrip("\n") for line in sys.stdin if line.rstrip("\n")]))')"
+export OPA_CMD_JSON
 
 cd "$ROOT_DIR"
 
-opa test policy
+"${OPA_CMD[@]}" test policy
 
 python3 <<'PY' > "$TMP_POLICY_INPUTS"
 import json
@@ -40,10 +48,11 @@ import sys
 from pathlib import Path
 
 payloads = json.loads(Path(os.environ["TMP_POLICY_INPUTS"]).read_text(encoding="utf-8"))
+opa_cmd = json.loads(os.environ["OPA_CMD_JSON"])
 
 for event in payloads["events"]:
     result = subprocess.run(
-        ["opa", "eval", "-f", "json", "-d", "policy", "-i", "/dev/stdin", "data.naming.deny"],
+        [*opa_cmd, "eval", "-f", "json", "-d", "policy", "-i", "/dev/stdin", "data.naming.deny"],
         input=json.dumps(event),
         capture_output=True,
         text=True,
@@ -56,7 +65,7 @@ for event in payloads["events"]:
 
 for metric in payloads["metrics"]:
     result = subprocess.run(
-        ["opa", "eval", "-f", "json", "-d", "policy", "-i", "/dev/stdin", "data.naming.deny"],
+        [*opa_cmd, "eval", "-f", "json", "-d", "policy", "-i", "/dev/stdin", "data.naming.deny"],
         input=json.dumps(metric),
         capture_output=True,
         text=True,
@@ -68,7 +77,7 @@ for metric in payloads["metrics"]:
         sys.exit(1)
 
 result = subprocess.run(
-    ["opa", "eval", "-f", "json", "-d", "policy", "-i", "events/schema_registry.json", "data.schema_registry.deny"],
+    [*opa_cmd, "eval", "-f", "json", "-d", "policy", "-i", "events/schema_registry.json", "data.schema_registry.deny"],
     capture_output=True,
     text=True,
     check=True,

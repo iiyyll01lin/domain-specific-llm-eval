@@ -59,7 +59,9 @@ python3 scripts/e2e_smoke.py
 bash scripts/e2e_smoke.sh
 ```
 
-This validates the checked-in service contracts, repository-backed workers, persistence pipeline, and reporting flow.
+Use `python3 scripts/e2e_smoke.py` when you want the fastest in-process integration check.
+
+Use `bash scripts/e2e_smoke.sh` when you want the real compose-backed path. It starts MinIO plus the service containers, submits work over HTTP, and then advances the queued jobs inside the deployed containers so the smoke still reflects the current submission-oriented API design.
 
 ## Local Development
 
@@ -89,6 +91,24 @@ The microservice layer expects object storage configuration. Before running the 
 
 For local MinIO-style deployments, an HTTP endpoint plus a development bucket is sufficient.
 
+Minimal example:
+
+```dotenv
+PYTHONPATH=/app
+LOG_LEVEL=INFO
+OBJECT_STORE_ENDPOINT=http://minio:9000
+OBJECT_STORE_REGION=us-east-1
+OBJECT_STORE_ACCESS_KEY=minioadmin
+OBJECT_STORE_SECRET_KEY=minioadmin123
+OBJECT_STORE_BUCKET=rag-eval-dev
+OBJECT_STORE_USE_SSL=false
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+MINIO_BUCKET=rag-eval-dev
+```
+
+`.env.compose` now includes a working local MinIO-based default profile for development.
+
 ## Deploy The Service Stack
 
 ### Compose
@@ -98,6 +118,17 @@ Baseline multi-service startup:
 ```bash
 make compose
 ```
+
+This path now expects either:
+
+- network access to install Python dependencies during the Docker build, or
+- prebuilt service images from a connected CI/build environment, or
+- an internal package mirror that the Docker build can reach.
+
+Mirror/prebuilt knobs:
+
+- set `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, and `PIP_TRUSTED_HOST` in your compose env file to route Docker builds through an internal PyPI mirror;
+- or set `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG`, and `SMOKE_USE_PREBUILT_IMAGE=1` to skip local image builds and reuse a prebuilt image.
 
 Hot-reload development mode:
 
@@ -120,6 +151,27 @@ Validate the compose definition before starting:
 ```bash
 make validate-compose
 ```
+
+### First Successful Deployment
+
+For the first real local deployment, use this sequence:
+
+```bash
+cp .env.compose .env.local
+$EDITOR .env.local
+COMPOSE_ENV_FILE=.env.local docker compose --env-file .env.local -f docker-compose.services.yml up -d --build
+curl http://localhost:8001/health
+curl http://localhost:8005/health
+bash scripts/e2e_smoke.sh
+```
+
+What success looks like:
+
+- MinIO is reachable on `9000` and its console on `9001`
+- service health endpoints on `8001` through `8007` return `{"status": ...}`
+- `bash scripts/e2e_smoke.sh` prints the submitted ingestion, processing, testset, eval, and reporting IDs
+
+If the compose build fails because PyPI is unreachable, the Dockerfile now exits immediately with `PyPI unreachable during image build`. Add your internal mirror via `PIP_INDEX_URL` / `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST`, or pull a prebuilt image and rerun with `SMOKE_USE_PREBUILT_IMAGE=1`.
 
 ### Image Build And Tagging
 
@@ -156,8 +208,11 @@ Suggested validation commands:
 python3 scripts/validate_event_schemas.py
 python3 scripts/validate_telemetry_taxonomy.py
 python3 scripts/validate_dev_parity.py --skip-installed-packages
+bash scripts/validate_policies.sh
 bash scripts/e2e_smoke.sh
 ```
+
+`scripts/validate_policies.sh` no longer requires a host-installed `opa` binary. If `opa` is missing, it falls back to `docker run openpolicyagent/opa` automatically.
 
 ## Where To Read Next
 

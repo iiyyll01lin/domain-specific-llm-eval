@@ -20,32 +20,32 @@ import future.keywords.in
 
 allowed_layers := {"ui", "svc", "ws", "eval", "kg"}
 
-event_key_parts(key) = parts {
+event_key_parts(key) := parts if {
     parts := split(key, ".")
 }
 
-deny[msg] {
+deny contains msg if {
     key := input.event_key
     parts := event_key_parts(key)
     not parts[0] in allowed_layers
     msg := sprintf("event_key '%v' has invalid layer prefix '%v'; allowed: %v", [key, parts[0], allowed_layers])
 }
 
-deny[msg] {
+deny contains msg if {
     key := input.event_key
     parts := event_key_parts(key)
     count(parts) < 3
     msg := sprintf("event_key '%v' too short — must have at least 3 dot-separated parts (layer.domain.action)", [key])
 }
 
-deny[msg] {
+deny contains msg if {
     key := input.event_key
     parts := event_key_parts(key)
     count(parts) > 5
     msg := sprintf("event_key '%v' too long — max 5 dot-separated parts", [key])
 }
 
-deny[msg] {
+deny contains msg if {
     key := input.event_key
     not regex.match(`^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*){2,4}$`, key)
     msg := sprintf("event_key '%v' must match pattern ^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*){2,4}$", [key])
@@ -56,20 +56,20 @@ deny[msg] {
 # All components must be lowercase alphanumeric with underscore separators
 # ---------------------------------------------------------------------------
 
-deny[msg] {
+deny contains msg if {
     name := input.metric_name
     parts := split(name, "_")
     not parts[0] in allowed_layers
     msg := sprintf("metric_name '%v' has invalid layer prefix '%v'; allowed: %v", [name, parts[0], allowed_layers])
 }
 
-deny[msg] {
+deny contains msg if {
     name := input.metric_name
     count(split(name, "_")) < 4
     msg := sprintf("metric_name '%v' too short — must have at least 4 underscore-separated parts (layer_domain_entity_metric)", [name])
 }
 
-deny[msg] {
+deny contains msg if {
     name := input.metric_name
     not regex.match(`^[a-z][a-z0-9]*(_[a-z][a-z0-9]*){3,5}$`, name)
     msg := sprintf("metric_name '%v' must match pattern ^[a-z][a-z0-9]*(_[a-z][a-z0-9]*){3,5}$", [name])

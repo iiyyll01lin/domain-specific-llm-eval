@@ -1,9 +1,17 @@
-version: '3.9'
-
 x-service-base: &service-base
+  image: ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}
   build:
     context: .
     dockerfile: Dockerfile
+    args:
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+      PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+      PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
+      PIP_NETWORK_CHECK_URL: ${PIP_NETWORK_CHECK_URL:-https://pypi.org/simple/}
+      PIP_NETWORK_TIMEOUT: ${PIP_NETWORK_TIMEOUT:-5}
+      ENABLE_GPU: ${ENABLE_GPU:-false}
+      MODELS_CACHE: ${MODELS_CACHE_PATH:-/var/cache/rag-models}
+      EXTENSIONS_DIR: ${EXTENSIONS_DIR:-/extensions}
   env_file:
     - ${COMPOSE_ENV_FILE:-.env.compose}
   restart: unless-stopped
@@ -24,6 +32,40 @@ x-service-base: &service-base
     - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
 
 services:
+  minio:
+    image: minio/minio:RELEASE.2025-02-18T16-25-55Z
+    container_name: rag-eval-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+    networks:
+      - rag-eval-net
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-02-15T10-36-16Z
+    container_name: rag-eval-minio-init
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rag-eval-dev}
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done
+        mc mb -p "local/$$MINIO_BUCKET" || true
+    networks:
+      - rag-eval-net
+
   ingestion:
     <<: *service-base
     container_name: rag-eval-ingestion
@@ -87,3 +129,4 @@ networks:
 
 volumes:
   models-cache:
+  minio-data:
