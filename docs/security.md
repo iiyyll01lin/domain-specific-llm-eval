@@ -39,6 +39,8 @@ Local verification example:
 cosign verify --key cosign.pub ghcr.io/<owner>/rag-eval:v<version>
 ```
 
+For the full prebuilt deployment flow, including GHCR login and compose-backed smoke validation without local builds, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).
+
 ## 6. Next Steps
 - Integrate SARIF uploads with GitHub Security Alerts (enable on repository settings).
 - Tighten unsigned-image handling from warning to hard-fail once repository secrets are provisioned.

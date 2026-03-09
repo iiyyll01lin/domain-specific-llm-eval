@@ -1,6 +1,6 @@
 # Deployment & Containerization Guide
 
-Status: Draft
+Status: Active
 
 ## 1. Overview
 Multi-service architecture packaged via a single base image parameterized by `SERVICE` env. Compose and Helm (future) orchestrate runtime wiring. This guide covers local dev, tagging, and environment parity.
@@ -47,7 +47,16 @@ Hot reload override uses `docker-compose.dev.override.yml` layering in volumes &
 	- `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, `PIP_TRUSTED_HOST`, `PIP_NETWORK_CHECK_URL`, `PIP_NETWORK_TIMEOUT` for Docker builds that must use an internal PyPI mirror.
 	- `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG` to pin compose to a prebuilt image.
 	- `SMOKE_USE_PREBUILT_IMAGE=1` when rerunning [scripts/e2e_smoke.sh](scripts/e2e_smoke.sh) against a pulled prebuilt image instead of building locally.
+	- start from `.env.prebuilt.example` when the runtime must consume a CI-published image.
 - Need a step-by-step dev loop? Refer to `docs/DOCKER_README.md` for hot reload expectations.
+
+### 4.2 Prebuilt Image Path
+- CI publishes the shared service image to `ghcr.io/<owner>/rag-eval` on `main` pushes.
+- All service containers reuse that single image and switch entrypoints with the `SERVICE` environment variable.
+- For the full operator flow, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).
+- Convenience targets:
+	- `make compose-prebuilt PREBUILT_ENV_FILE=.env.prebuilt`
+	- `make smoke-prebuilt PREBUILT_ENV_FILE=.env.prebuilt`
 
 ## 5. Tagging Strategy
 - Semantic tag: `vX.Y.Z` (from VERSION file)
@@ -94,3 +103,4 @@ Outputs JSON with failure reasons (non-zero exit on problems).
 ## 11. Security Considerations
 - Governance workflow now includes policy-as-code validation via OPA, gitleaks secret scanning, CycloneDX SBOM generation, SBOM diff output, and provenance emission.
 - When `COSIGN_PRIVATE_KEY` is available in CI, images are signed automatically after push.
+- Prebuilt image pull and signature verification examples are collected in [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).

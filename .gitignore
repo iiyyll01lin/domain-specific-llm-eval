@@ -32,6 +32,8 @@ dist/
 eggs/
 *.egg-info/
 .env
+.env.local
+.env.prebuilt
 .venv
 env/
 venv/

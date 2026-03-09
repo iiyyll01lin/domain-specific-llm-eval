@@ -2437,6 +2437,7 @@ governance:
 		- .github/workflows/build-governance.yml
 		- scripts/validate_task_status.py
 		- scripts/validate_compose.py
+		- docs/prebuilt_image_workflow.md
 	dod:
 		- Workflow orchestrates validators before image build
 		- Governance scripts fail-fast on status drift
@@ -2584,8 +2585,10 @@ governance:
 		- Dockerfile
 		- docker-compose.services.yml
 		- .env.compose
+		- .env.prebuilt.example
 		- docs/deployment_guide.md
 		- docs/hardening_checklist.md
+		- docs/prebuilt_image_workflow.md
 	dod:
 		- Dockerfile refactored into builder/runtime stages; runtime contains no build toolchain packages
 		- Non-root service user retained with owned `/app`, `${MODELS_CACHE_PATH}`, and `${EXTENSIONS_DIR}` directories

@@ -2446,6 +2446,7 @@ governance:
 		- .github/workflows/build-governance.yml
 		- scripts/validate_task_status.py
 		- scripts/validate_compose.py
+		- docs/prebuilt_image_workflow.md
 	dod:
 		- 工作流程先執行治理驗證再建置映像
 		- 任務狀態飄移可被 validate_task_status.py 阻擋
@@ -2489,8 +2490,10 @@ governance:
 		- Dockerfile
 		- docker-compose.services.yml
 		- .env.compose
+		- .env.prebuilt.example
 		- docs/deployment_guide.md
 		- docs/hardening_checklist.md
+		- docs/prebuilt_image_workflow.md
 	dod:
 		- Dockerfile 改為 builder/runtime 多階段，最終階段不含建置工具鏈
 		- 維持非 root 用戶並確保 `/app`、`${MODELS_CACHE_PATH}`、`${EXTENSIONS_DIR}` 權限歸屬

@@ -130,6 +130,8 @@ Mirror/prebuilt knobs:
 - set `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, and `PIP_TRUSTED_HOST` in your compose env file to route Docker builds through an internal PyPI mirror;
 - or set `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG`, and `SMOKE_USE_PREBUILT_IMAGE=1` to skip local image builds and reuse a prebuilt image.
 
+For a complete prebuilt-image flow, including GHCR login, tag selection, `.env.prebuilt` setup, `--no-build` compose startup, and smoke-test reuse, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).
+
 Hot-reload development mode:
 
 ```bash
@@ -172,6 +174,8 @@ What success looks like:
 - `bash scripts/e2e_smoke.sh` prints the submitted ingestion, processing, testset, eval, and reporting IDs
 
 If the compose build fails because PyPI is unreachable, the Dockerfile now exits immediately with `PyPI unreachable during image build`. Add your internal mirror via `PIP_INDEX_URL` / `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST`, or pull a prebuilt image and rerun with `SMOKE_USE_PREBUILT_IMAGE=1`.
+
+You can bootstrap the prebuilt path with `.env.prebuilt.example`.
 
 ### Image Build And Tagging
 
