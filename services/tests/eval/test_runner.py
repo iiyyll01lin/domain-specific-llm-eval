@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 from ragas.dataset_schema import SingleTurnSample
-from ragas.testset.synthesizers.testset_schema import TestsetSample
+from ragas.testset.synthesizers.testset_schema import TestsetSample as RagasTestsetSample
 
 from services.eval.context_capture import ContextCapture
 from services.eval.metrics import RAGRequestMetricsRecorder
@@ -21,8 +21,8 @@ def _retry_factory(max_attempts: int) -> RetryPolicy:
     return RetryPolicy(max_attempts=max_attempts, base_delay_seconds=0.0, sleep_fn=lambda _: None)
 
 
-def _sample(*, question: str = "What is the policy?", answer: str = "The policy mandates annual reviews.") -> TestsetSample:
-    return TestsetSample(
+def _sample(*, question: str = "What is the policy?", answer: str = "The policy mandates annual reviews.") -> RagasTestsetSample:
+    return RagasTestsetSample(
         eval_sample=SingleTurnSample(
             user_input=question,
             reference=answer,

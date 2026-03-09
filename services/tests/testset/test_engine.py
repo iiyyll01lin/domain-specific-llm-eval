@@ -6,7 +6,7 @@ from typing import Any, Dict, Mapping, Sequence
 
 import pytest
 from ragas.dataset_schema import SingleTurnSample
-from ragas.testset.synthesizers.testset_schema import TestsetSample
+from ragas.testset.synthesizers.testset_schema import TestsetSample as RagasTestsetSample
 from jsonschema import Draft202012Validator
 
 from services.common.errors import ServiceError
@@ -55,8 +55,8 @@ class StubGenerator:
         *,
         chunks: Sequence[SourceChunk],
         config: Mapping[str, Any],
-    ) -> tuple[Sequence[TestsetSample], GenerationStats, Dict[str, Any]]:
-        sample = TestsetSample(
+    ) -> tuple[Sequence[RagasTestsetSample], GenerationStats, Dict[str, Any]]:
+        sample = RagasTestsetSample(
             eval_sample=SingleTurnSample(
                 user_input="What is the policy?",
                 reference="The policy mandates annual reviews.",
@@ -94,7 +94,7 @@ class EmptyGenerator:
         *,
         chunks: Sequence[SourceChunk],
         config: Mapping[str, Any],
-    ) -> tuple[Sequence[TestsetSample], GenerationStats, Dict[str, Any]]:
+    ) -> tuple[Sequence[RagasTestsetSample], GenerationStats, Dict[str, Any]]:
         stats = GenerationStats(generated=0, filtered=0, dropped_duplicates=0, dropped_length=0)
         metadata = {"seed": config.get("seed", 0), "scenarios": [], "strategies": []}
         return [], stats, metadata

@@ -32,6 +32,8 @@ class TestsetJob:
 class TestsetRepository:
     """SQLite-backed repository for testset generation job metadata."""
 
+    __test__ = False
+
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
         directory = os.path.dirname(db_path)

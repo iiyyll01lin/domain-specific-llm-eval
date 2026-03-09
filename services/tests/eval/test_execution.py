@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from ragas.dataset_schema import SingleTurnSample
-from ragas.testset.synthesizers.testset_schema import TestsetSample
+from ragas.testset.synthesizers.testset_schema import TestsetSample as RagasTestsetSample
 
 from services.eval.execution import execute_evaluation_run
 from services.eval.metrics.loader import load_metric_registry
@@ -13,8 +13,8 @@ from services.eval.rag_interface import RetrievedContext, StaticResponseAdapter
 from services.eval.runner import EvaluationRunner
 
 
-def _build_sample() -> TestsetSample:
-    return TestsetSample(
+def _build_sample() -> RagasTestsetSample:
+    return RagasTestsetSample(
         eval_sample=SingleTurnSample(
             user_input="Where is the Taipei 101 located?",
             reference="The Taipei 101 is located in Taipei, Taiwan.",

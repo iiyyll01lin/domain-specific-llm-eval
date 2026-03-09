@@ -28,6 +28,8 @@ class TestsetGenerationResult:
 class TestsetGenerationEngine:
     """Coordinates deterministic testset generation and artifact persistence."""
 
+    __test__ = False
+
     def __init__(
         self,
         repository: TestsetRepository,

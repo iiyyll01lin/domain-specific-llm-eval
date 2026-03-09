@@ -75,6 +75,8 @@ class EvaluationRunCreateRequest(BaseModel):
 
 class TestsetNotFoundError(ServiceError):
     """Raised when referenced testset does not exist."""
+
+    __test__ = False
     
     def __init__(self, testset_id: str):
         super().__init__(
@@ -87,6 +89,8 @@ class TestsetNotFoundError(ServiceError):
 
 class InvalidProfileError(ServiceError):
     """Raised when profile does not exist or is invalid."""
+
+    __test__ = False
     
     def __init__(self, profile: str, available_profiles: list[str]):
         super().__init__(
