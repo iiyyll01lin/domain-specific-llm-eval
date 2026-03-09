@@ -77,114 +77,87 @@ Checklist：
 - [ ] 至少一條量化 (p95 / hash / count)
 - [ ] 效能類連回 workload.md
 - [ ] 有故障 / 負面路徑（若屬韌性任務）
-	status: Completed
-	owner: platform-eval@team
-	priority: P1
-	estimate: 1p
-	engineer: E2
-	target_sprint: 3
-	completed_on: 2025-10-02
-	risk: "分位數計算錯誤"
-	mitigation: "固定樣本測試"
-	adr_impact: []
-	ci_gate: ["unit-tests"]
-	verification:
-		- pytest services/tests/eval/test_distribution.py -q
-	deliverables:
-		- services/eval/aggregation/distribution.py
-		- services/tests/eval/test_distribution.py
-	dod:
-		- p50/p95 等分位數在固定樣本測試中符合期望
-		- 支援負值與重複值運算且無精度漂移
-		- 文件補充使用說明
+```
+
+## 5. 詳細任務目錄
+### 5.1 基礎設施與 Repo 準備
+| ID       | Title                    | Description                                                                                  | Acceptance Criteria                                      | Dependencies | Artifacts                                                | Req Mapping         |
+|----------|--------------------------|----------------------------------------------------------------------------------------------|----------------------------------------------------------|--------------|----------------------------------------------------------|---------------------|
+| TASK-001 | 服務骨架 Scaffolding     | 建立微服務 FastAPI 基礎專案結構（ingestion、processing、testset、eval、reporting、adapter）與共用函式庫。 | 專案可 build；各服務可由 uvicorn 啟動；可匯入共用工具。   | None         | services/*、services/pyproject.toml、services/tests/test_service_skeleton.py | FR 基線基礎設施     |
+| TASK-002 | 共用設定與 Env 載入器    | 實作統一 settings 模組（env + .env + defaults）與驗證。                                     | 所有服務啟動時輸出設定；缺少關鍵變數時 fail-fast。       | TASK-001     | services/common/config.py                                | NFR 穩健性          |
+| TASK-003 | Logging 與 Trace ID 中介層 | 結構化 JSON logs 與每請求 trace_id 注入。                                                    | 日誌含 trace_id、path、status_code。                     | TASK-001     | middleware/logging.py                                    | NFR 可觀測性        |
+| TASK-004 | 錯誤信封標準化           | 實作例外處理器，回傳 {error_code,message,trace_id}。                                         | 4xx/5xx 回應格式一致；測試可驗證。                       | TASK-003     | error_handlers.py                                        | UI-FR-053~055       |
+| TASK-005 | 物件儲存客戶端抽象層     | 封裝 S3/MinIO 操作，含 retry/backoff 與 checksum 工具。                                      | upload/download 整合測試通過；checksum mismatch 會報錯。 | TASK-001     | storage/object_store.py                                  | FR ingest, processing |
+
+```yaml
 # TASK-001 治理
 governance:
 	status: Completed
-	owner: platform-eval@team
+	engineer: E1
+	target_sprint: 1
+	owner: platform-foundation@team
 	priority: P1
-	estimate: 1p
-	engineer: E2
-	target_sprint: 3
-	completed_on: 2025-10-02
-	risk: "NaN 傳遞到 UI"
-	mitigation: "守門將 NaN 轉 null"
-	adr_impact: []
-	ci_gate: ["unit-tests"]
+	estimate: 2p
+	completed_at: 2025-09-28
 	verification:
-		- pytest services/tests/eval/test_sanitizer.py -q
-		- pytest services/tests/eval/test_kpi_aggregator.py -q
+		- pytest services/tests/test_service_skeleton.py -q
 	deliverables:
-		- services/eval/aggregation/sanitizer.py
-		- services/tests/eval/test_sanitizer.py
-	dod:
-		- NaN / inf 轉為 None 並記錄於單元測試
-		- Sanitizer 與 KPIAggregator 整合避免髒值流入報告
-		- 文件記載資料衛生策略
+		- services/pyproject.toml
+		- services/tests/test_service_skeleton.py
+		- services/common/config.py
+		- services/*/main.py
 	risk: "服務結構不一致降低重用"
-	mitigation: "模板 + 目錄結構測試"
-	status: Completed
-	owner: platform-eval@team
-	priority: P2
-	estimate: 1p
-	engineer: E2
-	target_sprint: 3
-	completed_on: 2025-10-02
-	risk: "部分寫入損壞 KPI 檔"
-	mitigation: "原子 rename 測試"
-	adr_impact: []
+	mitigation: "模板 + scaffold 測試驗證目錄結構"
+	adr_impact: ["ADR-001"]
 	ci_gate: ["unit-tests"]
-	verification:
-		- pytest services/tests/eval/test_kpi_writer.py -q
-	deliverables:
-		- services/eval/kpi_writer.py
-		- services/tests/eval/test_kpi_writer.py
 	dod:
-		- fsync + 原子 rename 流程於測試中通過
-		- 無法寫入時會拋出錯誤並於測試覆蓋
-		- 文檔補充寫入策略
+		- Health 端點暴露服務識別資訊並回傳 trace_id header
+		- 共用 middleware 與 error handlers 可跨服務匯入且無執行期錯誤
+		- Scaffold smoke test 驗證錯誤信封 contract
+
+# TASK-002 治理
+governance:
+	status: Completed
+	engineer: E1
+	target_sprint: 1
+	owner: platform-foundation@team
+	priority: P1
 	estimate: 2p
 	completed_at: 2025-10-01
-	status: Completed
-	owner: platform-eval@team
-	priority: P2
-	estimate: 1p
-	engineer: E2
-	target_sprint: 3
-	completed_on: 2025-10-02
-	risk: "聚合延遲不可見"
-	mitigation: "耗時指標 + 測試"
-	adr_impact: ["ADR-005"]
-	ci_gate: ["unit-tests"]
+	risk: "環境變數設定錯誤導致執行期不穩定"
+	mitigation: "集中式 pydantic 驗證 + fail-fast；啟動日誌輸出設定快照"
+	adr_impact: ["ADR-001"]
+	ci_gate: ["unit-tests","lint-config"]
 	verification:
-		- pytest services/tests/eval/test_kpi_aggregator.py -q
-		- pytest services/tests/eval/test_execution.py -q
-	deliverables:
-		- services/eval/aggregation_metrics.py
-		- services/tests/eval/test_kpi_aggregator.py
+		- pytest services/tests/test_config.py -q
+		record_date: 2025-10-01
+		test_notes: "涵蓋服務層級覆寫"
+		- pytest services/tests/test_service_skeleton.py -q
+		- pytest tests/services/common/test_object_store.py -q
 	dod:
-		- 聚合耗時直方圖與計數指標可在 Prometheus 抓取
-		- execute_evaluation_run 驗證指標輸出與檔案一致
-		- README 補充聚合指標說明
-		- 服務層級環境變數覆寫驗證並僅啟動時記錄一次
+		- 缺少關鍵變數時 abort 測試通過
+		- 設定只輸出一次且敏感值會遮罩
+		- .env.example 補充服務層級覆寫說明
+		- 服務層級環境變數覆寫已驗證，且每個 process 僅記錄一次
 
 # TASK-003 治理
 governance:
 	status: Completed
-	engineer: E3  # 前端需消費日誌格式; 若需可由 E1 實作
+	engineer: E3  # 前端會消費日誌格式；若需要可由 E1 實作
 	target_sprint: 1
 	owner: platform-foundation@team
 	priority: P1
 	estimate: 2p
 	completed_at: 2025-09-29
-	risk: "非結構化日誌降低事故調查效率"
+	risk: "非結構化日誌妨礙事故排查"
 	mitigation: "JSON logger + trace_id middleware 測試 + 結構 schema"
 	adr_impact: ["ADR-002"]
 	ci_gate: ["unit-tests","log-schema-check"]
 	verification:
 		- pytest services/tests/test_logging.py services/tests/test_errors.py -q
 	dod:
-		- 日誌 schema 單元測試
-		- 請求日誌含 trace id 測試
+		- 日誌 schema 單元測試通過
+		- 請求日誌含 trace id 測試通過
 		- 錯誤路徑日誌含 trace id
 
 # TASK-004 治理
@@ -196,15 +169,15 @@ governance:
 	priority: P1
 	estimate: 1p
 	completed_at: 2025-09-29
-	risk: "錯誤格式不一致破壞 UI 處理"
-	mitigation: "統一 handler + contract 測試樣板"
+	risk: "錯誤格式不一致會破壞 UI 處理"
+	mitigation: "統一 handler + contract 測試 fixture"
 	adr_impact: ["ADR-003"]
 	ci_gate: ["unit-tests","api-schema"]
 	verification:
 		- pytest services/tests/test_logging.py services/tests/test_errors.py -q
 	dod:
 		- 4xx/5xx 錯誤 schema snapshot
-		- Trace id 一律存在
+		- trace id 一律存在
 		- UI 錯誤解析測試通過
 
 # TASK-005 治理
@@ -215,8 +188,8 @@ governance:
 	owner: platform-foundation@team
 	priority: P2
 	estimate: 2p
-	risk: "物件儲存不穩造成資料遺失"
-	mitigation: "重試 + checksum 失敗測試"
+	risk: "物件儲存不穩會導致資料遺失"
+	mitigation: "retry + checksum mismatch 測試"
 	adr_impact: ["ADR-005"]
 	ci_gate: ["unit-tests"]
 	completed_at: 2025-09-25
@@ -224,8 +197,8 @@ governance:
 		- pytest tests/services/common/test_object_store.py
 	dod:
 		- 重試邏輯測試
-		- Checksum 不符失敗
-		- README storage 區段
+		- checksum 不符時失敗
+		- README storage 區段已補充
 ```
 
 ### 5.2 Ingestion 與 Processing
