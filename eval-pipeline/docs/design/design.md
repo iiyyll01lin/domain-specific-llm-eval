@@ -731,7 +731,7 @@ Script (`scripts/validate_dev_parity.py`) compares:
 - Image Python version vs local `python3 --version`
 - Requirements resolved versions vs lock file
 - Extension hash differences between container and host
-Exit non-zero if drift detected (integrate pre-commit or CI optional job).
+Local runs may warn on Python major.minor drift while CI keeps `--python-drift-severity error` to fail on version mismatch. Dependency and extension drift remain reportable for pre-commit or CI jobs.
 
 ### 21.13 Risk Summary Addendum
 | Risk | Added Mitigation |

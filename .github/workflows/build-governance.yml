@@ -55,7 +55,7 @@ jobs:
         run: python3 scripts/validate_telemetry_taxonomy.py
 
       - name: Validate dev/CI parity snapshot
-        run: python3 scripts/validate_dev_parity.py --skip-installed-packages --report-json parity-report.json --report-md parity-report.md
+        run: python3 scripts/validate_dev_parity.py --skip-installed-packages --python-drift-severity error --report-json parity-report.json --report-md parity-report.md
 
       - name: Set up OPA
         uses: open-policy-agent/setup-opa@v2

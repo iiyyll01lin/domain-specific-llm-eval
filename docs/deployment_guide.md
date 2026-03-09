@@ -98,7 +98,10 @@ Outputs JSON with failure reasons (non-zero exit on problems).
 ## 10. GPU Profile & Parity Validation
 - GPU-enabled builds use `ENABLE_GPU=true` in the Docker build and Helm `gpu.*` values to switch the `processing` and `kg` services onto GPU-tagged images.
 - Runtime sets `GPU_ENABLED=true` for those services and exposes `gpu_enabled{service=...}` in Prometheus output.
-- `scripts/validate_dev_parity.py` now supports JSON/Markdown reports, snapshot comparison, extensions fingerprints, and drift whitelisting.
+- `scripts/validate_dev_parity.py` now supports JSON/Markdown reports, snapshot comparison, extensions fingerprints, drift whitelisting, and separate Python drift severity for local vs CI usage.
+- Recommended usage:
+	- local workstation: `python3 scripts/validate_dev_parity.py --skip-installed-packages`
+	- CI gate: `python3 scripts/validate_dev_parity.py --skip-installed-packages --python-drift-severity error`
 
 ## 11. Security Considerations
 - Governance workflow now includes policy-as-code validation via OPA, gitleaks secret scanning, CycloneDX SBOM generation, SBOM diff output, and provenance emission.

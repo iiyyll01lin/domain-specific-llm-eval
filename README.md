@@ -218,6 +218,8 @@ bash scripts/e2e_smoke.sh
 
 `scripts/validate_policies.sh` no longer requires a host-installed `opa` binary. If `opa` is missing, it falls back to `docker run openpolicyagent/opa` automatically.
 
+`scripts/validate_dev_parity.py` treats host Python drift as a local warning by default and remains a hard failure in CI when invoked with `--python-drift-severity error`.
+
 ## Where To Read Next
 
 - `eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`: detailed RAGAS setup and pipeline usage.

@@ -47,15 +47,39 @@ def test_compare_snapshots_respects_whitelist() -> None:
     assert all(drift.whitelisted for drift in drifts)
 
 
+def test_compare_snapshots_marks_python_warn_severity() -> None:
+    current = {
+        "python": {"expected": "3.11", "actual": "3.10"},
+        "dependency_files": {},
+        "extensions": {},
+    }
+    expected = {
+        "python": {"expected": "3.11", "actual": "3.11"},
+        "dependency_files": {},
+        "extensions": {},
+    }
+
+    drifts = validate_dev_parity.compare_snapshots(
+        current,
+        expected,
+        python_drift_severity="warn",
+    )
+
+    assert len(drifts) == 1
+    assert drifts[0].severity == "warn"
+
+
 def test_build_markdown_report_contains_whitelisted_drift() -> None:
     report = {
         "python": {"expected": "3.11", "actual": "3.10"},
+        "python_drift_severity": "warn",
         "drifts": [
             {
                 "category": "python",
                 "name": "python_version",
                 "expected": "3.11",
                 "actual": "3.10",
+                "severity": "warn",
                 "whitelisted": True,
             }
         ],
@@ -67,6 +91,7 @@ def test_build_markdown_report_contains_whitelisted_drift() -> None:
 
     assert "python_version" in markdown
     assert "True" in markdown
+    assert "warn" in markdown
 
 
 def test_load_whitelist_reads_json(tmp_path: Path) -> None:
@@ -80,3 +105,28 @@ def test_load_whitelist_reads_json(tmp_path: Path) -> None:
 
     assert "sample_metric.py" in whitelist["extensions"]
     assert "python_version" in whitelist["python"]
+
+
+def test_evaluate_parity_warns_for_local_python_drift(monkeypatch) -> None:
+    monkeypatch.setattr(
+        validate_dev_parity,
+        "build_snapshot",
+        lambda: {
+            "python": {"expected": "3.11", "actual": "3.10"},
+            "dependency_files": {},
+            "extensions": {},
+        },
+    )
+
+    class Args:
+        strict = False
+        skip_installed_packages = True
+        snapshot_json = None
+        whitelist = None
+        python_drift_severity = "warn"
+
+    report = validate_dev_parity.evaluate_parity(Args())
+
+    assert report["failures"] == []
+    assert report["warnings"] == ["python_version"]
+    assert report["python_drift_severity"] == "warn"

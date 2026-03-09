@@ -2220,7 +2220,7 @@ governance:
 | TASK-129 | K8s 水平擴展策略 (HPA)        | 為無狀態服務提供 CPU + 請求速率 HPA 範例。                                                                     | hpa.yaml 套用成功；dry-run 模擬 scaling；docs 含調優指引。                                                         | TASK-127, TASK-080 | deploy/helm/templates/hpa.yaml, docs/scaling.md                                     | 擴展性 NFR               |
 | TASK-130 | SBOM 與映像簽章流水線         | CI 使用 syft 產出 SBOM，並（選）cosign 簽章與 provenance attestation。                                            | build-governance 產出 CycloneDX v1.5 SBOM 於 sbom/sbom-main.json + 簽章（若提供金鑰）；驗證步驟通過；artifact 保存。 | TASK-123, TASK-124 | .github/workflows/build-governance.yml, sbom/sbom-main.json, docs/security.md       | 供應鏈完整性             |
 | TASK-131 | GPU 選配建置與執行設定        | ENABLE_GPU build arg + compose/Helm profile；曝露 gpu_enabled metric + 文件 fallback。                          | GPU profile 成功建置不破壞 CPU；gpu_enabled metric 存在；文件描述啟用步驟。                                        | TASK-125           | Dockerfile (ARG), docs/deployment_guide.md, helm values                             | 效能彈性                 |
-| TASK-132 | 開發/CI 環境一致性驗證腳本    | 腳本比對 Python 版本、依賴鎖定、extensions 哈希；可做為 CI Gate。                                                 | 漂移退出碼非 0；附示範測試；design §21.12 引用。                                                                   | TASK-120           | scripts/validate_dev_parity.py, docs/deployment_guide.md                            | 可重現性, DevEx          |
+| TASK-132 | 開發/CI 環境一致性驗證腳本    | 腳本比對 Python 版本、依賴鎖定、extensions 哈希；可做為 CI Gate。                                                 | CI 在強制模式下遇到漂移會非 0 退出；本地 Python 版本漂移可改為 warning 並寫入報告欄位；附示範測試；design §21.12 引用。 | TASK-120           | scripts/validate_dev_parity.py, docs/deployment_guide.md                            | 可重現性, DevEx          |
 | TASK-133 | Policy as Code (OPA)          | 使用 OPA Rego 規則驗證事件 schema 與 metrics 命名（前綴/風格/保留字）並納入 CI gate。                            | policy/*.rego 存在；命名違規測試失敗；CI 含 policy 驗證步驟。                                                      | TASK-118, TASK-032 | policy/*.rego, scripts/validate_policies.sh, .github/workflows/build-governance.yml | 治理, 一致性             |
 | TASK-134 | Secrets Scan Gate (gitleaks)  | 整合 gitleaks 掃描新提交/PR 硬編碼 secrets；偵測即失敗（可允許清單）。                                            | CI 顯示 gitleaks 步驟；注入測試 secret 觸發失敗；允許清單文件化。                                                  | TASK-123           | .github/workflows/build-governance.yml, .gitleaks.toml, docs/security.md            | 安全, 供應鏈控制         |
 
@@ -2883,7 +2883,7 @@ governance:
 #### TASK-132 子任務分解
 | 子ID      | 標題               | 說明                             | 驗收條件                        | 依賴      | 產出                           | 備註     |
 |-----------|--------------------|----------------------------------|---------------------------------|-----------|--------------------------------|----------|
-| TASK-132a | Python 版本比對    | 比對本地 vs 容器 major.minor     | 不一致非 0 退出 + JSON 報告欄位 | TASK-132  | scripts/validate_dev_parity.py | 漂移偵測 |
+| TASK-132a | Python 版本比對    | 比對本地 vs 容器 major.minor，支援本地 warning / CI fail 策略 | 不一致會寫入 JSON 報告；CI 可強制非 0 退出 | TASK-132  | scripts/validate_dev_parity.py | 漂移偵測 |
 | TASK-132b | 依賴鎖雜湊比對     | 計算鎖檔 hash 與容器快照比較     | 變更產生 drift 標誌 (可白名單)  | TASK-132a | scripts/validate_dev_parity.py | 完整性   |
 | TASK-132c | 擴充指紋           | Hash extensions/ 每檔並比較      | 新增/刪除/變更列於 diff         | TASK-132b | scripts/validate_dev_parity.py | 擴充管理 |
 | TASK-132d | 漂移白名單與格式化 | 支援允許清單；輸出 MD + JSON 報告 | 報告含摘要表；白名單項標註       | TASK-132c | scripts/validate_dev_parity.py | 報告     |
@@ -2901,6 +2901,7 @@ governance:
 	ci_gate: ["parity-validate"]
 	dod:
 		- 版本差異測試
+		- 本地 warning / CI fail 策略文件
 		- JSON 報告存在
 		- README parity 章節
 	completed_at: 2026-03-08

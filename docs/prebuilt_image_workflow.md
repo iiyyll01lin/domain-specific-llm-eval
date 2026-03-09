@@ -111,7 +111,7 @@ Behavior:
 The workflow publishes to `ghcr.io/${repository_owner}/rag-eval`. Replace `<owner>` with the repository owner for the CI run that produced the image.
 
 ### 9.4 Local parity warning
-If [scripts/validate_dev_parity.py](scripts/validate_dev_parity.py) reports a Python mismatch, that reflects the host environment, not the prebuilt image itself. The runtime target remains Python 3.11.
+If [scripts/validate_dev_parity.py](scripts/validate_dev_parity.py) reports a Python mismatch, that reflects the host environment, not the prebuilt image itself. The runtime target remains Python 3.11. Local runs warn by default; CI should use `--python-drift-severity error`.
 
 ## 10. Fallback: Internal PyPI Mirror
 If prebuilt images are unavailable, use the mirror path documented in [docs/deployment_guide.md](docs/deployment_guide.md) by setting:
