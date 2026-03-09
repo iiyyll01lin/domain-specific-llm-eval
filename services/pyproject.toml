@@ -32,4 +32,7 @@ include = ["services*"]
 minversion = "7.0"
 addopts = "-q"
 testpaths = ["tests"]
+filterwarnings = [
+    'ignore:Please use `import python_multipart` instead\.:PendingDeprecationWarning:starlette\.formparsers',
+]
 

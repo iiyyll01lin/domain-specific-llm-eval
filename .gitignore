@@ -79,20 +79,40 @@ temp/
 # ============================================================================
 # Development and Testing Files
 # ============================================================================
-# Debug and test files (massive cleanup needed)
-debug_*.py
-test_*.py
-fix_*.py
-apply_*.py
-*_test.py
-*_debug.py
-*_fix.py
-quick_*.py
-simple_*.py
-minimal_*.py
-temp_*.py
-verify_*.py
-validate_*.py
+# Root-level scratch utilities only. Keep maintained automation under scripts/,
+# services/, and eval-pipeline/ trackable without force-adding.
+/debug_*.py
+/test_*.py
+/fix_*.py
+/apply_*.py
+/*_test.py
+/*_debug.py
+/*_fix.py
+/quick_*.py
+/simple_*.py
+/minimal_*.py
+/temp_*.py
+/verify_*.py
+/validate_*.py
+/scripts/test_*.py
+
+# Legacy eval-pipeline scratch utilities and one-off repair scripts.
+/eval-pipeline/debug_*.py
+/eval-pipeline/test_*.py
+/eval-pipeline/fix_*.py
+/eval-pipeline/apply_*.py
+/eval-pipeline/*_test.py
+/eval-pipeline/*_debug.py
+/eval-pipeline/*_fix.py
+/eval-pipeline/quick_*.py
+/eval-pipeline/simple_*.py
+/eval-pipeline/minimal_*.py
+/eval-pipeline/temp_*.py
+/eval-pipeline/verify_*.py
+/eval-pipeline/validate_*.py
+/eval-pipeline/*_guide.py
+/eval-pipeline/scripts/validate_*.py
+/eval-pipeline/src/**/*_fix.py
 
 # Testing outputs and temporary files
 my_custom_testset.xlsx
@@ -100,13 +120,6 @@ test_enhanced_testset_sample.csv
 redfish_testset_verification.csv
 contextual_keyword_report*.txt
 contextual_keyword_report*.xlsx
-
-# Keep essential test files
-!eval-pipeline/test_custom_documents.py
-!eval-pipeline/test_pipeline.py
-!eval-pipeline/validate_complete_pipeline.py
-!eval-pipeline/verify_document_loader.py
-!services/tests/**/test_*.py
 
 # ============================================================================
 # Project-Specific & Temporary Files
@@ -222,7 +235,6 @@ sample_documents/
 # Keep essential documentation
 !README*.md
 !CUSTOM_DOCUMENTS_GUIDE.md
-!IMPLEMENTATION_COMPLETE.md
 !eval-pipeline/README.md
 !docs/**/*.md
 config/pipeline_config.yaml

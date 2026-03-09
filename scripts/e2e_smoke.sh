@@ -114,8 +114,12 @@ wait_http "http://localhost:9000/minio/health/live" "MinIO"
 compose run --rm minio-init >/dev/null
 if [[ "$SMOKE_USE_PREBUILT_IMAGE" == "1" ]]; then
 	log "  ↳ using prebuilt service image ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}"
-	compose pull ingestion processing testset eval reporting >/dev/null
-	compose up -d --no-build ingestion processing testset eval reporting
+	if ! compose pull ingestion processing testset eval reporting >/dev/null; then
+		fail "Pulling the prebuilt service image failed. Confirm registry access/login and verify that ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev} exists."
+	fi
+	if ! compose up -d --no-build ingestion processing testset eval reporting; then
+		fail "Starting services from the prebuilt image failed. Inspect the compose logs for the selected image tag."
+	fi
 else
 	log "  ↳ building service image via compose"
 	if ! compose up -d --build ingestion processing testset eval reporting; then
