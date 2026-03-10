@@ -506,7 +506,7 @@ governance:
 		- 單元測試涵蓋成功路徑、缺漏工作、生成結果為空的錯誤處理
 # TASK-022 治理
 governance:
-	status: Verified
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -527,7 +527,7 @@ governance:
 		- 單元測試驗證 artifact 內容、計數以及 metadata 關聯關係
 # TASK-023 治理
 governance:
-	status: Done
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -549,7 +549,7 @@ governance:
 		- 品質過濾計量納入去重減少值，確保最終樣本數遵守設定上限
 # TASK-024 治理
 governance:
-	status: Done
+	status: Completed
 	engineer: E2
 	target_sprint: 2
 	owner: platform-testset@team
@@ -568,7 +568,7 @@ governance:
 		- 單元測試以 JSON schema 驗證事件封包以確保契約穩定
 # TASK-025 治理
 governance:
-	status: Done
+	status: Completed
 	engineer: E3
 	target_sprint: 2
 	owner: ui-platform@team
@@ -1665,9 +1665,20 @@ governance:
 # TASK-065 治理
 governance:
 	status: Completed
+	owner: platform-kg@team
+	priority: P2
+	estimate: 2p
+	risk: "圖形可視化 bundle 體積膨脹"
+	mitigation: "Lazy chunk + 體積 diff 測試"
+	adr_impact: ["ADR-001"]
+	ci_gate: ["unit-tests","perf-baseline"]
 	engineer: E3
 	target_sprint: 4
 	completed_at: 2026-03-06
+	dod:
+		- 動態載入驗證
+		- 體積差異記錄
+		- README 可視化章節
 	notes: "KgPanel.tsx feature-flagged；Cytoscape lazy import 延後至後續"
 # TASK-066 治理
 governance:
@@ -1678,6 +1689,29 @@ governance:
 	deliverables:
 		- services/kg/subgraph.py
 		- services/tests/kg/test_subgraph.py
+# TASK-067 治理
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	owner: platform-ui@team
+	priority: P3
+	estimate: 2p
+	risk: "Subgraph 取樣結果造成 UI 誤解"
+	mitigation: "Sampling pill + 文件說明"
+	adr_impact: []
+	ci_gate: ["ui-tests"]
+	dod:
+		- SubgraphFocusForm 提供 seed node 與 depth 控制
+		- SubgraphOverlay 顯示 nodes/edges 清單
+		- SamplingPill 顯示 sampled/full count 與截斷指示
+		- 表單與錯誤訊息具備可及性標記
+		- 404 錯誤以 inline 訊息呈現
+	deliverables:
+		- insights-portal/src/app/lifecycle/KgPanel.tsx
+		- insights-portal/src/app/lifecycle/types.ts
+		- insights-portal/src/app/lifecycle/api.ts
+	engineer: E3
+	target_sprint: 6
 # TASK-062a 治理
 governance:
 	status: Completed
@@ -1746,25 +1780,6 @@ governance:
 	completed_at: 2026-03-06
 	deliverables:
 		- scripts/kg_threshold_tune.py
-```
-
-```yaml
-# TASK-065 治理
-governance:
-	status: Completed
-	owner: platform-kg@team
-	priority: P2
-	estimate: 2p
-	risk: "圖形可視化 bundle 體積膨脹"
-	mitigation: "Lazy chunk + 體積 diff 測試"
-	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests","perf-baseline"]
-	dod:
-		- 動態載入驗證
-		- 體積差異記錄
-		- README 可視化章節
-	completed_at: 2026-03-06
-	notes: "KgPanel.tsx 已加入 window.ENABLE_KG_PANEL feature flag；Cytoscape lazy import 延後至 Sprint 6"
 ```
 
 ### 5.7 WebSocket 與即時

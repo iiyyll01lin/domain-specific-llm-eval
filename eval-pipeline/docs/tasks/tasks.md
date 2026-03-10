@@ -2014,6 +2014,36 @@ governance:
 | TASK-091 | PII Redaction Utility           | Redact secrets & PII fields in logs and summaries.      | Regex test set passes redaction coverage >95%.      | TASK-003     | common/redact.py             | UI-FR-056/058 |
 | TASK-092 | Rate Limit & Backpressure Hooks | Basic per-IP limit on ingestion/testset/eval endpoints. | Exceed limit returns 429 with Retry-After.          | TASK-010     | services/common/ratelimit.py | Stability     |
 
+```yaml
+# TASK-090 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E1
+	target_sprint: 5
+	deliverables:
+		- services/common/auth.py
+		- services/tests/test_common_auth.py
+# TASK-091 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E1
+	target_sprint: 5
+	deliverables:
+		- services/common/redact.py
+		- services/tests/test_common_redact.py
+# TASK-092 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E1
+	target_sprint: 5
+	deliverables:
+		- services/common/ratelimit.py
+		- services/tests/test_common_ratelimit.py
+```
+
 ### 5.10 QA, Testing & Hardening
 | ID       | Title                        | Description                                                 | Acceptance Criteria                       | Dependencies       | Artifacts                | Req Mapping            |
 |----------|------------------------------|-------------------------------------------------------------|-------------------------------------------|--------------------|--------------------------|------------------------|
@@ -2022,6 +2052,50 @@ governance:
 | TASK-102 | Performance Baseline Capture | Benchmark ingestion→eval latency small dataset.             | Baseline JSON stored in repo.             | TASK-101           | benchmarks/baseline.json | NFR performance        |
 | TASK-103 | Load Test (Selective)        | k6 or Locust for processing & eval concurrency.             | Report p95 < target thresholds.           | TASK-015, TASK-034 | load/                    | NFR scalability        |
 | TASK-104 | Resilience Chaos Drill       | Simulate transient failures (network, embedding).           | System recovers; no data corruption.      | TASK-016, TASK-033 | chaos/plan.md            | Reliability            |
+
+```yaml
+# TASK-100 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E2
+	target_sprint: 5
+	notes: "coverage 89% statements (threshold >=70%). Run: pytest --cov=services"
+# TASK-101 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E2
+	target_sprint: 5
+	deliverables:
+		- scripts/e2e_smoke.sh
+# TASK-102 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E2
+	target_sprint: 5
+	deliverables:
+		- scripts/capture_perf_baseline.py
+		- benchmarks/baseline.json
+# TASK-103 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E2
+	target_sprint: 5
+	deliverables:
+		- load/locustfile.py
+		- load/README.md
+# TASK-104 Governance
+governance:
+	status: Completed
+	completed_at: 2026-03-06
+	engineer: E2
+	target_sprint: 5
+	deliverables:
+		- chaos/plan.md
+```
 
 ### 5.11 Documentation & Operational Readiness
 | ID       | Title                                 | Description                                                      | Acceptance Criteria                               | Dependencies       | Artifacts                                                                 | Req Mapping   |

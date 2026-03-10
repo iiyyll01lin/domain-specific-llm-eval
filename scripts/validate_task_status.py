@@ -11,32 +11,35 @@ TASK_DOCS = {
     "en": ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.md",
     "zh": ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.zh.md",
 }
-PARITY_TASKS = {f"TASK-{task_id}" for task_id in range(120, 135)}
 
 GOVERNANCE_HEADER_PATTERN = re.compile(
     r"^# (?P<task>TASK-\d+[a-z]?)\s+(?:Governance|治理)\s*$", re.MULTILINE
 )
-STATUS_PATTERN = re.compile(r"^\s*status:\s*(?P<status>[A-Za-z-]+)\s*$", re.MULTILINE)
+STATUS_PATTERN = re.compile(r"^\s*status:\s*(?P<status>[A-Za-z-]+)(?:\s+#.*)?\s*$", re.MULTILINE)
 CODE_FENCE_PATTERN = re.compile(r"^```(?:yaml)?\s*$", re.MULTILINE)
+YAML_BLOCK_PATTERN = re.compile(r"```yaml\n(?P<body>.*?)\n```", re.DOTALL)
 
 
 def parse_governance_sections(text: str):
-    matches = list(GOVERNANCE_HEADER_PATTERN.finditer(text))
     sections = {}
     duplicates = []
 
-    for index, match in enumerate(matches):
-        task = match.group("task")
-        start = match.end()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        body = text[start:end]
-        if task in sections:
-            duplicates.append(task)
-            continue
-        sections[task] = {
-            "body": body,
-            "statuses": STATUS_PATTERN.findall(body),
-        }
+    for yaml_block in YAML_BLOCK_PATTERN.finditer(text):
+        block_text = yaml_block.group("body")
+        matches = list(GOVERNANCE_HEADER_PATTERN.finditer(block_text))
+        for index, match in enumerate(matches):
+            task = match.group("task")
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(block_text)
+            body = block_text[start:end]
+            if task in sections:
+                duplicates.append(task)
+                continue
+            sections[task] = {
+                "body": body,
+                "statuses": STATUS_PATTERN.findall(body),
+            }
+
     return sections, duplicates
 
 
@@ -50,12 +53,9 @@ def validate_doc(doc_path: Path):
     sections, duplicates = parse_governance_sections(text)
     duplicate_counts = Counter(duplicates)
     for task, count in sorted(duplicate_counts.items()):
-        if task in PARITY_TASKS:
-            failures.append(f"{doc_path.name}: duplicate governance header for {task} ({count + 1} occurrences)")
+        failures.append(f"{doc_path.name}: duplicate governance header for {task} ({count + 1} occurrences)")
 
     for task, details in sorted(sections.items()):
-        if task not in PARITY_TASKS:
-            continue
         statuses = details["statuses"]
         if not statuses:
             failures.append(f"{doc_path.name}: {task} missing status line")
@@ -76,12 +76,12 @@ def main() -> int:
 
     en_tasks = set(parsed["en"])
     zh_tasks = set(parsed["zh"])
-    for task in sorted((en_tasks & PARITY_TASKS) - zh_tasks):
+    for task in sorted(en_tasks - zh_tasks):
         failures.append(f"tasks.zh.md: missing governance section for {task}")
-    for task in sorted((zh_tasks & PARITY_TASKS) - en_tasks):
+    for task in sorted(zh_tasks - en_tasks):
         failures.append(f"tasks.md: missing governance section for {task}")
 
-    for task in sorted((en_tasks & zh_tasks) & PARITY_TASKS):
+    for task in sorted(en_tasks & zh_tasks):
         en_statuses = parsed["en"][task]["statuses"]
         zh_statuses = parsed["zh"][task]["statuses"]
         if not en_statuses or not zh_statuses:
@@ -99,7 +99,7 @@ def main() -> int:
 
     print("Task governance validation passed.")
     print(f" - governance sections: {len(parsed['en'])} matched task IDs")
-    print(f" - scoped bilingual parity ({min(PARITY_TASKS)}..{max(PARITY_TASKS)}): OK")
+    print(" - full english/chinese status alignment: OK")
     print(" - markdown governance structure: OK")
     return 0
 
