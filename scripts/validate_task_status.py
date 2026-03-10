@@ -3,52 +3,106 @@ from __future__ import annotations
 
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TASK_DOCS = [
-    ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.md",
-    ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.zh.md",
-]
-EXPECTED = {
-    "TASK-120": "Verified",
-    "TASK-121": "Verified",
-    "TASK-122": "Verified",
-    "TASK-125": "Verified",
+TASK_DOCS = {
+    "en": ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.md",
+    "zh": ROOT / "eval-pipeline" / "docs" / "tasks" / "tasks.zh.md",
 }
+PARITY_TASKS = {f"TASK-{task_id}" for task_id in range(120, 135)}
 
-section_pattern = re.compile(
-    r"^# (?P<task>TASK-\d+)[^\n]*\n(?P<body>.*?)(?=^# TASK-|\Z)", re.MULTILINE | re.DOTALL
+GOVERNANCE_HEADER_PATTERN = re.compile(
+    r"^# (?P<task>TASK-\d+[a-z]?)\s+(?:Governance|治理)\s*$", re.MULTILINE
 )
-status_pattern = re.compile(r"status:\s*(?P<status>\w+)")
+STATUS_PATTERN = re.compile(r"^\s*status:\s*(?P<status>[A-Za-z-]+)\s*$", re.MULTILINE)
+CODE_FENCE_PATTERN = re.compile(r"^```(?:yaml)?\s*$", re.MULTILINE)
 
-failures: list[str] = []
 
-for doc in TASK_DOCS:
-    text = doc.read_text(encoding="utf-8")
-    sections = {match.group("task"): match.group("body") for match in section_pattern.finditer(text)}
+def parse_governance_sections(text: str):
+    matches = list(GOVERNANCE_HEADER_PATTERN.finditer(text))
+    sections = {}
+    duplicates = []
 
-    for task, expected_status in EXPECTED.items():
-        body = sections.get(task)
-        if body is None:
-            failures.append(f"{doc.name}: missing section for {task}")
+    for index, match in enumerate(matches):
+        task = match.group("task")
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[start:end]
+        if task in sections:
+            duplicates.append(task)
             continue
-        statuses = status_pattern.findall(body)
+        sections[task] = {
+            "body": body,
+            "statuses": STATUS_PATTERN.findall(body),
+        }
+    return sections, duplicates
+
+
+def validate_doc(doc_path: Path):
+    failures = []
+    text = doc_path.read_text(encoding="utf-8")
+    fences = CODE_FENCE_PATTERN.findall(text)
+    if len(fences) % 2 != 0:
+        failures.append(f"{doc_path.name}: unmatched markdown code fence count ({len(fences)})")
+
+    sections, duplicates = parse_governance_sections(text)
+    duplicate_counts = Counter(duplicates)
+    for task, count in sorted(duplicate_counts.items()):
+        if task in PARITY_TASKS:
+            failures.append(f"{doc_path.name}: duplicate governance header for {task} ({count + 1} occurrences)")
+
+    for task, details in sorted(sections.items()):
+        if task not in PARITY_TASKS:
+            continue
+        statuses = details["statuses"]
         if not statuses:
-            failures.append(f"{doc.name}: {task} missing status line")
+            failures.append(f"{doc_path.name}: {task} missing status line")
+        elif len(set(statuses)) != 1:
+            failures.append(f"{doc_path.name}: {task} has inconsistent statuses {sorted(set(statuses))}")
+
+    return sections, failures
+
+
+def main() -> int:
+    failures = []
+    parsed = {}
+
+    for locale, doc_path in TASK_DOCS.items():
+        sections, doc_failures = validate_doc(doc_path)
+        parsed[locale] = sections
+        failures.extend(doc_failures)
+
+    en_tasks = set(parsed["en"])
+    zh_tasks = set(parsed["zh"])
+    for task in sorted((en_tasks & PARITY_TASKS) - zh_tasks):
+        failures.append(f"tasks.zh.md: missing governance section for {task}")
+    for task in sorted((zh_tasks & PARITY_TASKS) - en_tasks):
+        failures.append(f"tasks.md: missing governance section for {task}")
+
+    for task in sorted((en_tasks & zh_tasks) & PARITY_TASKS):
+        en_statuses = parsed["en"][task]["statuses"]
+        zh_statuses = parsed["zh"][task]["statuses"]
+        if not en_statuses or not zh_statuses:
             continue
-        invalid = [status for status in statuses if status != expected_status]
-        if invalid:
-            failures.append(
-                f"{doc.name}: {task} expected {expected_status}, found {set(invalid)}"
-            )
+        en_status = en_statuses[0]
+        zh_status = zh_statuses[0]
+        if en_status != zh_status:
+            failures.append(f"status mismatch for {task}: tasks.md={en_status}, tasks.zh.md={zh_status}")
 
-if failures:
-    print("Task governance validation failed:")
-    for failure in failures:
-        print(f" - {failure}")
-    sys.exit(1)
+    if failures:
+        print("Task governance validation failed:")
+        for failure in failures:
+            print(f" - {failure}")
+        return 1
 
-print("Task governance validation passed for:")
-for task, status in EXPECTED.items():
-    print(f" - {task} -> {status}")
+    print("Task governance validation passed.")
+    print(f" - governance sections: {len(parsed['en'])} matched task IDs")
+    print(f" - scoped bilingual parity ({min(PARITY_TASKS)}..{max(PARITY_TASKS)}): OK")
+    print(" - markdown governance structure: OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

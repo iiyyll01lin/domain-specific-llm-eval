@@ -2162,554 +2162,174 @@ governance:
 |----------|-------------------------------|---------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|--------------------|--------------------------------------------|-----------------------|
 | TASK-120 | 多服務 Compose 基線           | 將現行單容器拆分為 ingestion/processing/testset/eval/reporting/ws/kg 多服務，新增 docker-compose.services.yml。 | docker-compose.services.yml 啟動全部服務；各服務健康檢查通過；日誌分離；共享 network 與 env。 | TASK-001, TASK-070 | docker-compose.services.yml                | 部署可擴充性, ADR-001 |
 | TASK-121 | 開發熱重載與原始碼 Bind Mount | dev 覆寫檔啟用 src bind mount + uvicorn --reload。                                                             | docker-compose.dev.override.yml 下程式碼改動 <3 秒反映；DOCKER_README 增說明。              | TASK-120           | docker-compose.dev.override.yml, docs 更新 | 開發效率 DevEx        |
+| TASK-122 | 映像版本與標籤策略            | 導入語義版號 + git SHA 標籤腳本與 Make 目標（build:tag）。                                                       | make build-tag 產生 :vX.Y.Z 與 :git-<sha>；docker images 可列出對應標籤；策略已文件化。        | TASK-120           | scripts/tag_image.sh, Makefile 更新, docs/deployment_guide.md | 追溯 / 發布治理 |
+| TASK-123 | CI 治理 + 映像建置流程        | GitHub Actions 執行治理驗證（schema、taxonomy）後於 main 分支建置與推送標籤映像。                                  | build-governance.yml 於 PR 可通過；驗證失敗會阻擋 build；成功建置時有推送映像紀錄。              | TASK-118, TASK-119 | .github/workflows/build-governance.yml     | 自動化, 治理, 可靠性   |
+| TASK-124 | 安全掃描整合                  | CI 整合 Trivy（或同等）；HIGH/CRITICAL 失敗；輸出 sarif artifact。                                                 | CI 顯示掃描步驟；注入測試漏洞導致失敗；sarif artifact 可下載。                                   | TASK-123           | workflow 擴充, docs/security.md            | 安全 NFR              |
+| TASK-125 | 基底映像強化與非 root         | Dockerfile：非 root 使用者、層精簡、pip --no-cache-dir、支援 pip mirror/離線守門 build args、cache volume 參數。      | docker history 顯示層減少；user != 0；移除套件管理快取；最終層數 <12；來源不可達時會明確失敗並提示 PyPI blocker，除非已提供 mirror / prebuilt image。 | TASK-120           | Dockerfile 更新, docs/deployment_guide.md  | 安全 + 效能           |
+| TASK-126 | 擴充/外掛掛載模式             | 提供 extensions/ 目錄掛載 + 載入器，允許丟入 metrics / builder 外掛免重建。                                      | 放入 sample 外掛成功載入；README 說明；單元測試列舉外掛。                                        | TASK-032, TASK-120 | extensions/sample_metric.py, services/common/plugin_loader.py | 可擴充性, ADR-001 模組化 |
+| TASK-127 | Helm Chart 拆解               | 建立 Helm Chart，子模板對應各服務 + values 切換（kg, ws enable/disable）。                                          | helm template 成功；kg.enabled=false 排除 KG；README 說明 values。                               | TASK-120           | deploy/helm/Chart.yaml, deploy/helm/templates/* | K8s 就緒, 部署彈性 |
+| TASK-128 | 健康 / 就緒探針標準化         | /healthz /readyz endpoint + compose/helm 探針；heavy init (embedding) startup probe。                             | 各服務 200 回應；故意失敗測試非 ready；compose 與 Helm 定義探針。                                  | TASK-120, TASK-127 | services/*/health.py, helm 模板更新, compose 更新 | 可靠性, 營運 |
+| TASK-129 | K8s 水平擴展策略 (HPA)        | 為無狀態服務提供 CPU + 請求速率 HPA 範例。                                                                         | hpa.yaml 套用成功；dry-run 模擬 scaling；docs 含調優指引。                                       | TASK-127, TASK-080 | deploy/helm/templates/hpa.yaml, docs/scaling.md | 擴展性 NFR |
+| TASK-130 | SBOM 與映像簽章流水線         | CI 使用 syft 產出 SBOM，並可選擇用 cosign 簽章與 provenance attestation。                                            | build-governance 產出 CycloneDX v1.5 SBOM 於 sbom/sbom-main.json，若有金鑰則完成簽章與驗證。       | TASK-123, TASK-124 | .github/workflows/build-governance.yml, sbom/sbom-main.json, docs/security.md | 供應鏈完整性 |
+| TASK-131 | GPU 選配建置與執行設定        | ENABLE_GPU build arg + compose/Helm profile；曝露 gpu_enabled metric + 文件 fallback。                             | GPU profile 成功建置不破壞 CPU；gpu_enabled metric 存在；文件描述啟用步驟。                        | TASK-125           | Dockerfile (ARG), docs/deployment_guide.md, helm values | 效能彈性 |
+| TASK-132 | 開發/CI 環境一致性驗證腳本    | 腳本比對 Python 版本、依賴鎖定、extensions 哈希；可做為 CI Gate。                                                   | CI 在強制模式下遇到漂移會非 0 退出；本地 Python 版本漂移可改為 warning 並寫入報告欄位；附示範測試。  | TASK-120           | scripts/validate_dev_parity.py, docs/deployment_guide.md | 可重現性, DevEx |
+| TASK-133 | Policy as Code (OPA)          | 使用 OPA Rego 規則驗證事件 schema 與 metrics 命名（前綴/風格/保留字）並納入 CI gate。                                | policy/*.rego 存在；命名違規測試失敗；CI 含 policy 驗證步驟。                                      | TASK-118, TASK-032 | policy/*.rego, scripts/validate_policies.sh, .github/workflows/build-governance.yml | 治理, 一致性 |
+| TASK-134 | Secrets Scan Gate (gitleaks)  | 整合 gitleaks 掃描新提交/PR 硬編碼 secrets；偵測即失敗（可允許清單）。                                               | CI 顯示 gitleaks 步驟；注入測試 secret 觸發失敗；允許清單文件化。                                  | TASK-123           | .github/workflows/build-governance.yml, .gitleaks.toml, docs/security.md | 安全, 供應鏈控制 |
 
 ```yaml
 # TASK-120 治理
 governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	engineer: E1
-	artifacts:
-		- docker-compose.services.yml
-		- docker-compose.dev.override.yml
-		- docs/DOCKER_README.md
-		- docs/deployment_guide.md
-	dod:
-		- 服務分離並可透過 compose 啟動，健康檢查通過
-		- dev override 啟用 bind mount 與 --reload，文件化流程
-	completed_on: 2025-09-25
-	verification:
-		- docker compose -f docker-compose.services.yml -f docker-compose.dev.override.yml config
-```
-| TASK-122 | 映像版本與標籤策略            | 语义版號 + git SHA 標籤腳本與 Make 目標（build:tag）。                                                           | make build-tag 產生 :vX.Y.Z 與 :git-<sha>; docker images 顯示；strategy 文檔化。                                  | TASK-120           | scripts/tag_image.sh, Makefile 更新, docs/deployment_guide.md                       | 追溯 / 發布治理          |
-| TASK-123 | CI 治理 + 映像建置流程        | GitHub Actions 執行 (schema + taxonomy 驗證) 後建置與推送標籤影像（main 分支）。                                 | build-governance.yml PR 通過；驗證失敗阻擋；成功推送影像紀錄。                                                     | TASK-118, TASK-119 | .github/workflows/build-governance.yml                                              | 自動化, 治理, 可靠性     |
-| TASK-124 | 安全掃描整合                  | CI 整合 Trivy（或同等）；HIGH/CRITICAL 失敗；輸出 sarif artifact。                                                 | CI 顯示掃描步驟；注入測試漏洞導致失敗；sarif artifact 可下載。                                                     | TASK-123           | workflow 擴充, docs/security.md                                                     | 安全 NFR                 |
-| TASK-125 | 基底映像強化與非 root         | Dockerfile：非 root 使用者、層精簡、pip --no-cache-dir、支援 pip mirror/離線守門 build args、cache volume 參數。        | docker history 顯示層減少；user != 0；移除套件管理快取；最終層數 <12；當套件來源不可達時會明確失敗並提示 PyPI blocker，除非已提供 mirror / prebuilt image；尺寸差異記錄；提供 hardening checklist。 | TASK-120           | Dockerfile 更新, docs/deployment_guide.md                                           | 安全 + 效能              |
-| TASK-126 | 擴充/外掛掛載模式             | 提供 extensions/ 目錄掛載 + 載入器，允許丟入 metrics / builder 外掛免重建。                                     | 放入 sample 外掛成功載入；README 說明；單元測試列舉外掛。                                                          | TASK-032, TASK-120 | extensions/sample_metric.py, services/common/plugin_loader.py                       | 可擴充性, ADR-001 模組化 |
-| TASK-127 | Helm Chart 拆解               | 建立 Helm Chart，子模板對應各服務 + values 切換（kg, ws enable/disable）。                                        | helm template 成功；kg.enabled=false 排除 KG；README 說明 values。                                                 | TASK-120           | deploy/helm/Chart.yaml, deploy/helm/templates/*                                     | K8s 就緒, 部署彈性       |
-| TASK-128 | 健康 / 就緒探針標準化         | /healthz /readyz endpoint + compose/helm 探針；heavy init (embedding) startup probe。                           | 各服務 200 回應；故意失敗測試非 ready；compose 與 Helm 定義探針。                                                  | TASK-120, TASK-127 | services/*/health.py, helm 模板更新, compose 更新                                   | 可靠性, 營運             |
-| TASK-129 | K8s 水平擴展策略 (HPA)        | 為無狀態服務提供 CPU + 請求速率 HPA 範例。                                                                     | hpa.yaml 套用成功；dry-run 模擬 scaling；docs 含調優指引。                                                         | TASK-127, TASK-080 | deploy/helm/templates/hpa.yaml, docs/scaling.md                                     | 擴展性 NFR               |
-| TASK-130 | SBOM 與映像簽章流水線         | CI 使用 syft 產出 SBOM，並（選）cosign 簽章與 provenance attestation。                                            | build-governance 產出 CycloneDX v1.5 SBOM 於 sbom/sbom-main.json + 簽章（若提供金鑰）；驗證步驟通過；artifact 保存。 | TASK-123, TASK-124 | .github/workflows/build-governance.yml, sbom/sbom-main.json, docs/security.md       | 供應鏈完整性             |
-| TASK-131 | GPU 選配建置與執行設定        | ENABLE_GPU build arg + compose/Helm profile；曝露 gpu_enabled metric + 文件 fallback。                          | GPU profile 成功建置不破壞 CPU；gpu_enabled metric 存在；文件描述啟用步驟。                                        | TASK-125           | Dockerfile (ARG), docs/deployment_guide.md, helm values                             | 效能彈性                 |
-| TASK-132 | 開發/CI 環境一致性驗證腳本    | 腳本比對 Python 版本、依賴鎖定、extensions 哈希；可做為 CI Gate。                                                 | CI 在強制模式下遇到漂移會非 0 退出；本地 Python 版本漂移可改為 warning 並寫入報告欄位；附示範測試；design §21.12 引用。 | TASK-120           | scripts/validate_dev_parity.py, docs/deployment_guide.md                            | 可重現性, DevEx          |
-| TASK-133 | Policy as Code (OPA)          | 使用 OPA Rego 規則驗證事件 schema 與 metrics 命名（前綴/風格/保留字）並納入 CI gate。                            | policy/*.rego 存在；命名違規測試失敗；CI 含 policy 驗證步驟。                                                      | TASK-118, TASK-032 | policy/*.rego, scripts/validate_policies.sh, .github/workflows/build-governance.yml | 治理, 一致性             |
-| TASK-134 | Secrets Scan Gate (gitleaks)  | 整合 gitleaks 掃描新提交/PR 硬編碼 secrets；偵測即失敗（可允許清單）。                                            | CI 顯示 gitleaks 步驟；注入測試 secret 觸發失敗；允許清單文件化。                                                  | TASK-123           | .github/workflows/build-governance.yml, .gitleaks.toml, docs/security.md            | 安全, 供應鏈控制         |
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - docker-compose.services.yml
+    - .env.compose
+    - scripts/validate_compose.py
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
 
-```yaml
-# TASK-122 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 5
-	artifacts:
-		- scripts/tag_image.sh
-		- VERSION
-	dod:
-		- 標籤腳本可產生 vX.Y.Z 與 git-<sha>
-		- deployment_guide.md 已描述策略
-# TASK-123 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-124 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-125 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-126 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-26
-# TASK-127 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- deploy/helm/Chart.yaml
-		- deploy/helm/values.yaml
-		- deploy/helm/templates/deployment.yaml
-		- deploy/helm/templates/service.yaml
-		- deploy/helm/templates/hpa.yaml
-		- deploy/helm/templates/configmap.yaml
-		- deploy/helm/templates/_helpers.tpl
-# TASK-128 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- services/*/main.py (/healthz + /readyz 端點)
-		- services/ws/gateway.py (/healthz + /readyz 端點)
-		- deploy/helm/values.yaml (readinessProbe: /readyz, livenessProbe: /healthz)
-# TASK-129 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- docs/scaling.md (HPA 調校指南)
-		- deploy/helm/templates/hpa.yaml (已在 Sprint-6 完成)
-# TASK-130 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- .github/workflows/build-governance.yml (syft SBOM + anchore/sbom-action)
-		- sbom/ 目錄佔位
-# TASK-131 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- Dockerfile (ARG ENABLE_GPU=false，條件式 CUDA torch 安裝)
-		- deploy/helm/values.yaml (gpu: 區塊含 processing/kg GPU profiles)
-# TASK-132 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- scripts/validate_dev_parity.py (Python 版本 + 套件存在性檢查)
-# TASK-133 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- policy/naming.rego (事件鍵 + 指標名稱命名規則)
-		- policy/schema_registry.rego (Registry 完整性)
-# TASK-134 治理
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- .gitleaks.toml (允許清單設定)
-		- .github/workflows/build-governance.yml (secrets-scan job)
-# TASK-122 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-123 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-124 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-125 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-126 治理
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-26
-# TASK-127 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-127 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-129 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-129 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-131 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-131 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-133 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-# TASK-133 治理
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-
-```yaml
-# TASK-120 治理
-governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "多服務拆分造成設定漂移"
-	mitigation: "Compose 驗證腳本 + 健康矩陣測試"
-	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- docker-compose.services.yml
-		- .env.compose
-		- docs/deployment_guide.md
-	dod:
-		- docker compose config 成功（預設環境模板）
-		- 健康檢查端點維持可用
-		- 部署指南補充環境覆寫說明
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 docker compose -f docker-compose.services.yml config
-
-# TASK-123 治理
-governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "建置流程跳過治理驗證"
-	mitigation: "工作流程步驟排序測試 + 失敗注入"
-	adr_impact: ["ADR-004","ADR-005"]
-	ci_gate: ["build-governance:schemas"]
-	artifacts:
-		- .github/workflows/build-governance.yml
-		- scripts/validate_task_status.py
-		- scripts/validate_compose.py
-		- docs/prebuilt_image_workflow.md
-	dod:
-		- 工作流程先執行治理驗證再建置映像
-		- 任務狀態飄移可被 validate_task_status.py 阻擋
-		- main 分支建置時推送 GHCR 標籤
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 python3 scripts/validate_task_status.py
-
-# TASK-124 治理
-governance:
-	status: Verified
-	owner: platform-secops@team
-	priority: P1
-	estimate: 1p
-	risk: "Critical 漏洞未被攔截"
-	mitigation: "注入 CVE 測試觸發失敗"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["security-scan"]
-	artifacts:
-		- .github/workflows/build-governance.yml
-		- docs/security.md
-	dod:
-		- Trivy 檔案系統與映像掃描產出 SARIF
-		- HIGH/CRITICAL 漏洞觸發 exit-code 1
-		- 安全指南記錄修復與豁免流程
-	completed_on: 2025-09-25
-	verification:
-		- Workflow 審閱：Trivy 步驟已啟用並上傳 SARIF
-
-# TASK-125 治理
-governance:
-	status: Verified
-	owner: platform-secops@team
-	priority: P2
-	estimate: 1p
-	risk: "基底映像 CVE 未及時修補或仍以 root 執行"
-	mitigation: "多階段 Dockerfile + 安全掃描管線定期檢視"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- Dockerfile
-		- docker-compose.services.yml
-		- .env.compose
-		- .env.prebuilt.example
-		- docs/deployment_guide.md
-		- docs/hardening_checklist.md
-		- docs/prebuilt_image_workflow.md
-	dod:
-		- Dockerfile 改為 builder/runtime 多階段，最終階段不含建置工具鏈
-		- 維持非 root 用戶並確保 `/app`、`${MODELS_CACHE_PATH}`、`${EXTENSIONS_DIR}` 權限歸屬
-		- 依賴安裝集中於單一 RUN，啟用 `pip --no-cache-dir`、`PIP_DISABLE_PIP_VERSION_CHECK`、停用 bytecode
-		- 新增 pip mirror / 離線守門 build arg，於 Hardening 清單中記錄避免離線重試暴增
-		- 基底映像更新為 `python:3.11-slim-bookworm` 並於各階段執行 `apt-get upgrade`，MODELS_CACHE 參數仍可與 compose volume 對應
-		- Hardening 清單與部署指南同步描述驗證步驟與多階段理由
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 docker build -t rag-eval:test .
-		- 2025-09-25 docker history rag-eval:test | head -n 12
-		- 2025-09-25 grep "python:3.11-slim-bookworm" Dockerfile
-		- 2025-09-25 python3 -m compileall services
-
-# TASK-126 治理
-governance:
-	status: Verified
-	owner: platform-extensions@team
-	priority: P2
-	estimate: 2p
-	risk: "外掛載入流程缺乏覆蓋，可能在回歸時失效"
-	mitigation: "針對 register() 與屬性回退的單元測試"
-	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- services/common/plugin_loader.py
-		- extensions/sample_metric.py
-		- test_plugin_loader.py
-		- docs/DOCKER_README.md
-		- docs/deployment_guide.md
-	dod:
-		- 載入器可發現 register() 與 PLUGIN_DEFINITION 外掛
-		- 範例外掛可直接掛載於 extensions/ 免重建
-		- 文件說明 EXTENSIONS_DIR 覆寫與使用方式
-		- 自動化測試列舉外掛並驗證輸出
-	completed_on: 2025-09-26
-	verification:
-		- 2025-09-26 pytest test_plugin_loader.py
-
-# TASK-122 治理
-governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 1p
-	risk: "標籤策略不一致"
-	mitigation: "標籤腳本 snapshot 測試"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- scripts/tag_image.sh
-		- Makefile
-		- VERSION
-		- docs/deployment_guide.md
-	dod:
-		- tag_image.sh 同時輸出 v<version> 與 git-<sha>（支援 DRY_RUN）
-		- VERSION 仍為語義版號權威
-		- 部署指南補充 build-tag 流程
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 DRY_RUN=1 make tag
-	engineer: E1
-	target_sprint: 5
-# TASK-127 治理
-governance:
-	status: Completed
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "單一 chart 複雜度過高"
-	mitigation: "模板 linter + values 測試"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["unit-tests"]
-	dod:
-		- helm template 測試
-		- kg/ws disabled diff 測試
-		- README values 表格
-	engineer: E1
-	target_sprint: 5
-	completed_at: 2026-03-07
-# TASK-128 治理
-governance:
-	status: Completed
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 1p
-	risk: "缺 readiness 隱藏故障"
-	mitigation: "探針失敗夾具"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["unit-tests"]
-	dod:
-		- /healthz 測試
-		- /readyz 測試
-		- Startup probe 文件
-	engineer: E1
-	target_sprint: 5
-	completed_at: 2026-03-07
-# TASK-129 治理
-governance:
-	status: Completed
-	owner: platform-deploy@team
-	priority: P2
-	estimate: 1p
-	risk: "HPA 過度或不足 scaling"
-	mitigation: "HPA dry-run 測試"
-	adr_impact: []
-	ci_gate: ["unit-tests"]
-	dod:
-		- HPA 範例套用測試
-		- Scaling 事件文件
-		- 調優指南
-	engineer: E1
-	target_sprint: 6
-	completed_at: 2026-03-07
-# TASK-131 治理
-governance:
-	status: Completed
-	owner: platform-deploy@team
-	priority: P3
-	estimate: 1p
-	risk: "GPU 路徑與 CPU 分歧"
-	mitigation: "Parity build 測試"
-	adr_impact: []
-	ci_gate: ["unit-tests"]
-	dod:
-		- gpu_enabled metric 測試
-		- CPU fallback 測試
-		- README GPU 章節
-	engineer: E1
-	target_sprint: 6
-	completed_at: 2026-03-08
-# TASK-132 治理
-governance:
-	status: Completed
-	owner: platform-parity@team
-	priority: P1
-	estimate: 1p
-	risk: "環境漂移降低重現性"
-	mitigation: "Parity 腳本 diff 測試"
-	adr_impact: []
-	ci_gate: ["parity-validate"]
-	dod:
-		- 漂移退出碼測試
-		- JSON parity 報告
-		- README parity 章節
- 	engineer: E1
- 	target_sprint: 6
-	completed_at: 2026-03-08
-```yaml
-# TASK-133 治理
-governance:
-	status: Completed
-	owner: platform-governance@team
-	priority: P2
-	estimate: 2p
-	risk: "政策缺口導致指標不一致"
-	mitigation: "命名違規負向測試"
-	adr_impact: ["ADR-005"]
-	ci_gate: ["policy-validate"]
-	dod:
-		- Rego 測試通過
-		- 命名違規樣本
-		- README policy 章節
-	engineer: E1 (E2 metrics 諮詢)
-	target_sprint: 6
-	completed_at: 2026-03-08
-# TASK-134 治理
-governance:
-	status: Completed
-	owner: platform-secops@team
-	priority: P1
-	estimate: 1p
-	risk: "Secrets 泄漏入庫"
-	mitigation: "注入 secret 測試"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["security-scan"]
-	dod:
-		- gitleaks 設定提交
-		- 失敗測試樣本
-		- Allowlist 文件
-	engineer: E1
-	target_sprint: 5
-	completed_at: 2026-03-07
-```
-
-```yaml
 # TASK-121 治理
 governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 1p
-	risk: "熱重載缺失降低迭代速度"
-	mitigation: "使用 bind mount 與 --reload 開發覆寫"
-	adr_impact: ["ADR-001"]
-	ci_gate: []
-	artifacts:
-		- docker-compose.dev.override.yml
-		- docs/DOCKER_README.md
-	dod:
-		- 程式碼修改 3 秒內反映
-		- Bind mount 驗證
-		- 開發流程文件化
-	completed_on: 2025-09-25
-	engineer: E1
-	target_sprint: 5
-```
-```
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: []
+  artifacts:
+    - docker-compose.dev.override.yml
+    - docs/DOCKER_README.md
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
 
-```yaml
+# TASK-122 治理
+governance:
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - scripts/tag_image.sh
+    - Makefile
+    - VERSION
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
+
+# TASK-123 治理
+governance:
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [build-governance:schemas]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - scripts/validate_task_status.py
+    - scripts/validate_compose.py
+    - docs/prebuilt_image_workflow.md
+  completed_on: 2025-09-25
+
+# TASK-124 治理
+governance:
+  status: Verified
+  owner: platform-secops@team
+  ci_gate: [security-scan]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - docs/security.md
+  completed_on: 2025-09-25
+
+# TASK-125 治理
+governance:
+  status: Verified
+  owner: platform-secops@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - Dockerfile
+    - docker-compose.services.yml
+    - .env.compose
+    - .env.prebuilt.example
+    - docs/deployment_guide.md
+    - docs/hardening_checklist.md
+    - docs/prebuilt_image_workflow.md
+  completed_on: 2025-09-25
+
+# TASK-126 治理
+governance:
+  status: Verified
+  owner: platform-extensions@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - services/common/plugin_loader.py
+    - extensions/sample_metric.py
+    - test_plugin_loader.py
+    - docs/DOCKER_README.md
+    - docs/deployment_guide.md
+  completed_on: 2025-09-26
+
+# TASK-127 治理
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
+
+# TASK-128 治理
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
+
+# TASK-129 治理
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
+
 # TASK-130 治理
 governance:
-	status: Completed
-	owner: platform-secops@team
-	priority: P1
-	estimate: 4p
-	risk: "簽章金鑰管理複雜或遺失導致部署阻塞"
-	mitigation: "允許無金鑰時降級為 unsigned (標註)；KMS 托管金鑰 + 最小權限"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["security-scan","sbom-generate","image-sign"]
-	sbom_format: CycloneDX-1.5
-	artifacts:
-		- sbom/sbom-main.json
-		- sbom/sbom-diff.json
-		- attest/provenance.intoto.jsonl
-	slo:
-		pipeline_additional_time_seconds_p95: 90
-		critical_vuln_allowed: 0
-	metrics:
-		- supplychain_vuln_count{severity="CRITICAL"}
-		- supplychain_unsigned_image_total
-	logs:
-		- code=SBOM_GENERATED level=INFO
-		- code=IMAGE_SIGNED    level=INFO
-		- code=SIGNING_SKIPPED level=WARN
-	dod:
-		- syft 產出 CycloneDX JSON 並存入 sbom/
-		- Trivy 掃描 SARIF 上傳並零 CRITICAL/HIGH (允許 X 個中等)
-		- 提供 cosign 驗證示例指令於 security.md
-		- 簽章缺失時 workflow 標註 annotation
-		- README 部署章節新增 SBOM / 簽章說明
-	completed_at: 2026-03-08
+  status: Completed
+  owner: platform-secops@team
+  ci_gate: [security-scan, sbom-generate, image-sign]
+  artifacts:
+    - sbom/sbom-main.json
+    - sbom/sbom-diff.json
+    - attest/provenance.intoto.jsonl
+  completed_at: 2026-03-08
+
+# TASK-131 治理
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-08
+
+# TASK-132 治理
+governance:
+  status: Completed
+  owner: platform-parity@team
+  ci_gate: [parity-validate]
+  artifacts:
+    - scripts/validate_dev_parity.py
+    - services/tests/test_validate_dev_parity.py
+  completed_at: 2026-03-08
+
+# TASK-133 治理
+governance:
+  status: Completed
+  owner: platform-governance@team
+  ci_gate: [policy-validate]
+  completed_at: 2026-03-08
+
+# TASK-134 治理
+governance:
+  status: Completed
+  owner: platform-secops@team
+  ci_gate: [security-scan]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - .gitleaks.toml
+    - docs/security.md
+  completed_at: 2026-03-07
 ```
+
 
 #### TASK-126 子任務分解
 | 子ID      | 標題                | 說明                                     | 驗收條件                             | 依賴      | 產出                              | 備註     |

@@ -2165,637 +2165,159 @@ governance:
 | TASK-134 | Secrets Scan Gate (gitleaks)                | Integrate gitleaks to scan new commits/PRs for hardcoded secrets; fail on detection with allowlist capability.                          | CI shows gitleaks step; injected test secret triggers failure; allowlist documented.                                                                                                      | TASK-123           | .github/workflows/build-governance.yml, .gitleaks.toml, docs/security.md            | Security, Supply chain control        |
 
 ```yaml
-# TASK-121 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 5
-	completed_on: 2025-09-25
-# TASK-122 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 5
-	completed_on: 2025-09-25
-# TASK-123 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 5
-	completed_on: 2025-09-25
-```yaml
-# TASK-121 Governance
-governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 1p
-	risk: "Lack of hot reload slows iteration"
-	mitigation: "Override file with bind mount + reload"
-	adr_impact: ["ADR-001"]
-	ci_gate: []
-	artifacts:
-		- docker-compose.dev.override.yml
-		- docs/DOCKER_README.md
-		- docs/deployment_guide.md
-	dod:
-		- Dev override keeps bind mount alongside models cache volume
-		- Hot reload command documented with override merge instructions
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 docker compose -f docker-compose.services.yml -f docker-compose.dev.override.yml config
-		- Uvicorn --reload commands defined
-	engineer: E1
-	target_sprint: 5
-
-# TASK-122 Governance
-governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 1p
-	risk: "Inconsistent image tagging reduces traceability"
-	mitigation: "Unified script + Make targets"
-	adr_impact: ["ADR-004"]
-	ci_gate: []
-	artifacts:
-		- scripts/tag_image.sh
-		- Makefile
-		- VERSION
-		- docs/deployment_guide.md
-	dod:
-		- Tag script emits v<version> and git-<sha> with optional dry-run
-		- VERSION file remains single source of semantic tag
-		- Deployment guide documents build-tag workflow
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 DRY_RUN=1 make tag
-	engineer: E1
-	target_sprint: 5
-```
-# TASK-124 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-125 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-# TASK-126 Governance
-governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 5
-	completed_on: 2025-09-26
-# TASK-127 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- deploy/helm/Chart.yaml
-		- deploy/helm/values.yaml
-		- deploy/helm/templates/deployment.yaml
-		- deploy/helm/templates/service.yaml
-		- deploy/helm/templates/hpa.yaml
-		- deploy/helm/templates/configmap.yaml
-		- deploy/helm/templates/_helpers.tpl
-# TASK-128 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 5
-	deliverables:
-		- services/*/main.py (added /healthz and /readyz endpoints)
-		- services/ws/gateway.py (added /healthz and /readyz endpoints)
-		- deploy/helm/values.yaml (readinessProbe: /readyz, livenessProbe: /healthz)
-# TASK-129 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 5
-	deliverables:
-		- docs/scaling.md (HPA tuning guide, dry-run validation, startup probe docs)
-		- deploy/helm/templates/hpa.yaml (completed Sprint-6)
-# TASK-130 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- .github/workflows/build-governance.yml (syft SBOM + anchore/sbom-action step)
-		- sbom/ directory placeholder
-# TASK-131 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- Dockerfile (ARG ENABLE_GPU=false, conditional CUDA torch install)
-		- deploy/helm/values.yaml (gpu: section with processing/kg GPU profiles)
-# TASK-132 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- scripts/validate_dev_parity.py (Python version + package presence check)
-# TASK-133 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- policy/naming.rego (event key + metric naming enforcement)
-		- policy/schema_registry.rego (registry integrity enforcement)
-# TASK-134 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-07
-	engineer: E1
-	target_sprint: 6
-	deliverables:
-		- .gitleaks.toml (allowlist config)
-		- .github/workflows/build-governance.yml (secrets-scan job with gitleaks-action)
-# TASK-090 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E1
-	target_sprint: 5
-	deliverables:
-		- services/common/auth.py
-		- services/tests/test_common_auth.py
-# TASK-091 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E1
-	target_sprint: 5
-	deliverables:
-		- services/common/redact.py
-		- services/tests/test_common_redact.py
-# TASK-092 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E1
-	target_sprint: 5
-	deliverables:
-		- services/common/ratelimit.py
-		- services/tests/test_common_ratelimit.py
-# TASK-100 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E2
-	target_sprint: 5
-	notes: "Coverage measured at 89% statements (threshold ≥70%). Run: pytest --cov=services"
-# TASK-101 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E2
-	target_sprint: 5
-	deliverables:
-		- scripts/e2e_smoke.sh
-# TASK-102 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E2
-	target_sprint: 5
-	deliverables:
-		- scripts/capture_perf_baseline.py
-		- benchmarks/baseline.json
-# TASK-103 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E2
-	target_sprint: 5
-	deliverables:
-		- load/locustfile.py
-		- load/README.md
-# TASK-104 Governance
-governance:
-	status: Completed
-	completed_at: 2026-03-06
-	engineer: E2
-	target_sprint: 5
-	deliverables:
-		- chaos/plan.md
-```yaml
 # TASK-120 Governance
 governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "Service split introduces config drift"
-	mitigation: "Compose validation script + health matrix test"
-	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- docker-compose.services.yml
-		- .env.compose
-		- scripts/validate_compose.py
-		- docs/deployment_guide.md
-	dod:
-		- docker compose config succeeds with default env template
-		- Health endpoints scaffolded (/health)
-		- Deployment guide documents env override
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 docker compose -f docker-compose.services.yml config
-	engineer: E1
-	target_sprint: 5
-```
-```yaml
-# TASK-123 Governance
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - docker-compose.services.yml
+    - .env.compose
+    - scripts/validate_compose.py
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
+
+# TASK-121 Governance
 governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "Build pipeline skips governance validations"
-	mitigation: "Workflow step ordering test + fail injection"
-	adr_impact: ["ADR-004","ADR-005"]
-	ci_gate: ["build-governance:schemas"]
-	artifacts:
-		- .github/workflows/build-governance.yml
-		- scripts/validate_task_status.py
-		- scripts/validate_compose.py
-		- docs/prebuilt_image_workflow.md
-	dod:
-		- Workflow orchestrates validators before image build
-		- Governance scripts fail-fast on status drift
-		- Build job tags/pushes GHCR images on main
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 python3 scripts/validate_task_status.py
-	engineer: E1 (E3 CI front-end budget step integration)
-	target_sprint: 5
-```
- 
-```yaml
-# TASK-125 Governance
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: []
+  artifacts:
+    - docker-compose.dev.override.yml
+    - docs/DOCKER_README.md
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
+
+# TASK-122 Governance
 governance:
-	status: Verified
-	engineer: E1
-	target_sprint: 6
-	completed_on: 2025-09-25
-```
- 
-```yaml
-# TASK-127 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 5
-```
-```yaml
-# TASK-128 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 5
-```
-```yaml
-# TASK-129 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 5
-```
-```yaml
-# TASK-130 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-```yaml
-# TASK-131 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-```yaml
-# TASK-132 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-```yaml
-# TASK-133 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-```yaml
-# TASK-134 Governance
-governance:
-	status: Completed
-	engineer: E1
-	target_sprint: 6
-```
-		adr_impact: ["ADR-004"]
-		ci_gate: ["unit-tests"]
-		dod:
-			- tag_image.sh script test
-			- Version + SHA tags documented
-			- Make target help updated
-		engineer: E1
-		target_sprint: 5
-	```
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - scripts/tag_image.sh
+    - Makefile
+    - VERSION
+    - docs/deployment_guide.md
+  completed_on: 2025-09-25
 
 # TASK-123 Governance
 governance:
-	status: Verified
-	owner: platform-deploy@team
-	priority: P1
-	estimate: 2p
-	risk: "Build pipeline skips governance validations"
-	mitigation: "Workflow step ordering test + fail injection"
-	adr_impact: ["ADR-004","ADR-005"]
-	ci_gate: ["build-governance:schemas"]
-	artifacts:
-		- .github/workflows/build-governance.yml
-		- scripts/validate_task_status.py
-		- scripts/validate_compose.py
-	dod:
-		- Workflow orchestrates validators before image build
-		- Governance scripts fail-fast on status drift
-		- Build job tags/pushes GHCR images on main
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 python3 scripts/validate_task_status.py
-	engineer: E1 (E3 CI front-end budget step integration)
-	target_sprint: 5
+  status: Verified
+  owner: platform-deploy@team
+  ci_gate: [build-governance:schemas]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - scripts/validate_task_status.py
+    - scripts/validate_compose.py
+    - docs/prebuilt_image_workflow.md
+  completed_on: 2025-09-25
 
 # TASK-124 Governance
 governance:
-	status: Verified
-	owner: platform-secops@team
-	priority: P1
-	estimate: 1p
-	risk: "Critical vuln passes undetected"
-	mitigation: "Injected CVE fixture triggers failure"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["security-scan"]
-	artifacts:
-		- .github/workflows/build-governance.yml
-		- docs/security.md
-	dod:
-		- Trivy filesystem & image scans produce SARIF artifacts
-		- HIGH/CRITICAL findings fail the workflow via exit-code 1
-		- Security guide documents remediation & skip policy guidance
-	completed_on: 2025-09-25
-	verification:
-		- Workflow validation via static review (Trivy steps present)
-	engineer: E1 (secops assist)
-	target_sprint: 5
+  status: Verified
+  owner: platform-secops@team
+  ci_gate: [security-scan]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - docs/security.md
+  completed_on: 2025-09-25
 
 # TASK-125 Governance
 governance:
-	status: Verified
-	owner: platform-secops@team
-	priority: P2
-	estimate: 1p
-	risk: "Unhandled base image CVEs or privilege escalation"
-	mitigation: "Hardened Dockerfile with multi-stage build and scan hooks"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- Dockerfile
-		- docker-compose.services.yml
-		- .env.compose
-		- .env.prebuilt.example
-		- docs/deployment_guide.md
-		- docs/hardening_checklist.md
-		- docs/prebuilt_image_workflow.md
-	dod:
-		- Dockerfile refactored into builder/runtime stages; runtime contains no build toolchain packages
-		- Non-root service user retained with owned `/app`, `${MODELS_CACHE_PATH}`, and `${EXTENSIONS_DIR}` directories
-		- Dependency installation consolidated with `pip --no-cache-dir`, `PIP_DISABLE_PIP_VERSION_CHECK`, and bytecode suppression
-		- Build-time pip mirror/offline guard configurable via `PIP_INDEX_URL`/* and documented in hardening checklist to prevent repeated timeout loops
-		- Base image patched (`python:3.11-slim-bookworm`) with `apt-get upgrade` executed per stage; MODELS_CACHE build arg still surfaced with compose volume wiring
-		- Hardening checklist & deployment guide updated to capture verification steps and multi-stage rationale
-	completed_on: 2025-09-25
-	verification:
-		- 2025-09-25 docker build -t rag-eval:test .
-		- 2025-09-25 docker history rag-eval:test | head -n 12
-		- 2025-09-25 grep "python:3.11-slim-bookworm" Dockerfile
-		- 2025-09-25 python3 -m compileall services
-	engineer: E1
-	target_sprint: 5
+  status: Verified
+  owner: platform-secops@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - Dockerfile
+    - docker-compose.services.yml
+    - .env.compose
+    - .env.prebuilt.example
+    - docs/deployment_guide.md
+    - docs/hardening_checklist.md
+    - docs/prebuilt_image_workflow.md
+  completed_on: 2025-09-25
 
 # TASK-126 Governance
 governance:
-	status: Verified
-	owner: platform-extensions@team
-	priority: P2
-	estimate: 2p
-	risk: "Plugin discovery regresses without coverage"
-	mitigation: "Unit tests exercising register() and fallback payloads"
-	adr_impact: ["ADR-001"]
-	ci_gate: ["unit-tests"]
-	artifacts:
-		- services/common/plugin_loader.py
-		- extensions/sample_metric.py
-		- test_plugin_loader.py
-		- docs/DOCKER_README.md
-		- docs/deployment_guide.md
-	dod:
-		- Loader discovers register() based plugins and attribute payload fallback
-		- Sample plugin loads without image rebuild via mounted directory
-		- Documentation explains EXTENSIONS_DIR override and usage
-		- Automated test enumerates discovered plugins
-	completed_on: 2025-09-26
-	verification:
-		- 2025-09-26 pytest test_plugin_loader.py
-	engineer: E3 (E2 consult for metrics plugin alignment)
-	target_sprint: 6
+  status: Verified
+  owner: platform-extensions@team
+  ci_gate: [unit-tests]
+  artifacts:
+    - services/common/plugin_loader.py
+    - extensions/sample_metric.py
+    - test_plugin_loader.py
+    - docs/DOCKER_README.md
+    - docs/deployment_guide.md
+  completed_on: 2025-09-26
 
-	```yaml
-	# TASK-127 Governance
-	governance:
-		status: Completed
-		owner: platform-deploy@team
-		priority: P1
-		estimate: 2p
-		risk: "Monolithic chart complexity"
-		mitigation: "Template linter + values toggles tests"
-		adr_impact: ["ADR-004"]
-		ci_gate: ["unit-tests"]
-		dod:
-			- helm template success test
-			- kg/ws disabled diff test
-			- README values table
-		engineer: E1
-		target_sprint: 5
-		completed_at: 2026-03-07
-	# TASK-128 Governance
-	governance:
-		status: Completed
-		owner: platform-deploy@team
-		priority: P1
-		estimate: 1p
-		risk: "Missing readiness hides failures"
-		mitigation: "Probe failure fixture"
-		adr_impact: ["ADR-004"]
-		ci_gate: ["unit-tests"]
-		dod:
-			- /healthz test
-			- /readyz test
-			- Startup probe doc
-		engineer: E1
-		target_sprint: 5
-		completed_at: 2026-03-07
-	# TASK-129 Governance
-	governance:
-		status: Completed
-		owner: platform-deploy@team
-		priority: P2
-		estimate: 1p
-		risk: "Over/under scaling"
-		mitigation: "HPA dry-run metrics test"
-		adr_impact: []
-		ci_gate: ["unit-tests"]
-		dod:
-			- HPA example applied test
-			- Scaling event doc
-			- Tuning guide
-		engineer: E1
-		target_sprint: 6
-		completed_at: 2026-03-07
-	# TASK-131 Governance
-	governance:
-		status: Completed
-		owner: platform-deploy@team
-		priority: P3
-		estimate: 1p
-		risk: "GPU path diverges from CPU"
-		mitigation: "Parity build test"
-		adr_impact: []
-		ci_gate: ["unit-tests"]
-		dod:
-			- gpu_enabled metric test
-			- CPU fallback test
-			- README GPU section
-		engineer: E1
-		target_sprint: 6
-		completed_at: 2026-03-08
-	# TASK-132 Governance (Engineer Assignment)
-	governance:
-		engineer: E1
-		target_sprint: 6
-	# TASK-133 Governance
-	governance:
-		status: Completed
-		owner: platform-governance@team
-		priority: P2
-		estimate: 2p
-		risk: "Policy gaps allow inconsistent metrics"
-		mitigation: "Negative naming test cases"
-		adr_impact: ["ADR-005"]
-		ci_gate: ["policy-validate"]
-		dod:
-			- Rego tests pass
-			- Naming violation sample
-			- README policy section
-		engineer: E1 (E2 consult for metrics)
-		target_sprint: 6
-		completed_at: 2026-03-08
-	# TASK-134 Governance
-	governance:
-		status: Completed
-		owner: platform-secops@team
-		priority: P1
-		estimate: 1p
-		risk: "Secrets leak to repo"
-		mitigation: "Injected secret test"
-		adr_impact: ["ADR-004"]
-		ci_gate: ["security-scan"]
-		dod:
-			- gitleaks config committed
-			- Failing secret test
-			- Allowlist doc
-		engineer: E1
-		target_sprint: 5
-		completed_at: 2026-03-07
-	```
-# TASK-132 Governance
+# TASK-127 Governance
 governance:
-	status: Completed
-	owner: platform-parity@team
-	priority: P1
-	estimate: 1p
-	risk: "Environment drift reduces reproducibility"
-	mitigation: "Parity script diff test"
-	adr_impact: []
-	ci_gate: ["parity-validate"]
-	dod:
-		- Drift exit code test
-		- JSON parity report
-		- README parity section
-	completed_at: 2026-03-08
-	deliverables:
-		- scripts/validate_dev_parity.py
-		- services/tests/test_validate_dev_parity.py
-```
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
 
-```yaml
+# TASK-128 Governance
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
+
+# TASK-129 Governance
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-07
+
 # TASK-130 Governance
 governance:
-	status: Completed
-	owner: platform-secops@team
-	priority: P1
-	estimate: 4p
-	risk: "Key management complexity or lost signing key blocks deployments"
-	mitigation: "Allow unsigned fallback with clear annotation; KMS-backed key w/ least privilege"
-	adr_impact: ["ADR-004"]
-	ci_gate: ["security-scan","sbom-generate","image-sign"]
-	sbom_format: CycloneDX-1.5
-	artifacts:
-		- sbom/sbom-main.json
-		- sbom/sbom-diff.json
-		- attest/provenance.intoto.jsonl
-	slo:
-		pipeline_additional_time_seconds_p95: 90
-		critical_vuln_allowed: 0
-	metrics:
-		- supplychain_vuln_count{severity="CRITICAL"}
-		- supplychain_unsigned_image_total
-	logs:
-		- code=SBOM_GENERATED level=INFO
-		- code=IMAGE_SIGNED level=INFO
-		- code=SIGNING_SKIPPED level=WARN
-	dod:
-		- syft produces CycloneDX JSON stored under sbom/
-		- Trivy SARIF uploaded with 0 CRITICAL/HIGH (allow configurable medium tolerance)
-		- cosign verify example documented in security.md
-		- Missing signature triggers workflow annotation
-		- Deployment guide updated with SBOM / signing section
-	engineer: E1 (secops partnering)
-	target_sprint: 6
-	completed_at: 2026-03-08
+  status: Completed
+  owner: platform-secops@team
+  ci_gate: [security-scan, sbom-generate, image-sign]
+  artifacts:
+    - sbom/sbom-main.json
+    - sbom/sbom-diff.json
+    - attest/provenance.intoto.jsonl
+  completed_at: 2026-03-08
+
+# TASK-131 Governance
+governance:
+  status: Completed
+  owner: platform-deploy@team
+  ci_gate: [unit-tests]
+  completed_at: 2026-03-08
+
+# TASK-132 Governance
+governance:
+  status: Completed
+  owner: platform-parity@team
+  ci_gate: [parity-validate]
+  artifacts:
+    - scripts/validate_dev_parity.py
+    - services/tests/test_validate_dev_parity.py
+  completed_at: 2026-03-08
+
+# TASK-133 Governance
+governance:
+  status: Completed
+  owner: platform-governance@team
+  ci_gate: [policy-validate]
+  completed_at: 2026-03-08
+
+# TASK-134 Governance
+governance:
+  status: Completed
+  owner: platform-secops@team
+  ci_gate: [security-scan]
+  artifacts:
+    - .github/workflows/build-governance.yml
+    - .gitleaks.toml
+    - docs/security.md
+  completed_at: 2026-03-07
 ```
+
 
 #### TASK-126 Subtasks
 | Sub-ID    | Title                          | Description                                                            | Acceptance Criteria                                                 | Dependencies | Artifacts                         | Notes            |
