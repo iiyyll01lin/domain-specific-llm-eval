@@ -320,19 +320,19 @@ class SMTRAGEvaluator:
     def _evaluate_with_ragas(self, question: str, answer: str, ground_truth: str, contexts: str) -> Dict[str, Any]:
         """Evaluate using RAGAS metrics"""
         # Create RAGAS-compatible data
-        eval_data = {
-            'question': [question],
-            'answer': [answer],
-            'contexts': [[contexts]] if contexts else [[]],
-            'ground_truth': [ground_truth]
+        testset_data = {
+            "questions": [question],
+            "ground_truths": [ground_truth],
+            "contexts": [[contexts]] if contexts else [[]],
         }
+        rag_responses = [{"answer": answer}]
         
         try:
-            return self.ragas_evaluator.evaluate(eval_data)
+            return self.ragas_evaluator.evaluate(testset_data, rag_responses)
         except Exception as e:
             logger.warning(f"RAGAS evaluation failed: {e}")
-            return {'error': str(e)}
-    
+            return {"error": str(e)}
+
     def save_results(self, results: Dict[str, Any], output_dir: str = "outputs/evaluations") -> str:
         """Save evaluation results"""
         os.makedirs(output_dir, exist_ok=True)

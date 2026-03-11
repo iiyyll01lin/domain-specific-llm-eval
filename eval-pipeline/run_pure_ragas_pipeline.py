@@ -16,6 +16,8 @@ This fixes the design flaw where keywords were calculated before RAG testing.
 import asyncio
 import json
 import logging
+from src.utils.pipeline_telemetry import PipelineTelemetry
+from src.utils.pipeline_telemetry import PipelineTelemetry
 import os
 import sys
 from dataclasses import dataclass
@@ -652,17 +654,27 @@ async def create_knowledge_graph_from_documents(
     # Create knowledge graph
     kg = KnowledgeGraph()
 
-    # Text splitter for chunking
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=100,
-        length_function=len,
-        separators=["\n\n", "\n", "。", ".", " ", ""],
-    )
+    # Advanced semantic chunking with fallback
+    try:
+        from langchain_experimental.text_splitter import SemanticChunker
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+        logger.info("🧠 Initializing SemanticChunker for better relations...")
+        embedder = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        text_splitter = SemanticChunker(embedder, breakpoint_threshold_type="percentile")
+    except ImportError:
+        logger.info("Falling back to RecursiveCharacterTextSplitter...")
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50,
+            length_function=len,
+            separators=["\n\n", "\n", "。", ".", " ", ""],
+        )
 
     # Split documents into chunks
     split_docs = text_splitter.split_documents(documents)
     logger.info(f"📄 Split {len(documents)} documents into {len(split_docs)} chunks")
+    telemetry.log_document_stats(len(documents), len(split_docs))
+    telemetry.log_document_stats(len(documents), len(split_docs))
 
     # Create nodes for each chunk
     import uuid
@@ -1026,6 +1038,7 @@ def generate_ragas_testset(
         return test_samples
 
     except Exception as e:
+        telemetry.log_error("evaluation_generation", str(e))
         logger.error(f"❌ RAGAS testset generation failed: {e}")
         import traceback
 
@@ -1141,6 +1154,8 @@ def save_testset(test_samples: List[Dict], output_dir: Path) -> str:
 
 def main():
     """Main pipeline execution"""
+    telemetry = None
+    telemetry = None
     logger.info("🚀 Starting Pure RAGAS Pipeline (Corrected Design)")
     logger.info("=" * 60)
 
@@ -1293,9 +1308,15 @@ def main():
         logger.info("4. 📊 Calculate evaluation metrics on RAG outputs")
         logger.info("5. 📈 Generate evaluation reports")
 
+        if telemetry:
+            telemetry.finish(status="completed")
+
         return True
 
     except Exception as e:
+        if telemetry:
+            telemetry.log_error("pipeline_main", str(e))
+            telemetry.finish(status="failed")
         logger.error(f"❌ Pipeline failed: {e}")
         import traceback
 
