@@ -53,21 +53,29 @@ from langchain_core.documents import Document
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
 from ragas.run_config import RunConfig
+
 # Import RAGAS components
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers import default_query_distribution
-from ragas.testset.synthesizers.multi_hop.abstract import \
-    MultiHopAbstractQuerySynthesizer
-from ragas.testset.synthesizers.multi_hop.specific import \
-    MultiHopSpecificQuerySynthesizer
-from ragas.testset.synthesizers.single_hop.specific import \
-    SingleHopSpecificQuerySynthesizer
+from ragas.testset.synthesizers.multi_hop.abstract import (
+    MultiHopAbstractQuerySynthesizer,
+)
+from ragas.testset.synthesizers.multi_hop.specific import (
+    MultiHopSpecificQuerySynthesizer,
+)
+from ragas.testset.synthesizers.single_hop.specific import (
+    SingleHopSpecificQuerySynthesizer,
+)
 from ragas.testset.transforms.relationship_builders import (
-    CosineSimilarityBuilder, JaccardSimilarityBuilder, OverlapScoreBuilder)
-from ragas.testset.transforms.relationship_builders.cosine import \
-    SummaryCosineSimilarityBuilder
+    CosineSimilarityBuilder,
+    JaccardSimilarityBuilder,
+    OverlapScoreBuilder,
+)
+from ragas.testset.transforms.relationship_builders.cosine import (
+    SummaryCosineSimilarityBuilder,
+)
 
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -80,10 +88,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.utils.prompt_templates import (get_fallback_generation_templates,
-                                        get_persona_templates,
-                                        get_query_distribution_templates,
-                                        load_prompt_library)
+from src.utils.prompt_templates import (
+    get_fallback_generation_templates,
+    get_persona_templates,
+    get_query_distribution_templates,
+    load_prompt_library,
+)
 
 
 @dataclass
@@ -896,8 +906,7 @@ def setup_ragas_components(
         logger.info(f"🔗 Using HuggingFace embeddings: {embeddings_model}")
     except ImportError:
         try:
-            from langchain_community.embeddings import \
-                SentenceTransformerEmbeddings
+            from langchain_community.embeddings import SentenceTransformerEmbeddings
             from sentence_transformers import SentenceTransformer
 
             embeddings = SentenceTransformerEmbeddings(model_name=embeddings_model)

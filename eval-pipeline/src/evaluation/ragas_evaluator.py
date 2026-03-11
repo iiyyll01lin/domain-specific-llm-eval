@@ -40,6 +40,19 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+class DomainRegexHeuristic:
+    """Custom evaluation metric that checks for domain-specific vocabulary constraints."""
+
+    def __init__(self, required_terms=None):
+        self.rules = required_terms or []
+
+    def score(self, text):
+        if not self.rules:
+            return 1.0
+        matches = sum(1 for r in self.rules if r in text)
+        return matches / len(self.rules)
+
+
 class RagasEvaluator:
     """RAGAS-based evaluator for RAG systems."""
 
