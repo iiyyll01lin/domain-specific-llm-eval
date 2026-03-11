@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 Simplified Pipeline Runner - Clean Implementation
 
@@ -103,9 +104,18 @@ except ImportError as e:
     ENHANCED_EXTRACTOR_AVAILABLE = False
     ENHANCED_EXTRACTOR_AVAILABLE = False
 
-# RAGAS imports for relationship building
+# RAGAS imports for graph and relationship building
 try:
     from ragas.testset.graph import KnowledgeGraph, Node, Relationship
+    RAGAS_GRAPH_AVAILABLE = True
+    RAGAS_GRAPH_IMPORT_ERROR = None
+except ImportError as e:
+    print(f"⚠️  RAGAS graph support not available: {e}")
+    KnowledgeGraph = Node = Relationship = None
+    RAGAS_GRAPH_AVAILABLE = False
+    RAGAS_GRAPH_IMPORT_ERROR = e
+
+try:
     from ragas.testset.transforms.relationship_builders import (
         JaccardSimilarityBuilder,
         OverlapScoreBuilder,
@@ -116,6 +126,8 @@ try:
     print("✅ RAGAS relationship builders imported successfully")
 except ImportError as e:
     print(f"⚠️  RAGAS relationship builders not available: {e}")
+    JaccardSimilarityBuilder = OverlapScoreBuilder = CosineSimilarityBuilder = None
+    SummaryCosineSimilarityBuilder = None
     RAGAS_RELATIONSHIPS_AVAILABLE = False
 
 # Setup logging
@@ -124,6 +136,15 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def ensure_ragas_graph_available() -> None:
+    if RAGAS_GRAPH_AVAILABLE:
+        return
+    raise RuntimeError(
+        "RAGAS graph support is unavailable. Install the local RAGAS runtime dependencies "
+        f"and retry. Original import error: {RAGAS_GRAPH_IMPORT_ERROR}"
+    )
 
 # --- Utility helpers -------------------------------------------------------
 def _sanitize_for_filename(text: str, max_len: int = 80) -> str:
@@ -194,13 +215,94 @@ def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='Run RAG evaluation pipeline')
     parser.add_argument('--config', required=True, help='Configuration file path')
-    parser.add_argument('--stage', default='testset-generation', help='Pipeline stage to run')
+    parser.add_argument(
+        '--stage',
+        default='testset-generation',
+        choices=['testset-generation', 'evaluation'],
+        help='Pipeline stage to run',
+    )
     return parser.parse_args()
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file"""
     with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
+        config = yaml.safe_load(f) or {}
+    config['__config_dir__'] = str(Path(config_path).resolve().parent)
+    return config
+
+
+def resolve_configured_path(path_value: str, config: Dict[str, Any]) -> Path:
+    """Resolve config paths relative to the config file when needed."""
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    config_dir = Path(config.get('__config_dir__', Path.cwd()))
+    return (config_dir / path).resolve()
+
+
+def find_latest_testset_file(outputs_root: Path) -> Optional[Path]:
+    """Locate the most recent generated testset for evaluation."""
+    patterns = (
+        "*/testsets/validated_testset_*.csv",
+        "*/testsets/pure_ragas_testset_*.csv",
+        "*/testsets/*.csv",
+    )
+    candidates: List[Path] = []
+    for pattern in patterns:
+        candidates.extend(outputs_root.glob(pattern))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def run_evaluation_stage(config: Dict[str, Any], config_path: str, run_id: str) -> None:
+    """Run the evaluation-only stage against an existing generated testset."""
+    rag_endpoint = config.get('rag_system', {}).get('endpoint')
+    if not rag_endpoint:
+        raise RuntimeError(
+            "Evaluation stage requires rag_system.endpoint in the selected config. "
+            "Use a config with a reachable RAG endpoint before running --stage evaluation."
+        )
+
+    configured_testset = (
+        config.get('evaluation', {}).get('existing_testset_file')
+        or config.get('testset_generation', {}).get('existing_testset_file')
+    )
+    testset_path = Path(configured_testset) if configured_testset else None
+
+    if testset_path is None or not testset_path.exists():
+        outputs_root = Path('outputs')
+        latest_testset = find_latest_testset_file(outputs_root)
+        if latest_testset is None:
+            raise RuntimeError(
+                "No existing testset was found for evaluation. Run --stage testset-generation first, "
+                "or set evaluation.existing_testset_file in the config."
+            )
+        testset_path = latest_testset
+
+    logger.info(f"🔍 Running evaluation stage with testset: {testset_path}")
+
+    try:
+        from evaluate_existing_testset import SMTRAGEvaluator
+    except ImportError as exc:
+        raise RuntimeError(
+            "Evaluation stage could not import the existing-testset evaluator. "
+            "Ensure the local pipeline dependencies are installed with eval-pipeline/requirements.minimal.txt. "
+            f"Original import error: {exc}"
+        ) from exc
+
+    evaluator = SMTRAGEvaluator(config_path)
+    testset_df = evaluator.load_testset(str(testset_path))
+    results = evaluator.evaluate_testset(testset_df)
+
+    evaluation_dir = Path('outputs') / run_id / 'evaluations'
+    output_file = evaluator.save_results(results, str(evaluation_dir))
+    report = evaluator.generate_report(results)
+    report_path = Path(output_file).with_suffix('.report.txt')
+    report_path.write_text(report, encoding='utf-8')
+
+    logger.info(f"✅ Saved evaluation results: {output_file}")
+    logger.info(f"✅ Saved evaluation report: {report_path}")
 
 def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Load CSV documents and parse JSON content"""
@@ -210,7 +312,7 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
     logger.info(f"📄 Loading CSV documents with max_docs: {max_docs}")
     
     for csv_file in csv_files:
-        csv_path = Path(csv_file)
+        csv_path = resolve_configured_path(csv_file, config)
         if not csv_path.exists():
             logger.warning(f"CSV file not found: {csv_file}")
             continue
@@ -339,57 +441,25 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
     return documents
     
 def load_txt_documents(document_files: List[str], config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Load TXT documents using clean method"""
-    documents = []
-    max_docs = config.get('testset_generation', {}).get('max_documents_for_generation', 10)
-    
-    for doc_file in document_files[:max_docs]:
-        doc_path = Path(doc_file)
-        if not doc_path.exists():
-            logger.warning(f"Document file not found: {doc_file}")
-            continue
-            
-        try:
-            # Read document content
-            with open(doc_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-            
-            if len(content) < 100:  # Skip very short content
-                continue
-            
-            documents.append({
-                'content': content,
-                'metadata': {
-                    'title': doc_path.stem,
-                    'source': str(doc_path),
-                    'document_id': len(documents),
-                    'filename': doc_path.name,
-                    'content_type': 'steel_plate_inspection'
-                }
-            })
-            
-        except Exception as e:
-            logger.warning(f"Failed to load document {doc_file}: {e}")
-            continue
-    
-    logger.info(f"✅ Loaded {len(documents)} CSV documents with parsed JSON content")
-    return documents
-
-def load_txt_documents(document_files: List[str], config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Load documents from text files"""
     documents = []
+    max_docs = config.get('testset_generation', {}).get('max_documents_for_generation', len(document_files))
     logger.info(f"📄 Loading {len(document_files)} text documents")
     
-    for doc_file in document_files:
+    for doc_file in document_files[:max_docs]:
         try:
-            with open(doc_file, 'r', encoding='utf-8') as f:
+            doc_path = resolve_configured_path(doc_file, config)
+            with open(doc_path, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 if content:
                     doc = {
                         'content': content,
                         'metadata': {
-                            'source': doc_file,
-                            'type': 'text'
+                            'source': str(doc_path),
+                            'type': 'text',
+                            'title': doc_path.stem,
+                            'filename': doc_path.name,
+                            'document_id': len(documents),
                         }
                     }
                     documents.append(doc)
@@ -694,6 +764,7 @@ def calculate_content_similarity(content1: str, content2: str) -> float:
 
 def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraph:
     """Load knowledge graph from custom JSON format and convert to RAGAS KnowledgeGraph"""
+    ensure_ragas_graph_available()
     logger.info(f"🔄 Loading existing knowledge graph from: {kg_file}")
     
     try:
@@ -775,6 +846,7 @@ def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraph:
 
 async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGraph:
     """Create native RAGAS KnowledgeGraph from documents with proper relationship building"""
+    ensure_ragas_graph_available()
     logger.info(f"🧠 Creating native RAGAS KnowledgeGraph from {len(documents)} documents...")
     
     # Create native RAGAS KnowledgeGraph
@@ -1881,6 +1953,7 @@ def generate_simple_qa_fallback(documents: List[Dict[str, Any]], config: Dict[st
             # Get run_id from config or generate one
             run_id = config.get('run_id', f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
             output_dir = Path(config.get('output_dir', 'outputs/fallback'))
+            output_dir.mkdir(parents=True, exist_ok=True)
             
             from src.utils.keyword_metadata_manager import KeywordMetadataManager
             metadata_manager = KeywordMetadataManager(output_dir, run_id)
@@ -2053,6 +2126,10 @@ async def main():
     logger.info(f"🚀 Starting hybrid fixed pipeline: {run_id}")
     
     try:
+        if args.stage == 'evaluation':
+            run_evaluation_stage(config, args.config, run_id)
+            return
+
         # Load data sources from configuration
         data_sources_config = config.get('data_sources', {})
         
@@ -2110,6 +2187,8 @@ async def main():
         # Create output directories first
         base_output_dir = Path("outputs") / run_id
         base_output_dir.mkdir(parents=True, exist_ok=True)
+        config['run_id'] = run_id
+        config['output_dir'] = str(base_output_dir)
         
         # Generate testset samples (will create ragas_artifacts under base_output_dir)
         test_samples = generate_testset_samples(documents, kg, config, base_output_dir)

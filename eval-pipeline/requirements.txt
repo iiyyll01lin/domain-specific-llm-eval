@@ -25,11 +25,12 @@ spacy>=3.4.0              # NLP processing for contextual segmentation
 transformers>=4.21.0      # Hugging Face transformers
 
 # RAGAS dependencies
-# ragas>=0.1.0              # RAG evaluation metrics - BUILT FROM LOCAL SUBMODULE
-# NOTE: RAGAS is installed from local submodule in Dockerfile, not from PyPI
+-e ../ragas/ragas          # Local RAGAS submodule with patched graph builders
 datasets>=2.5.0           # Dataset handling for RAGAS
+appdirs>=1.4,<2.0        # RAGAS analytics runtime dependency
 langchain>=0.0.200        # LangChain for document processing
 langchain-community>=0.0.20  # Community components
+langchain-openai>=0.1.0   # OpenAI-compatible chat wrapper used by run_pipeline.py
 
 # Keyword extraction
 keybert>=0.7.0            # KeyBERT for automatic keyword extraction

@@ -43,12 +43,15 @@ Use this if your goal is testset generation and evaluation rather than service d
 
 ```bash
 cd eval-pipeline
-python3 test_ragas_integration.py
-python3 run_pipeline.py --stage testset-generation
-python3 run_pipeline.py --stage evaluation
+python3 -m pip install -r requirements.minimal.txt
+python3 run_pipeline.py --config config/simple_config.yaml --stage testset-generation
 ```
 
 Use this path when you already have CSV inputs and a target LLM or RAG endpoint and want to benefit from the repo quickly.
+
+`eval-pipeline/requirements.minimal.txt` now installs the local `ragas/` submodule as an editable dependency, so the batch path uses the patched in-repo RAGAS implementation rather than a mismatched PyPI package.
+
+For `--stage evaluation`, use a config that includes `rag_system.endpoint` and either `evaluation.existing_testset_file` or a previously generated testset under `eval-pipeline/outputs/`.
 
 ### Path B: Service Layer Smoke Validation
 
@@ -71,6 +74,8 @@ Use `bash scripts/e2e_smoke.sh` when you want the real compose-backed path. It s
 - Docker and Docker Compose are required for the service deployment path.
 - Node.js 18.18+ / 20.x LTS is required for `insights-portal/` builds and tests.
 - `requirements.txt` contains the Python dependencies used by the service layer.
+- `eval-pipeline/requirements.minimal.txt` contains the additional packages required by the batch pipeline path.
+- Both dependency files install the local `ragas/` submodule from this repository.
 
 Install local dependencies:
 
@@ -78,6 +83,12 @@ Install local dependencies:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+If you also want the batch evaluation pipeline in the same environment:
+
+```bash
+pip install -r eval-pipeline/requirements.minimal.txt
 ```
 
 ### Important Runtime Configuration
