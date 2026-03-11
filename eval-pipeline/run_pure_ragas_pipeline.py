@@ -16,8 +16,21 @@ This fixes the design flaw where keywords were calculated before RAG testing.
 import asyncio
 import json
 import logging
+
 from src.utils.pipeline_telemetry import PipelineTelemetry
+
+# Global telemetry instance
+GLOBAL_TELEMETRY = None
+
+# Global telemetry instance
+GLOBAL_TELEMETRY = None
 from src.utils.pipeline_telemetry import PipelineTelemetry
+
+# Global telemetry instance
+GLOBAL_TELEMETRY = None
+
+# Global telemetry instance
+GLOBAL_TELEMETRY = None
 import os
 import sys
 from dataclasses import dataclass
@@ -35,28 +48,26 @@ ragas_path = str(
 if ragas_path not in sys.path:
     sys.path.insert(0, ragas_path)
 
+# Import LangChain for document processing
+from langchain_core.documents import Document
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
+from ragas.run_config import RunConfig
 # Import RAGAS components
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.run_config import RunConfig
 from ragas.testset.persona import Persona
 from ragas.testset.synthesizers import default_query_distribution
-from ragas.testset.synthesizers.multi_hop.abstract import MultiHopAbstractQuerySynthesizer
-from ragas.testset.synthesizers.multi_hop.specific import MultiHopSpecificQuerySynthesizer
-from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
+from ragas.testset.synthesizers.multi_hop.abstract import \
+    MultiHopAbstractQuerySynthesizer
+from ragas.testset.synthesizers.multi_hop.specific import \
+    MultiHopSpecificQuerySynthesizer
+from ragas.testset.synthesizers.single_hop.specific import \
+    SingleHopSpecificQuerySynthesizer
 from ragas.testset.transforms.relationship_builders import (
-    CosineSimilarityBuilder,
-    JaccardSimilarityBuilder,
-    OverlapScoreBuilder,
-)
-from ragas.testset.transforms.relationship_builders.cosine import (
-    SummaryCosineSimilarityBuilder,
-)
-
-# Import LangChain for document processing
-from langchain_core.documents import Document
+    CosineSimilarityBuilder, JaccardSimilarityBuilder, OverlapScoreBuilder)
+from ragas.testset.transforms.relationship_builders.cosine import \
+    SummaryCosineSimilarityBuilder
 
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -69,12 +80,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from src.utils.prompt_templates import (
-    get_fallback_generation_templates,
-    get_persona_templates,
-    get_query_distribution_templates,
-    load_prompt_library,
-)
+from src.utils.prompt_templates import (get_fallback_generation_templates,
+                                        get_persona_templates,
+                                        get_query_distribution_templates,
+                                        load_prompt_library)
 
 
 @dataclass
@@ -187,7 +196,9 @@ def build_query_distribution(
         )
 
     if not available_distribution:
-        fallback_distribution = default_query_distribution(llm, kg if kg_has_nodes else None)
+        fallback_distribution = default_query_distribution(
+            llm, kg if kg_has_nodes else None
+        )
         fallback_records = [
             {
                 "synthesizer": synthesizer.name,
@@ -201,7 +212,9 @@ def build_query_distribution(
     total_weight = sum(weight for _, weight in available_distribution)
     normalized_distribution = []
     normalized_records = []
-    for record, (synthesizer, weight) in zip(distribution_records, available_distribution):
+    for record, (synthesizer, weight) in zip(
+        distribution_records, available_distribution
+    ):
         normalized_weight = weight / total_weight
         normalized_distribution.append((synthesizer, normalized_weight))
         normalized_records.append({**record, "weight": normalized_weight})
@@ -351,25 +364,28 @@ def load_config(config_path: str = "config/pipeline_config.yaml") -> Dict[str, A
     """Load pipeline configuration with environment variable expansion"""
     import os
     import re
+
     from dotenv import load_dotenv
+
     load_dotenv()
-    
+
     config_file = Path(config_path)
     if not config_file.is_absolute():
         config_file = (Path(__file__).parent / config_file).resolve()
 
     with open(config_file, "r", encoding="utf-8") as f:
         content = f.read()
-        
-    pattern = re.compile(r'\$\{([^}]+)\}')
+
+    pattern = re.compile(r"\$\{([^}]+)\}")
+
     def replacer(match):
         inner = match.group(1)
-        if ':' in inner:
-            var_name, default_value = inner.split(':', 1)
+        if ":" in inner:
+            var_name, default_value = inner.split(":", 1)
         else:
             var_name, default_value = inner, ""
         return os.environ.get(var_name, default_value)
-        
+
     content = pattern.sub(replacer, content)
     config = yaml.safe_load(content)
 
@@ -656,11 +672,14 @@ async def create_knowledge_graph_from_documents(
 
     # Advanced semantic chunking with fallback
     try:
-        from langchain_experimental.text_splitter import SemanticChunker
         from langchain_community.embeddings import HuggingFaceEmbeddings
+        from langchain_experimental.text_splitter import SemanticChunker
+
         logger.info("🧠 Initializing SemanticChunker for better relations...")
         embedder = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        text_splitter = SemanticChunker(embedder, breakpoint_threshold_type="percentile")
+        text_splitter = SemanticChunker(
+            embedder, breakpoint_threshold_type="percentile"
+        )
     except ImportError:
         logger.info("Falling back to RecursiveCharacterTextSplitter...")
         text_splitter = RecursiveCharacterTextSplitter(
@@ -673,8 +692,10 @@ async def create_knowledge_graph_from_documents(
     # Split documents into chunks
     split_docs = text_splitter.split_documents(documents)
     logger.info(f"📄 Split {len(documents)} documents into {len(split_docs)} chunks")
-    telemetry.log_document_stats(len(documents), len(split_docs))
-    telemetry.log_document_stats(len(documents), len(split_docs))
+    if GLOBAL_TELEMETRY:
+        GLOBAL_TELEMETRY.log_document_stats(len(documents), len(split_docs))
+    if GLOBAL_TELEMETRY:
+        GLOBAL_TELEMETRY.log_document_stats(len(documents), len(split_docs))
 
     # Create nodes for each chunk
     import uuid
@@ -746,13 +767,17 @@ async def create_knowledge_graph_from_documents(
         )
         semaphore = asyncio.Semaphore(max_workers)
         tasks = [
-            _populate_node_embeddings(node, content, summary, embeddings_model, semaphore)
+            _populate_node_embeddings(
+                node, content, summary, embeddings_model, semaphore
+            )
             for node, content, summary in pending_embedding_nodes
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for (node, _, summary), result in zip(pending_embedding_nodes, results):
             if isinstance(result, Exception):
-                logger.warning(f"Failed to create embedding for node {node.id}: {result}")
+                logger.warning(
+                    f"Failed to create embedding for node {node.id}: {result}"
+                )
                 node.properties.pop("embedding", None)
                 node.properties.pop("summary_embedding", None)
                 node.properties["summary"] = summary
@@ -871,8 +896,9 @@ def setup_ragas_components(
         logger.info(f"🔗 Using HuggingFace embeddings: {embeddings_model}")
     except ImportError:
         try:
+            from langchain_community.embeddings import \
+                SentenceTransformerEmbeddings
             from sentence_transformers import SentenceTransformer
-            from langchain_community.embeddings import SentenceTransformerEmbeddings
 
             embeddings = SentenceTransformerEmbeddings(model_name=embeddings_model)
             generator_embeddings = LangchainEmbeddingsWrapper(embeddings)
@@ -1038,7 +1064,8 @@ def generate_ragas_testset(
         return test_samples
 
     except Exception as e:
-        telemetry.log_error("evaluation_generation", str(e))
+        if GLOBAL_TELEMETRY:
+            GLOBAL_TELEMETRY.log_error("evaluation_generation", str(e))
         logger.error(f"❌ RAGAS testset generation failed: {e}")
         import traceback
 
@@ -1105,9 +1132,11 @@ def save_testset(test_samples: List[Dict], output_dir: Path) -> str:
         df = pd.DataFrame(test_samples)
         for column in df.columns:
             df[column] = df[column].apply(
-                lambda value: json.dumps(value, ensure_ascii=False)
-                if isinstance(value, (list, dict))
-                else value
+                lambda value: (
+                    json.dumps(value, ensure_ascii=False)
+                    if isinstance(value, (list, dict))
+                    else value
+                )
             )
 
         # Add additional columns to match expected format (but leave empty as designed)
