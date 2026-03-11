@@ -1,0 +1,9 @@
+default:
+  ragas_system_prompt: |
+    You are an expert system. Generate a question and answer based on the context provided.
+  user_prompt: |
+    Context: {context}
+    Please carefully consider the context above to produce the result.
+domain_a:
+  ragas_system_prompt: |
+    You are a technical specialist in Domain A...
