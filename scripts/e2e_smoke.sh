@@ -9,6 +9,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.services.yml}"
 TEMP_ENV="$(mktemp)"
 RAW_DOCUMENT='Policy requires annual review of all compliance controls.'
 SMOKE_USE_PREBUILT_IMAGE="${SMOKE_USE_PREBUILT_IMAGE:-0}"
+INPUT_ENV_FILE="${SMOKE_ENV_FILE:-${COMPOSE_ENV_FILE:-}}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -26,6 +27,19 @@ trap cleanup EXIT
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+load_input_env_file() {
+	if [[ -z "$INPUT_ENV_FILE" ]]; then
+		return
+	fi
+
+	[[ -f "$INPUT_ENV_FILE" ]] || fail "Smoke env file not found: $INPUT_ENV_FILE"
+	log "Loading compose smoke overrides from $INPUT_ENV_FILE"
+	set -a
+	# shellcheck disable=SC1090
+	source "$INPUT_ENV_FILE"
+	set +a
 }
 
 compose() {
@@ -107,6 +121,7 @@ EOF
 
 require_cmd docker
 require_cmd curl
+load_input_env_file
 
 log "Step 0: Start compose-backed services"
 compose up -d minio

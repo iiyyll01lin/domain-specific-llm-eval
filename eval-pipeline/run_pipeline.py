@@ -20,7 +20,7 @@ import re
 from collections import Counter
 import uuid
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, TypeAlias
 from pathlib import Path
 from pathlib import Path
 from typing import Dict, List, Any
@@ -56,7 +56,7 @@ def validate_ragas_setup():
         
         # Test critical imports
         try:
-            from ragas.testset.synthesizers.single_hop import SingleHopSpecificQuerySynthesizer
+            from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
             print("✅ SingleHopSpecificQuerySynthesizer available")
         except ImportError as e:
             print(f"❌ SingleHopSpecificQuerySynthesizer not available: {e}")
@@ -115,6 +115,8 @@ except ImportError as e:
     RAGAS_GRAPH_AVAILABLE = False
     RAGAS_GRAPH_IMPORT_ERROR = e
 
+KnowledgeGraphType: TypeAlias = Any
+
 try:
     from ragas.testset.transforms.relationship_builders import (
         JaccardSimilarityBuilder,
@@ -136,6 +138,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+DEFAULT_STAGE_CONFIGS = {
+    'testset-generation': Path(__file__).parent / 'config' / 'simple_config.yaml',
+    'evaluation': Path(__file__).parent / 'config' / 'evaluation_smoke_config.yaml',
+}
 
 
 def ensure_ragas_graph_available() -> None:
@@ -214,7 +221,10 @@ def setup_ragas_llm(config: Dict[str, Any]) -> Optional[ChatOpenAI]:
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='Run RAG evaluation pipeline')
-    parser.add_argument('--config', required=True, help='Configuration file path')
+    parser.add_argument(
+        '--config',
+        help='Configuration file path. Defaults to a bundled stage-specific config.',
+    )
     parser.add_argument(
         '--stage',
         default='testset-generation',
@@ -222,6 +232,13 @@ def parse_arguments():
         help='Pipeline stage to run',
     )
     return parser.parse_args()
+
+
+def resolve_runtime_config_path(stage: str, config_path: Optional[str]) -> Path:
+    """Resolve the config path, falling back to a bundled stage-specific config."""
+    if config_path:
+        return Path(config_path).resolve()
+    return DEFAULT_STAGE_CONFIGS[stage].resolve()
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file"""
@@ -268,10 +285,10 @@ def run_evaluation_stage(config: Dict[str, Any], config_path: str, run_id: str) 
         config.get('evaluation', {}).get('existing_testset_file')
         or config.get('testset_generation', {}).get('existing_testset_file')
     )
-    testset_path = Path(configured_testset) if configured_testset else None
+    testset_path = resolve_configured_path(configured_testset, config) if configured_testset else None
 
     if testset_path is None or not testset_path.exists():
-        outputs_root = Path('outputs')
+        outputs_root = Path(config.get('output', {}).get('base_dir', './outputs')).resolve()
         latest_testset = find_latest_testset_file(outputs_root)
         if latest_testset is None:
             raise RuntimeError(
@@ -540,7 +557,7 @@ def extract_keyphrases_from_content(content: str) -> List[str]:
 
     return deduped[:10]  # Limit to top 10 keyphrases
 
-async def build_relationships_with_ragas(kg: KnowledgeGraph) -> int:
+async def build_relationships_with_ragas(kg: KnowledgeGraphType) -> int:
     """Build relationships using RAGAS relationship builders on native KnowledgeGraph"""
     total_relationships = 0
     
@@ -626,7 +643,7 @@ async def build_relationships_with_ragas(kg: KnowledgeGraph) -> int:
     
     return total_relationships
 
-def build_relationships_custom_kg(kg: KnowledgeGraph) -> int:
+def build_relationships_custom_kg(kg: KnowledgeGraphType) -> int:
     """Fallback custom relationship building for native KnowledgeGraph"""
     relationships_count = 0
     nodes = list(kg.nodes)
@@ -762,7 +779,7 @@ def calculate_content_similarity(content1: str, content2: str) -> float:
     
     return final_similarity
 
-def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraph:
+def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraphType:
     """Load knowledge graph from custom JSON format and convert to RAGAS KnowledgeGraph"""
     ensure_ragas_graph_available()
     logger.info(f"🔄 Loading existing knowledge graph from: {kg_file}")
@@ -844,7 +861,7 @@ def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraph:
         logger.error(f"❌ Failed to load knowledge graph from {kg_file}: {e}")
         raise
 
-async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGraph:
+async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGraphType:
     """Create native RAGAS KnowledgeGraph from documents with proper relationship building"""
     ensure_ragas_graph_available()
     logger.info(f"🧠 Creating native RAGAS KnowledgeGraph from {len(documents)} documents...")
@@ -1227,7 +1244,7 @@ def generate_answer_from_context(question: str, content: str) -> str:
     
     return ' '.join(relevant_lines) if relevant_lines else content.split('\n')[0] if content.split('\n') else "No relevant information found."
 
-def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph, config: Dict[str, Any], base_output_dir: Path = None) -> List[Dict[str, Any]]:
+def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraphType, config: Dict[str, Any], base_output_dir: Path = None) -> List[Dict[str, Any]]:
     """Generate testset using RAGAS TestsetGenerator and save all debugging artifacts"""
     
     try:
@@ -1441,7 +1458,7 @@ def generate_testset_samples(documents: List[Dict[str, Any]], kg: KnowledgeGraph
 
             # Try importing single-hop synthesizer
             try:
-                from ragas.testset.synthesizers.single_hop import (
+                from ragas.testset.synthesizers.single_hop.specific import (
                     SingleHopSpecificQuerySynthesizer,
                 )
                 single_hop_available = True
@@ -1964,7 +1981,7 @@ def generate_simple_qa_fallback(documents: List[Dict[str, Any]], config: Dict[st
     
     return samples
 
-def generate_personas_from_kg(kg: KnowledgeGraph, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def generate_personas_from_kg(kg: KnowledgeGraphType, config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate personas from knowledge graph analysis for SMT domain"""
     try:
         nodes = list(kg.nodes) if hasattr(kg, 'nodes') else []
@@ -2047,7 +2064,7 @@ def get_default_personas() -> List[Dict[str, Any]]:
         }
     ]
 
-def generate_scenarios_from_kg(kg: KnowledgeGraph, personas_data: List[Dict[str, Any]], config: Dict[str, Any]) -> List[Dict[str, Any]]:
+def generate_scenarios_from_kg(kg: KnowledgeGraphType, personas_data: List[Dict[str, Any]], config: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate scenarios using QuerySynthesizer approach"""
     try:
         scenarios = []
@@ -2117,7 +2134,8 @@ def get_default_scenarios(personas_data: List[Dict[str, Any]]) -> List[Dict[str,
 async def main():
     """Main pipeline entry point with hybrid fix strategy"""
     args = parse_arguments()
-    config = load_config(args.config)
+    resolved_config_path = resolve_runtime_config_path(args.stage, args.config)
+    config = load_config(str(resolved_config_path))
     
     # Generate run ID and timestamp
     run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
@@ -2127,7 +2145,7 @@ async def main():
     
     try:
         if args.stage == 'evaluation':
-            run_evaluation_stage(config, args.config, run_id)
+            run_evaluation_stage(config, str(resolved_config_path), run_id)
             return
 
         # Load data sources from configuration

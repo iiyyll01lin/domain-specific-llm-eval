@@ -1,0 +1,44 @@
+pipeline:
+  name: Local Evaluation Smoke Pipeline
+  version: 1.0.0
+
+rag_system:
+  enabled: true
+  endpoint: mock://local
+  timeout: 5
+  max_retries: 1
+
+evaluation:
+  existing_testset_file: null
+  rag_system_testing:
+    enabled: true
+    test_all_questions: true
+    capture_responses: true
+    capture_contexts: true
+  contextual_keywords:
+    enabled: false
+    evaluator: enhanced
+    similarity_threshold: 0.7
+    fuzzy_threshold: 80
+    weights:
+      mandatory: 0.8
+      optional: 0.2
+  ragas_metrics:
+    enabled: false
+  gates:
+    contextual_keywords:
+      enabled: true
+      threshold: 0.6
+      weight: 1.0
+    combination:
+      method: weighted_average
+      minimum_gates_required: 1
+    human_feedback:
+      enabled: false
+
+output:
+  base_dir: ./outputs
+  use_timestamps: true
+
+logging:
+  level: INFO

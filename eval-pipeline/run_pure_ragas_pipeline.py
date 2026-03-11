@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Tuple
 
 # Add RAGAS to path
-ragas_path = "/data/yy/domain-specific-llm-eval/ragas/ragas/src"
+ragas_path = str((Path(__file__).resolve().parent.parent / "ragas" / "ragas" / "src").resolve())
 if ragas_path not in sys.path:
     sys.path.insert(0, ragas_path)
 
@@ -42,7 +42,10 @@ from ragas.testset.transforms.relationship_builders.cosine import SummaryCosineS
 
 # Import LangChain for document processing
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -116,9 +119,20 @@ def create_entities_overlap_relationships(kg: KnowledgeGraph):
 
 def load_config(config_path: str = "config/pipeline_config.yaml") -> Dict[str, Any]:
     """Load pipeline configuration"""
-    config_file = Path(__file__).parent / config_path
-    with open(config_file, 'r') as f:
-        return yaml.safe_load(f)
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = (Path(__file__).parent / config_file).resolve()
+
+    with open(config_file, 'r', encoding='utf-8') as f:
+        config = yaml.safe_load(f)
+
+    if config:
+        return config
+
+    template_file = config_file.parent / "pipeline_config.template.yaml"
+    logger.warning(f"⚠️ Empty config detected at {config_file}; falling back to template {template_file}")
+    with open(template_file, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f) or {}
 
 def extract_content_from_csv_row(content_json: str) -> Tuple[str, Dict]:
     """Extract text content and metadata from CSV content JSON"""
@@ -204,7 +218,7 @@ def load_txt_documents(document_files: List[str], max_docs: int = 53) -> List[Do
     logger.info(f"✅ Loaded {len(documents)} TXT documents")
     return documents
 
-def load_csv_documents(csv_file_path: str, max_docs: int = 3) -> List[Document]:
+def load_csv_documents(csv_file_path: str, max_docs: int | None = None) -> List[Document]:
     """Load and process CSV documents for RAGAS"""
     logger.info(f"📂 Loading CSV documents from: {csv_file_path}")
     
@@ -215,7 +229,7 @@ def load_csv_documents(csv_file_path: str, max_docs: int = 3) -> List[Document]:
     processed_count = 0
     
     for idx, row in df.iterrows():
-        if processed_count >= max_docs:
+        if max_docs is not None and processed_count >= max_docs:
             break
             
         # Extract content from JSON field
@@ -381,14 +395,14 @@ async def create_knowledge_graph_from_documents(documents: List[Document],
         entities = []
         keyphrases = []
         content_text = chunk_doc.page_content.strip()
+        normalized_text = content_text
         
         # Simple entity extraction (can be improved with NLP models)
         # Split by common separators and get meaningful terms
-        terms = []
         for separator in ["。", ".", "\n", ",", "，"]:
-            content_text = content_text.replace(separator, "|")
+            normalized_text = normalized_text.replace(separator, "|")
         
-        sentences = [s.strip() for s in content_text.split("|") if len(s.strip()) > 5]
+        sentences = [s.strip() for s in normalized_text.split("|") if len(s.strip()) > 5]
         for sentence in sentences[:3]:  # Take first 3 sentences as keyphrases
             if len(sentence) > 10:
                 keyphrases.append(sentence)

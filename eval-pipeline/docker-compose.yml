@@ -22,7 +22,7 @@ services:
       - LOG_LEVEL=DEBUG          # Changed from 'INFO' to 'DEBUG'
       - CACHE_DIR=/app/cache
       - TEMP_DIR=/app/temp
-      - PYTHONPATH=/app/src:/app/local_ragas/src:/app/workspace      # Added local RAGAS and workspace
+      - PYTHONPATH=/app/src:/app/local_ragas/ragas/src:/app/ragas/ragas/src:/app/workspace
       - TIKTOKEN_CACHE_DIR=/app/.cache/tiktoken    # Use local tiktoken cache
       - TIKTOKEN_CACHE_ONLY=1                     # Force offline mode
       - TIKTOKEN_DISABLE_DOWNLOAD=1               # Disable downloads    # Volume mounts for persistent data (now includes source code mounting)
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     
     # Command override for development (added)
-    command: ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml", "--log-level", "DEBUG"]
+    command: ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml"]
 
   # =============================================================================
   # Optional: Web Interface Service (Future Enhancement)

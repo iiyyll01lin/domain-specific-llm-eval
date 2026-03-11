@@ -189,10 +189,7 @@ class KeywordMetadataManager:
                         total_original_counts += original_count
                         total_score_filter_removals += (original_count - after_score_filter)
                         total_deduplication_removals += dedup_stats.get('total_removed', 0)
-            # Check if extraction was successful
-            if not sample_metadata.get('extraction_failed', False) and sample_metadata.get('keywords'):
-                successful_extractions += 1
-                
+
                 # Language distribution
                 lang_dist = sample_metadata.get('language_distribution', {})
                 if lang_dist.get('mixed_content', False):
@@ -234,6 +231,8 @@ class KeywordMetadataManager:
                 # Keywords
                 keywords = sample_metadata.get('keywords', [])
                 stats['total_unique_keywords'].update(keywords)
+            else:
+                continue
         
         # Calculate final statistics
         total_samples = len(metadata_list)

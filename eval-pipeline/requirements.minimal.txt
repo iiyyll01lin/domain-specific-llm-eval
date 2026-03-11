@@ -4,6 +4,7 @@ numpy>=1.21.0
 PyYAML>=6.0
 datasets>=2.19,<3.0
 appdirs>=1.4,<2.0
+langdetect>=1.0.9
 langchain-openai>=0.1.0
 openpyxl>=3.0.10
 sentence-transformers>=2.2.2

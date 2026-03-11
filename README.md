@@ -44,25 +44,27 @@ Use this if your goal is testset generation and evaluation rather than service d
 ```bash
 cd eval-pipeline
 python3 -m pip install -r requirements.minimal.txt
-python3 run_pipeline.py --config config/simple_config.yaml --stage testset-generation
+python3 test_ragas_integration.py
+python3 run_pipeline.py --stage testset-generation
+python3 run_pipeline.py --stage evaluation
 ```
 
 Use this path when you already have CSV inputs and a target LLM or RAG endpoint and want to benefit from the repo quickly.
 
 `eval-pipeline/requirements.minimal.txt` now installs the local `ragas/` submodule as an editable dependency, so the batch path uses the patched in-repo RAGAS implementation rather than a mismatched PyPI package.
 
-For `--stage evaluation`, use a config that includes `rag_system.endpoint` and either `evaluation.existing_testset_file` or a previously generated testset under `eval-pipeline/outputs/`.
+By default, `python3 run_pipeline.py --stage testset-generation` uses `config/simple_config.yaml`, and `python3 run_pipeline.py --stage evaluation` uses `config/evaluation_smoke_config.yaml` with the latest generated testset plus a built-in mock RAG endpoint. Pass `--config` explicitly whenever you want a real external endpoint instead.
 
 ### Path B: Service Layer Smoke Validation
 
 Use this if you want to verify the current service architecture and artifact chain locally.
 
 ```bash
-python3 scripts/e2e_smoke.py
+python3 e2e_smoke.py
 bash scripts/e2e_smoke.sh
 ```
 
-Use `python3 scripts/e2e_smoke.py` when you want the fastest in-process integration check.
+Use `python3 e2e_smoke.py` when you want the fastest in-process integration check.
 
 Use `bash scripts/e2e_smoke.sh` when you want the real compose-backed path. It starts MinIO plus the service containers, submits work over HTTP, and then advances the queued jobs inside the deployed containers so the smoke still reflects the current submission-oriented API design.
 
@@ -142,7 +144,7 @@ Mirror/prebuilt knobs:
 - set `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, and `PIP_TRUSTED_HOST` in your compose env file to route Docker builds through an internal PyPI mirror;
 - or set `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG`, and `SMOKE_USE_PREBUILT_IMAGE=1` to skip local image builds and reuse a prebuilt image.
 
-For a complete prebuilt-image flow, including GHCR login, tag selection, `.env.prebuilt` setup, `--no-build` compose startup, and smoke-test reuse, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md).
+For a complete prebuilt-image flow, including GHCR login, tag selection, `.env.prebuilt` setup, `--no-build` compose startup, and smoke-test reuse, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md). The smoke script now accepts either `COMPOSE_ENV_FILE=.env.prebuilt` or `SMOKE_ENV_FILE=.env.prebuilt` and loads that file before starting the stack.
 
 Hot-reload development mode:
 
