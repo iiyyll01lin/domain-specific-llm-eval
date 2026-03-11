@@ -15,3 +15,13 @@ output:
 
 logging:
   level: INFO
+
+rag_system:
+  endpoint: "http://localhost:8000/v1/chat/completions"
+testset_generation:
+  max_documents_for_generation: 10
+  max_total_samples: 6
+  ragas_config:
+    custom_llm:
+      endpoint: "http://localhost:8000/v1/chat/completions"
+      model: "google/gemma-2-9b-it"

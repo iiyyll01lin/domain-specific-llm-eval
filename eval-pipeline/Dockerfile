@@ -76,7 +76,7 @@ COPY eval-pipeline/requirements.txt .
 COPY eval-pipeline/setup.py .
 
 # Install Python dependencies with retry logic and better error handling
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --upgrade pip setuptools wheel \
         $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") && \
     pip install --no-cache-dir --timeout 120 --retries 10 -r requirements.txt \
         $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") || \
@@ -133,7 +133,7 @@ RUN if [ -d "ragas" ]; then \
     fi
 
 # First, try to install RAGAS dependencies and build tools
-RUN pip install --no-cache-dir --timeout 120 --retries 5 \
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --timeout 120 --retries 5 \
         $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") \
         setuptools wheel build pip-tools || echo "⚠️ Basic build tools installation completed with warnings"
 
@@ -157,7 +157,7 @@ RUN if [ -f "pyproject.toml" ]; then \
     fi
 
 # Try to install optional RAGAS dependencies for full functionality
-RUN pip install --no-cache-dir --timeout 120 --retries 3 \
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --timeout 120 --retries 3 \
         $([ -n "${HTTP_PROXY}" ] && echo "--proxy ${HTTP_PROXY}") \
         sentence-transformers transformers nltk rouge_score rapidfuzz \
         pandas datacompy || echo "⚠️ Some optional RAGAS dependencies failed to install"
