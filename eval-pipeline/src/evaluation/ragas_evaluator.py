@@ -1,10 +1,11 @@
-
 import os
 
 # Phase 5: Distributed Tracing with LangSmith
 if os.environ.get("LANGCHAIN_TRACING_V2") == "true":
-    from langchain.callbacks.tracers import LangChainTracer
     import uuid
+
+    from langchain.callbacks.tracers import LangChainTracer
+
     # Usually handled inherently by Langchain via env vars
     # Here we just explicitly ensure the callbacks are bound if needed
     print("LangSmith Tracing Enabled globally.")
@@ -94,10 +95,9 @@ class RagasEvaluator:
             apply_ragas_model_dump_fix()
 
             from datasets import Dataset
+            from ragas import evaluate
             from ragas.metrics import (  # Use only metrics that work well with custom LLMs
                 context_precision, faithfulness)
-
-            from ragas import evaluate
 
             self.evaluate_func = evaluate
             self.metrics = [context_precision, faithfulness]
@@ -146,9 +146,8 @@ class RagasEvaluator:
             # Import necessary RAGAS components for custom LLM
             try:
                 from langchain_openai import ChatOpenAI
-                from ragas.llms import LangchainLLMWrapper
-
                 from ragas import RunConfig
+                from ragas.llms import LangchainLLMWrapper
 
                 # Create custom LLM using your API
                 endpoint = llm_config.get("endpoint", "")
@@ -311,7 +310,9 @@ class RagasEvaluator:
                     "available": True,
                     "summary": {
                         "average_score": (
-                            sum(mock_score_list) / len(mock_score_list) if mock_score_list else 0.0
+                            sum(mock_score_list) / len(mock_score_list)
+                            if mock_score_list
+                            else 0.0
                         )
                     },
                     "metrics": {
