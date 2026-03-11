@@ -15,14 +15,26 @@ if str(utils_dir) not in sys.path:
     sys.path.insert(0, str(utils_dir))
 
 
+import os
+
+import langchain
+from langchain.cache import SQLiteCache
+
+# Create cache directory if it doesn't exist
+os.makedirs(".cache", exist_ok=True)
+try:
+    langchain.llm_cache = SQLiteCache(database_path=".cache/langchain_llm.db")
+except Exception as e:
+    print(f"Failed to setup SQLiteCache: {e}")
+
 import logging
 import math
-import numpy as np
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-
 # Apply global tiktoken patch BEFORE any other imports
 import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from global_tiktoken_patch import apply_global_tiktoken_patch
@@ -70,12 +82,11 @@ class RagasEvaluator:
             # Apply RAGAS model_dump compatibility fix first
             apply_ragas_model_dump_fix()
 
-            from ragas import evaluate
-            from ragas.metrics import (
-                context_precision,
-                faithfulness,
-            )  # Use only metrics that work well with custom LLMs
             from datasets import Dataset
+            from ragas.metrics import (  # Use only metrics that work well with custom LLMs
+                context_precision, faithfulness)
+
+            from ragas import evaluate
 
             self.evaluate_func = evaluate
             self.metrics = [context_precision, faithfulness]
@@ -125,6 +136,7 @@ class RagasEvaluator:
             try:
                 from langchain_openai import ChatOpenAI
                 from ragas.llms import LangchainLLMWrapper
+
                 from ragas import RunConfig
 
                 # Create custom LLM using your API
@@ -159,10 +171,8 @@ class RagasEvaluator:
                 self.custom_llm = LangchainLLMWrapper(custom_llm)
 
                 # Update metrics to use custom LLM (only use metrics that work well with custom LLMs)
-                from ragas.metrics import (
-                    context_precision,
-                    faithfulness,
-                )  # Skip context_recall and answer_relevancy for now
+                from ragas.metrics import (  # Skip context_recall and answer_relevancy for now
+                    context_precision, faithfulness)
 
                 # Set custom LLM for each metric
                 for metric in [context_precision, faithfulness]:

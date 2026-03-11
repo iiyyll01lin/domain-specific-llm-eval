@@ -30,6 +30,7 @@ x-service-base: &service-base
   volumes:
     - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
     - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
+    - ./.cache:/app/.cache
 
 services:
   minio:
