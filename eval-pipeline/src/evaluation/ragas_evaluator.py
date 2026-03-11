@@ -170,14 +170,22 @@ class RagasEvaluator:
                 # Wrap for RAGAS
                 self.custom_llm = LangchainLLMWrapper(custom_llm)
 
-                # Update metrics to use custom LLM (only use metrics that work well with custom LLMs)
-                from ragas.metrics import (  # Skip context_recall and answer_relevancy for now
-                    context_precision, faithfulness)
+                # Setup Critic LLM (Independent model for Evaluation bias reduction)
+                critic_llm = ChatOpenAI(
+                    api_key=llm_config.get("api_key"),
+                    model="gpt-4-turbo",  # Could be configurable, default to structurally different model
+                    temperature=0.0,
+                    max_tokens=llm_config.get("max_length", 512),
+                    base_url=endpoint if endpoint else None,
+                )
+                self.critic_llm = LangchainLLMWrapper(critic_llm)
 
                 # Set custom LLM for each metric
-                for metric in [context_precision, faithfulness]:
+                for metric in self.metrics:
                     if hasattr(metric, "llm"):
-                        metric.llm = self.custom_llm
+                        metric.llm = (
+                            self.critic_llm
+                        )  # Use critic specifically for metrics
 
                 logger.info("✅ Custom LLM configured for RAGAS evaluation")
                 logger.info(f"   📍 Endpoint: {llm_config.get('endpoint')}")
@@ -284,7 +292,7 @@ class RagasEvaluator:
 
                 # Generate mock results based on evaluation data length
                 num_samples = len(evaluation_data["question"])
-                mock_scores = [
+                mock_score_list = [
                     0.5 + (i * 0.1) % 0.5 for i in range(num_samples)
                 ]  # Generate varied mock scores
 
@@ -292,12 +300,12 @@ class RagasEvaluator:
                     "available": True,
                     "summary": {
                         "average_score": (
-                            sum(mock_scores) / len(mock_scores) if mock_scores else 0.0
+                            sum(mock_score_list) / len(mock_score_list) if mock_score_list else 0.0
                         )
                     },
                     "metrics": {
-                        "context_precision": mock_scores,
-                        "faithfulness": mock_scores,
+                        "context_precision": mock_score_list,
+                        "faithfulness": mock_score_list,
                     },
                     "message": "RAGAS evaluation failed - using fallback mock results",
                     "mock_data": True,

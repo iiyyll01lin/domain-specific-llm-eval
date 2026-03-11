@@ -1,8 +1,9 @@
-import streamlit as st
-import json
 import glob
+import json
 import os
+
 import pandas as pd
+import streamlit as st
 
 st.set_page_config(page_title="Telemetry Dashboard", layout="wide")
 st.title("Domain-Specific LLM Evaluation Telemetry")
@@ -79,6 +80,6 @@ if st.button("Trigger Pipeline Action"):
     )
     if result.returncode == 0:
         st.success("Successfully completed!")
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.error(f"Failed with code {result.returncode}:\n{result.stderr}")

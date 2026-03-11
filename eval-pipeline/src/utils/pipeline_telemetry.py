@@ -1,9 +1,42 @@
-from typing import Any, Dict, List, TypedDict, Optional, TypedDict, Optional
+import io
+import json
+import os
+
+import boto3
+
+
+def upload_to_s3(file_path, s3_key):
+    try:
+        s3 = boto3.client(
+            "s3",
+            endpoint_url="http://localhost:9000",
+            aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
+            aws_secret_access_key=os.environ.get(
+                "MINIO_ROOT_PASSWORD", "minioadmin123"
+            ),
+        )
+        bucket = os.environ.get("MINIO_BUCKET", "rag-eval-dev")
+
+        # Check if bucket exists, if not create it
+        try:
+            s3.head_bucket(Bucket=bucket)
+        except:
+            try:
+                s3.create_bucket(Bucket=bucket)
+            except:
+                pass
+
+        s3.upload_file(file_path, bucket, s3_key)
+        print(f"Uploaded {file_path} to S3 bucket {bucket} at {s3_key}")
+    except Exception as e:
+        print(f"S3 Upload failed: {e}")
+
+
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +58,7 @@ class PipelineTelemetry:
         self.telemetry_dir.mkdir(parents=True, exist_ok=True)
 
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.metrics = {
+        self.metrics: Dict[str, Any] = {
             "session_id": self.session_id,
             "start_time": datetime.now().isoformat(),
             "status": "in_progress",
