@@ -52,3 +52,33 @@ else:
         )
     df = pd.DataFrame(summary)
     st.dataframe(df, use_container_width=True)
+
+# Task 5 Orchestration
+st.subheader("Generate new Testset")
+doc_count = st.number_input("Documents to process:", min_value=1, max_value=50, value=5)
+sample_count = st.number_input(
+    "Samples to generate:", min_value=1, max_value=50, value=2
+)
+if st.button("Trigger Pipeline Action"):
+    st.info(
+        f"Will execute `python3 run_pure_ragas_pipeline.py --docs {doc_count} --samples {sample_count}`."
+    )
+    import subprocess
+
+    result = subprocess.run(
+        [
+            "python3",
+            "run_pure_ragas_pipeline.py",
+            "--docs",
+            str(int(doc_count)),
+            "--samples",
+            str(int(sample_count)),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        st.success("Successfully completed!")
+        st.experimental_rerun()
+    else:
+        st.error(f"Failed with code {result.returncode}:\n{result.stderr}")

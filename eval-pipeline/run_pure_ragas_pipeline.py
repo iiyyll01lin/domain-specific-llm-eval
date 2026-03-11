@@ -1,3 +1,5 @@
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
 #!/usr/bin/env python3
 """
 Simple Pure RAGAS Pipeline Runner
@@ -901,7 +903,7 @@ def setup_ragas_components(
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
 
-        embeddings = HuggingFaceEmbeddings(model_name=embeddings_model)
+        core_embeddings = HuggingFaceEmbeddings(model_name=embeddings_model)
         generator_embeddings = LangchainEmbeddingsWrapper(embeddings)
         logger.info(f"🔗 Using HuggingFace embeddings: {embeddings_model}")
     except ImportError:

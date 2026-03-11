@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, TypedDict, Optional, TypedDict, Optional
 import json
 import logging
 from datetime import datetime
@@ -5,6 +6,14 @@ from pathlib import Path
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
+
+
+class TelemetryMetrics(TypedDict, total=False):
+    execution_time_seconds: float
+    documents_processed: int
+    samples_generated: int
+    failed_syntheses: int
+    generation_success_rate: float
 
 
 class PipelineTelemetry:

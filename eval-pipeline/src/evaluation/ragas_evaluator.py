@@ -78,7 +78,15 @@ class RagasEvaluator:
             from datasets import Dataset
 
             self.evaluate_func = evaluate
-            self.metrics = [context_precision, faithfulness]  # Default metrics
+            self.metrics = [context_precision, faithfulness]
+
+            # Inject domain heuristic
+            self.heuristic = DomainRegexHeuristic(
+                required_terms=["重要", "注意", "分析", "report"]
+            )
+
+            # We wrapper or process it within results
+            # Default metrics
             self.Dataset = Dataset
 
             # Setup custom LLM for RAGAS if configured
@@ -160,8 +168,6 @@ class RagasEvaluator:
                 for metric in [context_precision, faithfulness]:
                     if hasattr(metric, "llm"):
                         metric.llm = self.custom_llm
-
-                self.metrics = [context_precision, faithfulness]
 
                 logger.info("✅ Custom LLM configured for RAGAS evaluation")
                 logger.info(f"   📍 Endpoint: {llm_config.get('endpoint')}")
