@@ -346,13 +346,30 @@ def create_entities_overlap_relationships(kg: KnowledgeGraph):
 
 
 def load_config(config_path: str = "config/pipeline_config.yaml") -> Dict[str, Any]:
-    """Load pipeline configuration"""
+    """Load pipeline configuration with environment variable expansion"""
+    import os
+    import re
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     config_file = Path(config_path)
     if not config_file.is_absolute():
         config_file = (Path(__file__).parent / config_file).resolve()
 
     with open(config_file, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+        content = f.read()
+        
+    pattern = re.compile(r'\$\{([^}]+)\}')
+    def replacer(match):
+        inner = match.group(1)
+        if ':' in inner:
+            var_name, default_value = inner.split(':', 1)
+        else:
+            var_name, default_value = inner, ""
+        return os.environ.get(var_name, default_value)
+        
+    content = pattern.sub(replacer, content)
+    config = yaml.safe_load(content)
 
     if config:
         return config
@@ -362,7 +379,9 @@ def load_config(config_path: str = "config/pipeline_config.yaml") -> Dict[str, A
         f"⚠️ Empty config detected at {config_file}; falling back to template {template_file}"
     )
     with open(template_file, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+        content = f.read()
+        content = pattern.sub(replacer, content)
+        return yaml.safe_load(content) or {}
 
 
 def extract_content_from_csv_row(content_json: str) -> Tuple[str, Dict]:

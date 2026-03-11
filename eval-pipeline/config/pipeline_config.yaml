@@ -14,10 +14,10 @@ testset_generation:
     custom_llm:
       endpoint: http://llm-proxy.tao.inventec.net/v1
       model: google/gemma-2-9b-it
-      api_key: sk-I5EsSgWMjlgNFFm0DaA79862D07c4b20Be9167520237C4E9
+      api_key: ${CUSTOM_LLM_API_KEY}
       temperature: 0.3
       timeout: 60
-    embeddings_model: sentence-transformers/all-MiniLM-L6-v2
+    embeddings_model: ./cache/all-MiniLM-L6-v2
   generation:
     async_generation:
       enabled: true

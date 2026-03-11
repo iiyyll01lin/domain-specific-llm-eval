@@ -82,7 +82,7 @@ validate_ragas_setup()
 # KeyBERT and RAGAS imports
 try:
     from keybert import KeyBERT
-    from sentence_transformers import SentenceTransformer
+    
     KEYBERT_AVAILABLE = True
 except ImportError:
     print("⚠️  KeyBERT not available, using fallback keyword extraction")
@@ -241,9 +241,27 @@ def resolve_runtime_config_path(stage: str, config_path: Optional[str]) -> Path:
     return DEFAULT_STAGE_CONFIGS[stage].resolve()
 
 def load_config(config_path: str) -> Dict[str, Any]:
-    """Load configuration from YAML file"""
+    """Load configuration from YAML file with environment variable expansion."""
+    import os
+    import re
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     with open(config_path, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f) or {}
+        content = f.read()
+        
+    # Expand ${VAR_NAME} or ${VAR_NAME:default_value}
+    pattern = re.compile(r'\$\{([^}]+)\}')
+    def replacer(match):
+        inner = match.group(1)
+        if ':' in inner:
+            var_name, default_value = inner.split(':', 1)
+        else:
+            var_name, default_value = inner, ""
+        return os.environ.get(var_name, default_value)
+        
+    content = pattern.sub(replacer, content)
+    config = yaml.safe_load(content) or {}
     config['__config_dir__'] = str(Path(config_path).resolve().parent)
     return config
 
@@ -868,7 +886,7 @@ def load_knowledge_graph_from_json(kg_file: str) -> KnowledgeGraphType:
         logger.error(f"❌ Failed to load knowledge graph from {kg_file}: {e}")
         raise
 
-async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGraphType:
+async def create_knowledge_graph(documents: List[Dict[str, Any]], config: Optional[Dict[str, Any]] = None) -> KnowledgeGraphType:
     """Create native RAGAS KnowledgeGraph from documents with proper relationship building"""
     ensure_ragas_graph_available()
     logger.info(f"🧠 Creating native RAGAS KnowledgeGraph from {len(documents)} documents...")
@@ -880,12 +898,14 @@ async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGr
     embedding_model = None
     try:
         # Do NOT skip by default anymore!
-        skip_embeddings = os.getenv('SKIP_EMBEDDINGS', 'false').lower() == 'true'
+        config_skip = config.get('testset_generation', {}).get('ragas_config', {}).get('skip_embeddings') if config else None
+        skip_embeddings = str(config_skip).lower() == 'true' if config_skip is not None else os.getenv('SKIP_EMBEDDINGS', 'false').lower() == 'true'
         if not skip_embeddings:
             logger.info("🔧 Loading SentenceTransformer model once for Knowledge Graph relation building...")
-            from sentence_transformers import SentenceTransformer
+            
             # Fallback to a faster/more reliable config if mpnet fails, but default to MiniLM for better speed/memory tradeoff
-            model_name = os.getenv('EMBEDDINGS_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
+            config_model = config.get('testset_generation', {}).get('ragas_config', {}).get('embeddings_model') if config else None
+            model_name = config_model or os.getenv('EMBEDDINGS_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
             embedding_model = SentenceTransformer(model_name)
             logger.info(f"✅ SentenceTransformer model loaded ({model_name})")
         else:
@@ -2199,7 +2219,7 @@ async def main():
                 logger.warning(f"⚠️ Existing KG file not found: {existing_kg_file}")
             logger.info("🧠 Creating new knowledge graph...")
             # Create native RAGAS knowledge graph
-            kg = await create_knowledge_graph(documents)
+            kg = await create_knowledge_graph(documents, config)
         
         # Create output directories first
         base_output_dir = Path("outputs") / run_id
