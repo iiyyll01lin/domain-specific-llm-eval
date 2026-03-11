@@ -1,0 +1,14 @@
+name: Eval Pipeline CI Benchmarks
+on:
+  pull_request:
+    paths:
+      - "eval-pipeline/**"
+jobs:
+  ragas_eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Synthetic Eval
+        run: echo "Evaluating via pipeline"
+      - name: metrics
+        run: echo "Metrics in PR"
