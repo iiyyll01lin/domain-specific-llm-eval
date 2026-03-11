@@ -1,0 +1,20 @@
+replicaCount: 1
+
+minio:
+  enabled: true
+  rootUser: minioadmin
+  rootPassword: minioadmin123
+  bucketName: rag-eval-dev
+  storage: 10Gi
+
+env:
+  openAIApiKey: ""
+  langchainTracingV2: "false"
+  langchainEndpoint: "https://api.smith.langchain.com"
+  langchainApiKey: ""
+  langchainProject: "rag-eval-pipeline"
+
+image:
+  repository: rag-eval-pipeline
+  pullPolicy: IfNotPresent
+  tag: "latest"

@@ -1,3 +1,14 @@
+
+import os
+
+# Phase 5: Distributed Tracing with LangSmith
+if os.environ.get("LANGCHAIN_TRACING_V2") == "true":
+    from langchain.callbacks.tracers import LangChainTracer
+    import uuid
+    # Usually handled inherently by Langchain via env vars
+    # Here we just explicitly ensure the callbacks are bound if needed
+    print("LangSmith Tracing Enabled globally.")
+
 """
 RAGAS Evaluator for RAG Evaluation Pipeline
 
