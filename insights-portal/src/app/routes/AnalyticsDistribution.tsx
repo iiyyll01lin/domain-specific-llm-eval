@@ -240,6 +240,17 @@ export const AnalyticsDistribution: React.FC = () => {
     return () => { window.removeEventListener('resize', onResize); chart.dispose() }
   }, [run, runs, selectedRuns, hidden, metric, scatterY, mode, stableFilters, setFilters, cohort, thresholds, showLegend])
 
+  React.useEffect(() => {
+    if (mode !== 'scatter') return
+    const metricRanges = (usePortalStore.getState().filters as any)?.metricRanges || {}
+    const nextRanges: Record<string, [number | null, number | null]> = {}
+    if (metricRanges[metric] == null) nextRanges[metric] = [0, 1]
+    if (metricRanges[scatterY] == null) nextRanges[scatterY] = [0, 1]
+    if (Object.keys(nextRanges).length > 0) {
+      setFilters({ metricRanges: nextRanges })
+    }
+  }, [metric, mode, scatterY, setFilters])
+
   const onExportCsv = () => {
     const filtered = applyFilters(run?.items || [], stableFilters)
     const rows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
@@ -340,7 +351,7 @@ export const AnalyticsDistribution: React.FC = () => {
           </div>
         )}
       </div>
-  <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label={t('analytics.title')} role="img" />
+  <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
       {/* Test-only diagnostics to support E2E assertions without poking into ECharts internals */}
       <div style={{ display: 'none' }}>
         <span data-testid="analytics-series-count">{seriesInfo.count}</span>

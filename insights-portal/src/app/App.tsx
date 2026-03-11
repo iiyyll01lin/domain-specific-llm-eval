@@ -78,13 +78,14 @@ export const App: React.FC = () => {
     // In dev, auto-load a fixed JSON so reviewers don't need to pick a file.
     // Also allow ?sample= URL param to load from public/samples.
     // Use Vite /@fs to fetch from absolute path for local absolute dev path.
-    if (!import.meta.env.DEV) return
     const url = new URL(window.location.href)
     const sample = url.searchParams.get('sample') // e.g., "run_full" or "run_minimal"
+    if (!import.meta.env.DEV && !sample) return
     const candidatePaths = sample
       ? [
           `/samples/${sample}/outputs/long_context_sample.json`,
           `/samples/${sample}/outputs/ragas_enhanced_evaluation_results_20250827.json`,
+          `/samples/${sample}/ragas_enhanced_evaluation_results_sample.json`,
         ]
       : ['/@fs/mnt/d/workspace/domain-specific-llm-eval/eval-pipeline/outputs/run_20250709_160725_85a5ba54/evaluations-pre/ragas_enhanced_evaluation_results_20250709_205451_fixed.json']
     let cancelled = false

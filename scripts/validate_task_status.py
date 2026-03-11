@@ -18,6 +18,52 @@ GOVERNANCE_HEADER_PATTERN = re.compile(
 STATUS_PATTERN = re.compile(r"^\s*status:\s*(?P<status>[A-Za-z-]+)(?:\s+#.*)?\s*$", re.MULTILINE)
 CODE_FENCE_PATTERN = re.compile(r"^```(?:yaml)?\s*$", re.MULTILINE)
 YAML_BLOCK_PATTERN = re.compile(r"```yaml\n(?P<body>.*?)\n```", re.DOTALL)
+TOP_LEVEL_FIELD_PATTERN = re.compile(
+    r"^(?P<indent>[ \t]+)(?P<field>[A-Za-z_]+):(?P<value>.*)$"
+)
+
+REQUIRED_FIELDS = (
+    "status",
+    "owner",
+    "priority",
+    "estimate",
+    "risk",
+    "mitigation",
+    "adr_impact",
+    "dod",
+)
+
+NON_EMPTY_REQUIRED_FIELDS = (
+    "status",
+    "owner",
+    "priority",
+    "estimate",
+    "risk",
+    "mitigation",
+)
+
+
+def strip_inline_comment(value: str) -> str:
+    if " #" in value:
+        value = value.split(" #", 1)[0]
+    return value.strip()
+
+
+def extract_top_level_fields(body: str):
+    fields = {}
+    for line in body.splitlines():
+        if not line.strip() or line.strip() == "governance:":
+            continue
+
+        match = TOP_LEVEL_FIELD_PATTERN.match(line)
+        if not match:
+            continue
+
+        field = match.group("field")
+        value = strip_inline_comment(match.group("value"))
+        fields.setdefault(field, []).append(value)
+
+    return fields
 
 
 def parse_governance_sections(text: str):
@@ -35,16 +81,19 @@ def parse_governance_sections(text: str):
             if task in sections:
                 duplicates.append(task)
                 continue
+            fields = extract_top_level_fields(body)
             sections[task] = {
                 "body": body,
-                "statuses": STATUS_PATTERN.findall(body),
+                "fields": fields,
+                "statuses": fields.get("status", STATUS_PATTERN.findall(body)),
             }
 
     return sections, duplicates
 
 
-def validate_doc(doc_path: Path):
+def validate_doc(doc_path: Path, *, enforce_required_fields: bool):
     failures = []
+    required_field_failures = []
     text = doc_path.read_text(encoding="utf-8")
     fences = CODE_FENCE_PATTERN.findall(text)
     if len(fences) % 2 != 0:
@@ -57,22 +106,41 @@ def validate_doc(doc_path: Path):
 
     for task, details in sorted(sections.items()):
         statuses = details["statuses"]
+        fields = details["fields"]
         if not statuses:
             failures.append(f"{doc_path.name}: {task} missing status line")
         elif len(set(statuses)) != 1:
             failures.append(f"{doc_path.name}: {task} has inconsistent statuses {sorted(set(statuses))}")
 
-    return sections, failures
+        for field in REQUIRED_FIELDS:
+            values = fields.get(field, [])
+            if not values:
+                required_field_failures.append(f"{doc_path.name}: {task} missing required field '{field}'")
+                continue
+
+            if field in NON_EMPTY_REQUIRED_FIELDS and not any(value for value in values):
+                required_field_failures.append(f"{doc_path.name}: {task} field '{field}' must not be empty")
+
+    if enforce_required_fields:
+        failures.extend(required_field_failures)
+
+    return sections, failures, required_field_failures
 
 
 def main() -> int:
+    enforce_required_fields = "--enforce-required-fields" in sys.argv[1:]
     failures = []
+    required_field_failures = []
     parsed = {}
 
     for locale, doc_path in TASK_DOCS.items():
-        sections, doc_failures = validate_doc(doc_path)
+        sections, doc_failures, doc_required_field_failures = validate_doc(
+            doc_path,
+            enforce_required_fields=enforce_required_fields,
+        )
         parsed[locale] = sections
         failures.extend(doc_failures)
+        required_field_failures.extend(doc_required_field_failures)
 
     en_tasks = set(parsed["en"])
     zh_tasks = set(parsed["zh"])
@@ -101,6 +169,13 @@ def main() -> int:
     print(f" - governance sections: {len(parsed['en'])} matched task IDs")
     print(" - full english/chinese status alignment: OK")
     print(" - markdown governance structure: OK")
+    if enforce_required_fields:
+        print(" - required governance fields: OK")
+    else:
+        print(
+            f" - required governance fields: not enforced by default "
+            f"({len(required_field_failures)} outstanding; rerun with --enforce-required-fields)"
+        )
     return 0
 
 

@@ -9,6 +9,7 @@ export default defineConfig({
     exclude: [
   // Vitest defaults + project-specific
   '**/node_modules/**',
+  '**/node_modules.root.*/**',
   '**/dist/**',
   '**/build/**',
   '**/.{idea,git,cache,output,temp}/**',
