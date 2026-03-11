@@ -879,17 +879,19 @@ async def create_knowledge_graph(documents: List[Dict[str, Any]]) -> KnowledgeGr
     # Initialize embedding model once for efficiency (optional - can be disabled for speed)
     embedding_model = None
     try:
-        # Skip embeddings for faster testing - embeddings are optional for RAGAS
+        # Do NOT skip by default anymore!
         skip_embeddings = os.getenv('SKIP_EMBEDDINGS', 'false').lower() == 'true'
-        if KEYBERT_AVAILABLE and not skip_embeddings:
-            logger.info("🔧 Loading SentenceTransformer model once...")
-            # Use all-mpnet-base-v2 as specified in config for better embedding quality
-            embedding_model = SentenceTransformer('all-mpnet-base-v2')
-            logger.info("✅ SentenceTransformer model loaded (all-mpnet-base-v2)")
+        if not skip_embeddings:
+            logger.info("🔧 Loading SentenceTransformer model once for Knowledge Graph relation building...")
+            from sentence_transformers import SentenceTransformer
+            # Fallback to a faster/more reliable config if mpnet fails, but default to MiniLM for better speed/memory tradeoff
+            model_name = os.getenv('EMBEDDINGS_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
+            embedding_model = SentenceTransformer(model_name)
+            logger.info(f"✅ SentenceTransformer model loaded ({model_name})")
         else:
-            logger.info("ℹ️ Skipping embeddings for faster execution (set SKIP_EMBEDDINGS=false to enable)")
+            logger.info("ℹ️ Skip embeddings is set to True (SKIP_EMBEDDINGS=true).")
     except Exception as e:
-        logger.info(f"ℹ️ Could not load embeddings model: {e}")
+        logger.warning(f"⚠️ Could not load embeddings model: {e}. KG relationships may be limited.")
     
     for idx, doc in enumerate(documents):
         content = doc.get('content', '')

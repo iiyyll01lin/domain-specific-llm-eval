@@ -1,10 +1,9 @@
 data_sources:
   documents:
     document_files:
-      - ../sample_documents/ai_machine_learning.txt
-      - ../sample_documents/cloud_computing.txt
-      - ../sample_documents/cybersecurity.txt
-
+    - ../sample_documents/ai_machine_learning.txt
+    - ../sample_documents/cloud_computing.txt
+    - ../sample_documents/cybersecurity.txt
 testset_generation:
   max_documents_for_generation: 10
   max_total_samples: 6
@@ -13,9 +12,9 @@ testset_generation:
     profile: default
   ragas_config:
     custom_llm:
-      endpoint: "http://localhost:8000/v1/chat/completions"
-      model: "google/gemma-2-9b-it"
-      api_key: "dummy-key"
+      endpoint: http://llm-proxy.tao.inventec.net/v1
+      model: google/gemma-2-9b-it
+      api_key: sk-I5EsSgWMjlgNFFm0DaA79862D07c4b20Be9167520237C4E9
       temperature: 0.3
       timeout: 60
     embeddings_model: sentence-transformers/all-MiniLM-L6-v2
@@ -29,19 +28,16 @@ testset_generation:
       max_wait: 60
       log_tenacity: false
     query_distribution:
-      - synthesizer: single_hop_specific
-        weight: 0.4
-      - synthesizer: multi_hop_abstract
-        weight: 0.4
-      - synthesizer: multi_hop_specific
-        weight: 0.2
-
+    - synthesizer: single_hop_specific
+      weight: 0.4
+    - synthesizer: multi_hop_abstract
+      weight: 0.4
+    - synthesizer: multi_hop_specific
+      weight: 0.2
 rag_system:
-  endpoint: "http://localhost:8000/v1/chat/completions"
-
+  endpoint: http://localhost:8000/v1/chat/completions
 output:
   base_dir: ./outputs
   use_timestamps: true
-
 logging:
   level: INFO
