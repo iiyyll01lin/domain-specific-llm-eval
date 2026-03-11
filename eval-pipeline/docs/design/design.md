@@ -3,7 +3,6 @@
 Version: 0.1  
 Status: Draft for review  
 Date: 2025-09-09  
-Owner: Platform Engineering  
 
 ---
 ## 1. Purpose & Scope
@@ -748,4 +747,3 @@ Local runs may warn on Python major.minor drift while CI keeps `--python-drift-s
 - eBPF-based syscall profile (baseline → anomaly detection)
 
 ---
-End of document.

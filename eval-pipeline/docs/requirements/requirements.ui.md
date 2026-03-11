@@ -3,7 +3,7 @@
 Version: 0.1 (Draft)
 Status: Draft for review
 Date: 2025-09-10
-Owner: Platform Engineering
+
 
 ---
 ## 1. Purpose
@@ -176,4 +176,4 @@ Risk: Portal codebase grows in complexity; Mitigation: Introduce domain-based ro
 Mapping to existing platform requirements: UI-FR-033/034/035 ↔ FR-041/042 (KM summaries); UI-FR-060 ↔ global traceability objective (≥95% coverage); UI-FR-062/063 aids CLI transition plan.
 
 ---
-End of document.
+

@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Platform Lead, QA Lead  
-Reviewers: Security, SRE, Data Engineering  
 
 ## 1. Context
 The evaluation pipeline emits multiple artifacts per run (chunks.jsonl, evaluation_items.json, kpis.json, run_meta.json, testset_summary_v0.json, kg_summary_v0.json, export_summary.json, report HTML/PDF). Need: provable completeness, tamper detection, and future reproducibility hooks. Early introduction reduces retrofitting complexity and supports SMART traceability objective.
@@ -70,4 +68,3 @@ Validation CLI / library routine verifies presence + hashes on demand (CI or tro
 - Selective artifact compression policy referencing manifest entries.
 
 ---
-Mark Accepted once TASK-083 prototype stabilizes and validation integrated into CI.

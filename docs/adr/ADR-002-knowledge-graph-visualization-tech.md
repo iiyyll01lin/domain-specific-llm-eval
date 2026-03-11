@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Frontend Lead, Platform Lead  
-Reviewers: Data Engineering, UX, Performance SME  
 
 ## 1. Context
 The UI needs to optionally (feature-flagged) visualize a Knowledge Graph (KG) derived from ingested documents. Graph scale (hundreds to low thousands nodes typical) must not degrade baseline portal performance. Requirements include lazy loading, deterministic subgraph sampling, interaction (focus/expand), and theming alignment. Candidate libs: Cytoscape.js, D3 force layouts, Vis.js, Sigma.js.
@@ -56,4 +54,4 @@ Edge: { id, source, target, rel_type, score }
 - Accessibility audit (keyboard navigation & color contrast) by Sprint 6.
 
 ---
-Pending validation via prototype spike before marking Accepted.
+

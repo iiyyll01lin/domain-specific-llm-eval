@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Platform Lead, SRE Lead  
-Reviewers: Frontend Lead, Data Engineering, QA  
 
 ## 1. Context
 Multiple event families (document.ingested, document.processed, testset.created, run.completed, report.completed, kg.*) power UI updates and downstream analytics. Uncontrolled schema drift causes consumer breakage and silent data quality issues.
@@ -75,4 +73,3 @@ Schema registry file: `events/registry.json` containing array of entries:
 - Schema evolution simulation tests (fuzz) in CI.
 
 ---
-Will mark Accepted upon successful registry integration & dual emission tests passing (ties to TASK-084 + new tooling tasks TBD).

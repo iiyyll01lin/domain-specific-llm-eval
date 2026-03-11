@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Data Engineering Lead, Platform Lead  
-Reviewers: Frontend Lead, Performance SME  
 
 ## 1. Context
 The Subgraph API (spec §27) must return deterministic, size-bounded subgraphs to support focused visualization without overloading client or server. Requirements: reproducibility (same focus + parameters → same subgraph), bounded node/edge counts, semantic relevance preservation, graceful indication of truncation, and anti-abuse (cost control).
@@ -68,4 +66,4 @@ Adopt a layered sampling pipeline:
 - Server-side caching keyed by (kg_id, focus_set_hash, seed, max_nodes, hops, weight_profile).
 
 ---
-Status will change to Accepted after prototype validation & performance benchmark (TASK-066).
+

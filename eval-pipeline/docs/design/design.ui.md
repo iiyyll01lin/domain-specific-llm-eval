@@ -3,7 +3,6 @@
 Version: 0.1  
 Status: Draft for review  
 Date: 2025-09-10  
-Owner: Platform Engineering  
 
 ---
 ## 1. Purpose & Scope

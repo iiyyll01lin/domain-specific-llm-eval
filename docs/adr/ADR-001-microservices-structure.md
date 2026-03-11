@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Platform Lead, Backend Architect  
-Reviewers: Frontend Lead, Data Engineering, SRE  
 
 ## 1. Context
 The system must support ingestion → processing → testset generation → evaluation → reporting with modular evolution, independent scaling, and selective deployment of optional (flagged) features like Knowledge Graph (KG) building and Subgraph API. Monolith would accelerate initial delivery but risks entangled deployments and slower iteration on performance-critical stages (processing, evaluation). Observability, idempotency anchors, and artifact lineage are core non-functionals.
@@ -65,4 +63,4 @@ Open tasks: TASK-001, TASK-002, TASK-003, TASK-004, TASK-005.
 - If inter-service call latency > 50ms p95 internally → profile and revisit topology.
 
 ---
-Decision recorded for transparency; update status to Accepted after initial implementation stability review.
+

@@ -3,7 +3,7 @@
 Version: 0.1 (Draft)  
 Status: Draft for review  
 Date: 2025-09-09  
-Owner: Platform Engineering  
+
 
 ---
 ## 1. Vision
@@ -560,4 +560,4 @@ Note: KG visualization library open question is now resolved (Cytoscape.js, see 
 5. Establish CI templates for new services.  
 
 ---
-End of document.
+

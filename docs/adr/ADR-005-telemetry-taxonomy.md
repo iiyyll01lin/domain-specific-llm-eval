@@ -2,8 +2,6 @@
 
 Status: Accepted  
 Date: 2025-09-10  
-Decision Owners: Platform Lead, Frontend Lead  
-Reviewers: SRE, Data Engineering, Security  
 
 ## 1. Context
 Consistent telemetry naming enables reliable dashboards, anomaly detection, and cross-layer correlation (frontend ↔ backend). Current design (§25 taxonomy) outlines preliminary event families but lacks a formal decision on structure, prefixes, and versioning boundaries.
@@ -80,4 +78,4 @@ Metrics:
 - Multi-tenant scoping prefix if SaaS pivot emerges.
 
 ---
-Will transition to Accepted after taxonomy.json adoption & CI validation (TASK-081, TASK-080 integration).
+

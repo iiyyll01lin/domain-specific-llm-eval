@@ -3,7 +3,7 @@
 Version: 0.1  
 Status: Planning Draft  
 Date: 2025-09-10  
-Owner: Platform Engineering  
+
 
 ---
 ## 1. Purpose
@@ -2815,4 +2815,3 @@ Planned → In-Progress → (Blocked ↔ In-Progress) → Done → Verified (pos
 Blocked tasks MUST include a short cause + next action in PR description or tracking issue.
 
 ---
-End of document.
