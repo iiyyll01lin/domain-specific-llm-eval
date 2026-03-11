@@ -361,6 +361,13 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
                     else:
                         logger.warning(f"Row {idx}: Content is empty or invalid")
                         continue
+
+                    title = ""
+                    source = ""
+                    language = "unknown"
+                    label = ""
+                    error_code = ""
+                    category = "general"
                     
                     # Extract text components from JSON
                     # Handle different CSV formats
@@ -408,14 +415,14 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
                         src_name = Path(csv_path.name).stem  # e.g., pre-training-data
                         row_index = int(idx)
                         csv_line = row_index + 2  # header occupies line 1
-                        title_part = _sanitize_for_filename(title) if 'title' in locals() and title else f"row{csv_line}"
+                        title_part = _sanitize_for_filename(title) if title else f"row{csv_line}"
                         doc_id = len(documents)
                         filename = f"{src_name}__r{csv_line}__{title_part}__{doc_id}.txt"
 
                         document = {
                             'content': text_content,  # Clean content for reference_contexts
                             'metadata': {
-                                'title': title if 'title' in locals() else f"Document {csv_line}",
+                                'title': title or f"Document {csv_line}",
                                 'source': csv_path.name,
                                 'document_id': doc_id,
                                 'row_index': row_index,  # 0-based DataFrame index
@@ -423,7 +430,7 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
                                 'filename': filename,
                                 'content_type': content_type,
                                 'category': category,
-                                'language': language if 'language' in locals() else 'unknown'
+                                'language': language,
                             }
                         }
                     else:  # smt_error_code
@@ -432,13 +439,13 @@ def load_csv_documents(csv_files: List[str], config: Dict[str, Any]) -> List[Dic
                         document = {
                             'content': text_content,  # Clean content for reference_contexts
                             'metadata': {
-                                'title': f"Error {error_code}" if 'error_code' in locals() and error_code else f"Document {csv_line}",
+                                'title': f"Error {error_code}" if error_code else f"Document {csv_line}",
                                 'source': csv_path.name,
                                 'document_id': len(documents),
                                 # Build filename as: {source_stem}__r{csv_line}__error_{error_code}__{doc_id}.txt
-                                'filename': f"{Path(csv_path.name).stem}__r{csv_line}__error_{_sanitize_for_filename(error_code) if 'error_code' in locals() and error_code else str(csv_line)}__{len(documents)}.txt",
+                                'filename': f"{Path(csv_path.name).stem}__r{csv_line}__error_{_sanitize_for_filename(error_code) if error_code else str(csv_line)}__{len(documents)}.txt",
                                 'content_type': content_type,
-                                'error_code': error_code if 'error_code' in locals() else '',
+                                'error_code': error_code,
                                 'category': category,
                                 'row_index': row_index,  # 0-based DataFrame index
                                 'csv_line': csv_line     # 1-based physical CSV line number (header=1)
@@ -1091,19 +1098,6 @@ def extract_testset_keywords_with_metadata(user_query: str, reference_contexts: 
         }
         
         return "", error_metadata
-    """Get or create KeyBERT model instance (singleton pattern)."""
-    global _keybert_model
-    # Temporarily disable KeyBERT due to HuggingFace rate limiting
-    # if _keybert_model is None and KEYBERT_AVAILABLE:
-    #     try:
-    #         # Use a lighter model and try offline first
-    #         model_name = "all-MiniLM-L6-v2"
-    #         _keybert_model = KeyBERT(model=model_name)
-    #         logger.info(f"✅ KeyBERT model loaded: {model_name}")
-    #     except Exception as e:
-    #         logger.warning(f"⚠️  KeyBERT model loading failed: {e}")
-    #         _keybert_model = None
-    return None  # Force fallback method for now
 
 def extract_keywords_from_content(content: str, title: str = "", max_keywords: int = 5) -> str:
     """Extract meaningful keywords using Enhanced Hybrid Extractor or fallback method"""
@@ -2174,7 +2168,10 @@ async def main():
             logger.warning(f"⚠️ No data source enabled in config, falling back to: {csv_file_path}")
             
             if not Path(csv_file_path).exists():
-                logger.error(f"❌ Fallback CSV file not found: {csv_file_path}")
+                logger.error(
+                    "❌ No data source configured and fallback CSV not found. "
+                    f"Set data_sources.csv.csv_files in config. Missing fallback: {csv_file_path}"
+                )
                 return
             
             documents = load_csv_documents([csv_file_path], config)

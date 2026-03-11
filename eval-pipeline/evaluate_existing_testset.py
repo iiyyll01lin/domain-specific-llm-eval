@@ -32,11 +32,16 @@ class SMTRAGEvaluator:
     
     def __init__(self, config_path: str = "config/pipeline_config.yaml"):
         """Initialize evaluator with configuration"""
-        self.config_path = str(self._resolve_path(config_path))
+        raw_config_path = Path(config_path)
+        if raw_config_path.is_absolute():
+            resolved_config_path = raw_config_path
+        else:
+            resolved_config_path = (EVAL_PIPELINE_ROOT / raw_config_path).resolve()
+        self.config_path = str(resolved_config_path)
         self.config = self._load_config()
+        self.config_dir = Path(self.config_path).resolve().parent
         self.rag_config = self.config.get('rag_system', {})
         self.eval_config = self.config.get('evaluation', {})
-        self.config_dir = Path(self.config_path).resolve().parent
         
         # Initialize evaluators
         self._setup_evaluators()
@@ -44,17 +49,41 @@ class SMTRAGEvaluator:
     def _load_config(self) -> Dict[str, Any]:
         """Load pipeline configuration"""
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
+            config = yaml.safe_load(f) or {}
+        config['__config_dir__'] = str(Path(self.config_path).resolve().parent)
+        return config
 
     def _resolve_path(self, path_value: str) -> Path:
-        """Resolve paths relative to the pipeline root when possible."""
+        """Resolve paths relative to the loaded config file when possible."""
         path = Path(path_value)
         if path.is_absolute():
             return path
+        config_dir = getattr(self, 'config_dir', EVAL_PIPELINE_ROOT)
+        config_relative = (config_dir / path).resolve()
+        if config_relative.exists():
+            return config_relative
         pipeline_relative = (EVAL_PIPELINE_ROOT / path).resolve()
         if pipeline_relative.exists():
             return pipeline_relative
         return path.resolve()
+
+    @staticmethod
+    def _normalize_value(value: Any, default: Any = "") -> Any:
+        if pd.isna(value):
+            return default
+        return value
+
+    @staticmethod
+    def _decode_json_like_value(value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        if not stripped or stripped[0] not in "[{":
+            return value
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return value
     
     def _setup_evaluators(self):
         """Setup evaluation components"""
@@ -158,12 +187,14 @@ class SMTRAGEvaluator:
             df = df.rename(columns=rename_map)
         if 'ground_truth' not in df.columns and 'answer' in df.columns:
             df['ground_truth'] = df['answer']
+        if 'contexts' in df.columns:
+            df['contexts'] = df['contexts'].apply(self._decode_json_like_value)
         logger.info(f"📊 Loaded {len(df)} test questions")
         
         # Display testset overview
         logger.info("📋 Testset Overview:")
         for i, row in df.iterrows():
-            question = row.get('question', 'N/A')
+            question = self._normalize_value(row.get('question', 'N/A'), 'N/A')
             logger.info(f"  {i+1}. {question[:80]}{'...' if len(question) > 80 else ''}")
         
         return df
@@ -190,10 +221,10 @@ class SMTRAGEvaluator:
         
         # Process each question
         for i, row in testset_df.iterrows():
-            question = row.get('question', '')
-            expected_answer = row.get('answer', '')
-            ground_truth = row.get('ground_truth', expected_answer)
-            contexts = row.get('contexts', '')
+            question = self._normalize_value(row.get('question', ''), '')
+            expected_answer = self._normalize_value(row.get('answer', ''), '')
+            ground_truth = self._normalize_value(row.get('ground_truth', expected_answer), expected_answer)
+            contexts = self._normalize_value(row.get('contexts', ''), '')
             
             logger.info(f"🤖 Processing question {i+1}/{len(testset_df)}: {question[:60]}...")
             

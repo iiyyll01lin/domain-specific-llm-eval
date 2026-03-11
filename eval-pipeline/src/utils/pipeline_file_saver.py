@@ -20,6 +20,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _normalize_csv_cell(value: Any) -> Any:
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
 class PipelineFileSaver:
     """
     Comprehensive file saver for pipeline outputs with standardized directory structure
@@ -71,6 +77,8 @@ class PipelineFileSaver:
         try:
             # Convert to DataFrame
             df = pd.DataFrame(test_samples)
+            for column in df.columns:
+                df[column] = df[column].apply(_normalize_csv_cell)
 
             # Generate filename
             csv_filename = f"{filename_prefix}_{self.timestamp}.csv"

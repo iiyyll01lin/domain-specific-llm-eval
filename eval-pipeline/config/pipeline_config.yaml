@@ -8,6 +8,36 @@ data_sources:
 testset_generation:
   max_documents_for_generation: 10
   max_total_samples: 6
+  prompt_config:
+    templates_file: prompts/instruction_templates.yaml
+    profile: default
+  ragas_config:
+    custom_llm:
+      endpoint: "http://localhost:8000/v1/chat/completions"
+      model: "google/gemma-2-9b-it"
+      api_key: "dummy-key"
+      temperature: 0.3
+      timeout: 60
+    embeddings_model: sentence-transformers/all-MiniLM-L6-v2
+  generation:
+    async_generation:
+      enabled: true
+      max_workers: 8
+      batch_size: 4
+      timeout: 180
+      max_retries: 6
+      max_wait: 60
+      log_tenacity: false
+    query_distribution:
+      - synthesizer: single_hop_specific
+        weight: 0.4
+      - synthesizer: multi_hop_abstract
+        weight: 0.4
+      - synthesizer: multi_hop_specific
+        weight: 0.2
+
+rag_system:
+  endpoint: "http://localhost:8000/v1/chat/completions"
 
 output:
   base_dir: ./outputs
@@ -15,13 +45,3 @@ output:
 
 logging:
   level: INFO
-
-rag_system:
-  endpoint: "http://localhost:8000/v1/chat/completions"
-testset_generation:
-  max_documents_for_generation: 10
-  max_total_samples: 6
-  ragas_config:
-    custom_llm:
-      endpoint: "http://localhost:8000/v1/chat/completions"
-      model: "google/gemma-2-9b-it"

@@ -1,9 +1,60 @@
-default:
-  ragas_system_prompt: |
-    You are an expert system. Generate a question and answer based on the context provided.
-  user_prompt: |
-    Context: {context}
-    Please carefully consider the context above to produce the result.
-domain_a:
-  ragas_system_prompt: |
-    You are a technical specialist in Domain A...
+profiles:
+  default:
+    system_prompts:
+      default: |
+        You are a helpful assistant that must respond only in English.
+        Use precise, domain-appropriate wording and stay faithful to the provided context.
+      strict: |
+        You must respond only in English.
+        Never mix languages in the final answer.
+      conversational: |
+        You are a helpful assistant. Reply in clear English only, with a concise and practical tone.
+      technical: |
+        You are a technical evaluation assistant. Respond only in professional English and preserve domain terminology.
+    personas:
+      - id: technical_specialist
+        name: Technical Specialist
+        description: Domain expert asking detailed technical questions.
+        question_style: detailed
+        complexity_preference: high
+        role_description: A technical specialist who asks detailed questions about industrial processes and specifications.
+      - id: quality_inspector
+        name: Quality Inspector
+        description: Quality-focused reviewer asking validation questions.
+        question_style: precise
+        complexity_preference: medium
+        role_description: A quality inspector who focuses on measurement procedures and quality control standards.
+      - id: operations_engineer
+        name: Operations Engineer
+        description: Operations-focused user asking process reliability questions.
+        question_style: scenario_based
+        complexity_preference: high
+        role_description: An operations engineer who cares about troubleshooting steps, failure modes, and process dependencies.
+    fallback_generation:
+      measurement:
+        match_terms: ["量測", "measurement"]
+        question_template: "What are the measurement procedures described in {title}?"
+        answer_template: "The measurement procedures include: {excerpt}..."
+      inspection:
+        match_terms: ["檢查", "inspection"]
+        question_template: "What inspection steps are required according to {title}?"
+        answer_template: "The inspection requirements are: {excerpt}..."
+      general:
+        question_template: "What are the key points described in {title}?"
+        answer_template: "The key information includes: {excerpt}..."
+    query_distribution:
+      - synthesizer: single_hop_specific
+        weight: 0.4
+      - synthesizer: multi_hop_abstract
+        weight: 0.4
+      - synthesizer: multi_hop_specific
+        weight: 0.2
+
+  manufacturing:
+    personas:
+      - id: manufacturing_engineer
+        name: Manufacturing Engineer
+        description: Production-focused engineer asking process and equipment questions.
+        question_style: detailed
+        complexity_preference: high
+        role_description: A manufacturing engineer who focuses on production procedures, equipment behavior, and process optimization.

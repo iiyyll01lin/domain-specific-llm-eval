@@ -13,15 +13,18 @@ This script implements the corrected pipeline flow using ONLY RAGAS TestsetGener
 This fixes the design flaw where keywords were calculated before RAG testing.
 """
 
+import asyncio
+import json
+import logging
 import os
 import sys
-import json
-import yaml
-import logging
-import pandas as pd
-from pathlib import Path
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Any, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+import yaml
 
 # Add RAGAS to path
 ragas_path = str(
@@ -35,6 +38,12 @@ from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.run_config import RunConfig
+from ragas.testset.persona import Persona
+from ragas.testset.synthesizers import default_query_distribution
+from ragas.testset.synthesizers.multi_hop.abstract import MultiHopAbstractQuerySynthesizer
+from ragas.testset.synthesizers.multi_hop.specific import MultiHopSpecificQuerySynthesizer
+from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
 from ragas.testset.transforms.relationship_builders import (
     CosineSimilarityBuilder,
     JaccardSimilarityBuilder,
@@ -57,6 +66,209 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+from src.utils.prompt_templates import (
+    get_fallback_generation_templates,
+    get_persona_templates,
+    get_query_distribution_templates,
+    load_prompt_library,
+)
+
+
+@dataclass
+class GenerationSettings:
+    run_config: RunConfig
+    batch_size: Optional[int]
+    personas: List[Persona]
+    persona_records: List[Dict[str, Any]]
+    query_distribution: List[Tuple[Any, float]]
+    query_distribution_records: List[Dict[str, Any]]
+    prompt_profile: str
+    fallback_templates: Dict[str, Dict[str, Any]]
+
+
+def get_prompt_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
+    prompt_config = config.get("testset_generation", {}).get("prompt_config", {})
+    profile = prompt_config.get("profile", "default")
+    templates_path = prompt_config.get("templates_file")
+    library = load_prompt_library(
+        templates_path,
+        base_dir=Path(__file__).resolve().parent,
+    )
+    return library, profile
+
+
+def build_personas(
+    config: Dict[str, Any], library: Dict[str, Any], profile: str
+) -> Tuple[List[Persona], List[Dict[str, Any]]]:
+    generation_config = config.get("testset_generation", {}).get("generation", {})
+    persona_records = generation_config.get("personas") or get_persona_templates(
+        profile_name=profile,
+        library=library,
+    )
+    personas = [
+        Persona(
+            name=record["name"],
+            role_description=record["role_description"],
+        )
+        for record in persona_records
+    ]
+    return personas, persona_records
+
+
+def build_run_config(config: Dict[str, Any]) -> Tuple[RunConfig, Optional[int]]:
+    generation_config = config.get("testset_generation", {}).get("generation", {})
+    async_config = generation_config.get("async_generation", {})
+    enabled = async_config.get("enabled", True)
+    run_config = RunConfig(
+        timeout=async_config.get("timeout", 180),
+        max_retries=async_config.get("max_retries", 6),
+        max_wait=async_config.get("max_wait", 60),
+        max_workers=async_config.get("max_workers", 8 if enabled else 1),
+        log_tenacity=async_config.get("log_tenacity", False),
+        seed=async_config.get("seed", 42),
+    )
+    batch_size = async_config.get("batch_size") if enabled else None
+    return run_config, batch_size
+
+
+def build_query_distribution(
+    config: Dict[str, Any],
+    llm: LangchainLLMWrapper,
+    kg: KnowledgeGraph,
+    library: Dict[str, Any],
+    profile: str,
+) -> Tuple[List[Tuple[Any, float]], List[Dict[str, Any]]]:
+    generation_config = config.get("testset_generation", {}).get("generation", {})
+    configured_distribution = generation_config.get(
+        "query_distribution"
+    ) or get_query_distribution_templates(profile_name=profile, library=library)
+
+    kg_has_nodes = bool(getattr(kg, "nodes", []))
+
+    synthesizer_builders = {
+        "single_hop_specific": lambda: SingleHopSpecificQuerySynthesizer(llm=llm),
+        "multi_hop_abstract": lambda: MultiHopAbstractQuerySynthesizer(llm=llm),
+        "multi_hop_specific": lambda: MultiHopSpecificQuerySynthesizer(llm=llm),
+    }
+
+    available_distribution: List[Tuple[Any, float]] = []
+    distribution_records: List[Dict[str, Any]] = []
+
+    for item in configured_distribution:
+        synthesizer_name = item.get("synthesizer")
+        weight = float(item.get("weight", 0.0))
+        builder = synthesizer_builders.get(synthesizer_name)
+        if builder is None or weight <= 0:
+            continue
+
+        synthesizer = builder()
+        if kg_has_nodes:
+            try:
+                is_available = bool(synthesizer.get_node_clusters(kg))
+            except Exception:
+                is_available = True
+        else:
+            is_available = True
+
+        if not is_available:
+            logger.info(f"ℹ️ Skipping unavailable synthesizer: {synthesizer_name}")
+            continue
+
+        available_distribution.append((synthesizer, weight))
+        distribution_records.append(
+            {
+                "synthesizer": synthesizer_name,
+                "weight": weight,
+                "available": True,
+            }
+        )
+
+    if not available_distribution:
+        fallback_distribution = default_query_distribution(llm, kg if kg_has_nodes else None)
+        fallback_records = [
+            {
+                "synthesizer": synthesizer.name,
+                "weight": weight,
+                "available": True,
+            }
+            for synthesizer, weight in fallback_distribution
+        ]
+        return fallback_distribution, fallback_records
+
+    total_weight = sum(weight for _, weight in available_distribution)
+    normalized_distribution = []
+    normalized_records = []
+    for record, (synthesizer, weight) in zip(distribution_records, available_distribution):
+        normalized_weight = weight / total_weight
+        normalized_distribution.append((synthesizer, normalized_weight))
+        normalized_records.append({**record, "weight": normalized_weight})
+    return normalized_distribution, normalized_records
+
+
+def build_generation_settings(
+    config: Dict[str, Any],
+    llm: LangchainLLMWrapper,
+    kg: KnowledgeGraph,
+) -> GenerationSettings:
+    library, profile = get_prompt_config(config)
+    personas, persona_records = build_personas(config, library, profile)
+    run_config, batch_size = build_run_config(config)
+    query_distribution, query_distribution_records = build_query_distribution(
+        config,
+        llm,
+        kg,
+        library,
+        profile,
+    )
+    fallback_templates = get_fallback_generation_templates(
+        profile_name=profile,
+        library=library,
+    )
+    return GenerationSettings(
+        run_config=run_config,
+        batch_size=batch_size,
+        personas=personas,
+        persona_records=persona_records,
+        query_distribution=query_distribution,
+        query_distribution_records=query_distribution_records,
+        prompt_profile=profile,
+        fallback_templates=fallback_templates,
+    )
+
+
+async def _resolve_embedding_result(result: Any) -> Any:
+    if hasattr(result, "__await__"):
+        return await result
+    return result
+
+
+async def _populate_node_embeddings(
+    node: Node,
+    content: str,
+    summary: str,
+    embeddings_model: LangchainEmbeddingsWrapper,
+    semaphore: asyncio.Semaphore,
+) -> None:
+    async with semaphore:
+        node.properties["embedding"] = await _resolve_embedding_result(
+            embeddings_model.embed_text(content)
+        )
+        node.properties["summary_embedding"] = await _resolve_embedding_result(
+            embeddings_model.embed_text(summary)
+        )
+
+
+def _to_json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _to_json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_to_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_to_json_safe(item) for item in value]
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    return value
 
 
 def create_summary_similarity_relationships(kg: KnowledgeGraph):
@@ -411,7 +623,9 @@ async def build_relationships(kg: KnowledgeGraph, has_embeddings: bool = False) 
 
 
 async def create_knowledge_graph_from_documents(
-    documents: List[Document], embeddings_model: LangchainEmbeddingsWrapper = None
+    documents: List[Document],
+    embeddings_model: LangchainEmbeddingsWrapper = None,
+    async_settings: Optional[Dict[str, Any]] = None,
 ) -> KnowledgeGraph:
     """Create RAGAS knowledge graph from documents with relationships"""
     logger.info(f"🧠 Creating RAGAS Knowledge Graph from {len(documents)} documents...")
@@ -433,6 +647,9 @@ async def create_knowledge_graph_from_documents(
 
     # Create nodes for each chunk
     import uuid
+
+    pending_embedding_nodes: List[Tuple[Node, str, str]] = []
+    async_settings = async_settings or {}
 
     for chunk_idx, chunk_doc in enumerate(split_docs):
         if len(chunk_doc.page_content.strip()) < 30:  # Skip very short chunks
@@ -481,48 +698,42 @@ async def create_knowledge_graph_from_documents(
             },
         )
 
-        # Add embedding if embeddings model is provided
+        summary = sentences[0] if sentences else chunk_doc.page_content[:200]
+        node.properties["summary"] = summary
+
         if embeddings_model:
-            try:
-                embedding_result = embeddings_model.embed_text(chunk_doc.page_content)
-                # Handle both sync and async embedding models
-                if hasattr(embedding_result, "__await__"):
-                    embedding = await embedding_result
-                else:
-                    embedding = embedding_result
-                node.properties["embedding"] = embedding
-
-                # Create summary for summary embedding
-                summary = sentences[0] if sentences else chunk_doc.page_content[:200]
-                summary_embedding_result = embeddings_model.embed_text(summary)
-                if hasattr(summary_embedding_result, "__await__"):
-                    summary_embedding = await summary_embedding_result
-                else:
-                    summary_embedding = summary_embedding_result
-                node.properties["summary_embedding"] = summary_embedding
-                node.properties["summary"] = summary
-
-            except Exception as e:
-                logger.warning(f"Failed to create embedding for node {node_id}: {e}")
-                # Create fallback summary_embedding for persona compatibility
-                node.properties["summary_embedding"] = [
-                    0.1
-                ] * 384  # Simple fallback embedding
+            pending_embedding_nodes.append((node, chunk_doc.page_content, summary))
         else:
-            # Always ensure summary_embedding exists for persona generation
-            summary = sentences[0] if sentences else chunk_doc.page_content[:200]
-            node.properties["summary"] = summary
-            node.properties["summary_embedding"] = [
-                hash(summary) % 1000 / 1000.0
-            ] * 384  # Simple hash-based embedding
+            node.properties["summary_embedding"] = [hash(summary) % 1000 / 1000.0] * 384
 
         kg._add_node(node)
+
+    if embeddings_model and pending_embedding_nodes:
+        max_workers = max(1, int(async_settings.get("max_workers", 8) or 1))
+        logger.info(
+            f"🧵 Embedding {len(pending_embedding_nodes)} nodes with async batch workers={max_workers}"
+        )
+        semaphore = asyncio.Semaphore(max_workers)
+        tasks = [
+            _populate_node_embeddings(node, content, summary, embeddings_model, semaphore)
+            for node, content, summary in pending_embedding_nodes
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for (node, _, summary), result in zip(pending_embedding_nodes, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to create embedding for node {node.id}: {result}")
+                node.properties.pop("embedding", None)
+                node.properties.pop("summary_embedding", None)
+                node.properties["summary"] = summary
 
     logger.info(f"✅ Created knowledge graph with {len(kg.nodes)} nodes")
 
     # Build relationships between nodes
     logger.info("🔗 Building relationships between nodes...")
-    relationships_built = await build_relationships(kg, embeddings_model is not None)
+    relationships_built = await build_relationships(
+        kg,
+        any(node.properties.get("embedding") is not None for node in kg.nodes),
+    )
 
     logger.info(f"✅ Built {relationships_built} relationships in knowledge graph")
     return kg
@@ -547,7 +758,7 @@ def save_knowledge_graph(kg: KnowledgeGraph, output_dir: Path) -> str:
             {
                 "id": str(node.id),  # Convert UUID to string
                 "type": str(node.type),
-                "properties": node.properties,
+                "properties": _to_json_safe(node.properties),
             }
             for node in kg.nodes
         ],
@@ -557,7 +768,7 @@ def save_knowledge_graph(kg: KnowledgeGraph, output_dir: Path) -> str:
                     "source": str(rel.source.id),  # Convert UUID to string
                     "target": str(rel.target.id),  # Convert UUID to string
                     "type": str(rel.type),
-                    "properties": rel.properties,
+                    "properties": _to_json_safe(rel.properties),
                 }
                 for rel in kg.relationships
             ]
@@ -597,9 +808,15 @@ def setup_ragas_components(
         from langchain_openai import ChatOpenAI
 
         llm = ChatOpenAI(
-            base_url=custom_llm_config["endpoint"],
-            api_key=custom_llm_config["api_key"],
-            model=custom_llm_config["model"],
+            base_url=custom_llm_config["endpoint"].replace(
+                "/v1/chat/completions", "/v1"
+            ),
+            api_key=custom_llm_config.get(
+                "api_key", os.getenv("OPENAI_API_KEY", "dummy-key")
+            ),
+            model=custom_llm_config.get(
+                "model", custom_llm_config.get("model_name", "gpt-4o-mini")
+            ),
             temperature=custom_llm_config.get("temperature", 0.3),
             max_tokens=custom_llm_config.get("max_tokens", 1000),
             timeout=custom_llm_config.get("timeout", 60),
@@ -642,6 +859,7 @@ def generate_ragas_testset(
     kg: KnowledgeGraph,
     generator_llm: LangchainLLMWrapper,
     generator_embeddings: LangchainEmbeddingsWrapper,
+    generation_settings: GenerationSettings,
     num_samples: int = 3,
 ) -> List[Dict]:
     """Generate synthetic testset using RAGAS TestsetGenerator"""
@@ -651,34 +869,29 @@ def generate_ragas_testset(
     logger.info("🚀 Initializing RAGAS TestsetGenerator...")
 
     try:
-        # Create simple personas to avoid generation issues
-        from ragas.testset.persona import Persona
-
-        personas = [
-            Persona(
-                name="Technical Specialist",
-                role_description="A technical specialist who asks detailed questions about industrial processes and specifications.",
-            ),
-            Persona(
-                name="Quality Inspector",
-                role_description="A quality inspector who focuses on measurement procedures and quality control standards.",
-            ),
-        ]
-
         generator = TestsetGenerator(
             llm=generator_llm,
             embedding_model=generator_embeddings,
             knowledge_graph=kg,
-            persona_list=personas,  # Provide personas directly
+            persona_list=generation_settings.personas,
         )
 
-        logger.info("✅ RAGAS TestsetGenerator initialized with pre-defined personas")
+        logger.info("✅ RAGAS TestsetGenerator initialized with configured personas")
+        logger.info(
+            f"🧠 Query distribution: {generation_settings.query_distribution_records}"
+        )
+        logger.info(
+            f"🧵 Async generation config: max_workers={generation_settings.run_config.max_workers}, batch_size={generation_settings.batch_size}"
+        )
 
         # Generate testset using RAGAS with simple configuration
         logger.info(f"🎯 Generating {num_samples} test samples...")
 
         testset = generator.generate(
             testset_size=num_samples,
+            query_distribution=generation_settings.query_distribution,
+            run_config=generation_settings.run_config,
+            batch_size=generation_settings.batch_size,
             raise_exceptions=False,  # Don't raise exceptions to handle gracefully
         )
 
@@ -736,25 +949,45 @@ def generate_ragas_testset(
                     title = node.properties.get("title", "Document")
                     node_contents.append({"content": content, "title": title})
 
+            fallback_templates = generation_settings.fallback_templates
+            measurement_template = fallback_templates.get("measurement", {})
+            inspection_template = fallback_templates.get("inspection", {})
+            general_template = fallback_templates.get("general", {})
+
             # Create questions based on node content
             for i, node_data in enumerate(node_contents[:num_samples]):
                 content = node_data["content"]
                 title = node_data["title"]
+                excerpt = content[:200]
 
                 # Generate simple questions based on content
                 if "量測" in content or "measurement" in content.lower():
-                    question = (
-                        f"What are the measurement procedures described in {title}?"
-                    )
-                    answer = f"The measurement procedures include: {content[:200]}..."
+                    question = measurement_template.get(
+                        "question_template",
+                        "What are the measurement procedures described in {title}?",
+                    ).format(title=title, excerpt=excerpt)
+                    answer = measurement_template.get(
+                        "answer_template",
+                        "The measurement procedures include: {excerpt}...",
+                    ).format(title=title, excerpt=excerpt)
                 elif "檢查" in content or "inspection" in content.lower():
-                    question = (
-                        f"What inspection steps are required according to {title}?"
-                    )
-                    answer = f"The inspection requirements are: {content[:200]}..."
+                    question = inspection_template.get(
+                        "question_template",
+                        "What inspection steps are required according to {title}?",
+                    ).format(title=title, excerpt=excerpt)
+                    answer = inspection_template.get(
+                        "answer_template",
+                        "The inspection requirements are: {excerpt}...",
+                    ).format(title=title, excerpt=excerpt)
                 else:
-                    question = f"What are the key points described in {title}?"
-                    answer = f"The key information includes: {content[:200]}..."
+                    question = general_template.get(
+                        "question_template",
+                        "What are the key points described in {title}?",
+                    ).format(title=title, excerpt=excerpt)
+                    answer = general_template.get(
+                        "answer_template",
+                        "The key information includes: {excerpt}...",
+                    ).format(title=title, excerpt=excerpt)
 
                 test_sample = {
                     "question": question,
@@ -838,6 +1071,12 @@ def save_testset(test_samples: List[Dict], output_dir: Path) -> str:
 
         # Convert to DataFrame
         df = pd.DataFrame(test_samples)
+        for column in df.columns:
+            df[column] = df[column].apply(
+                lambda value: json.dumps(value, ensure_ascii=False)
+                if isinstance(value, (list, dict))
+                else value
+            )
 
         # Add additional columns to match expected format (but leave empty as designed)
         df["answer"] = df["ground_truth"]  # Copy ground truth as answer
@@ -895,9 +1134,7 @@ def main():
         max_docs = testset_config.get("max_documents_for_generation", 10)
         # CRITICAL FIX: Use proper default value instead of hardcoded 3
         # The hardcoded 3 was causing fallback to minimal generation
-        max_samples = testset_config.get(
-            "max_total_samples", 1000
-        )  # Changed from 3 to 1000
+        max_samples = testset_config.get("max_total_samples", 10)
 
         logger.info(f"🎯 Configuration: max_docs={max_docs}, max_samples={max_samples}")
 
@@ -917,6 +1154,7 @@ def main():
         )
         csv_files = config.get("data_sources", {}).get("csv", {}).get("csv_files", [])
 
+        csv_file_path = None
         if document_files:
             logger.info("📄 Loading TXT documents (working 2024 method)...")
             documents = load_txt_documents(document_files, max_docs)
@@ -932,19 +1170,33 @@ def main():
         # Step 4: Setup RAGAS components (before KG creation for embeddings)
         generator_llm, generator_embeddings = setup_ragas_components(config)
 
-        # Step 5: Create knowledge graph with relationships
-        import asyncio
+        # Step 4.1: Build async settings baseline for KG creation
+        run_config, _ = build_run_config(config)
 
+        # Step 5: Create knowledge graph with relationships
         kg = asyncio.run(
-            create_knowledge_graph_from_documents(documents, generator_embeddings)
+            create_knowledge_graph_from_documents(
+                documents,
+                generator_embeddings,
+                async_settings={
+                    "max_workers": run_config.max_workers,
+                },
+            )
         )
+
+        # Rebuild generation settings using the actual KG for synthesizer availability checks
+        generation_settings = build_generation_settings(config, generator_llm, kg)
 
         # Step 6: Save knowledge graph for reuse (as requested)
         kg_filepath = save_knowledge_graph(kg, output_dir)
 
         # Step 7: Generate synthetic testset using RAGAS
         test_samples = generate_ragas_testset(
-            kg, generator_llm, generator_embeddings, max_samples
+            kg,
+            generator_llm,
+            generator_embeddings,
+            generation_settings,
+            max_samples,
         )
 
         # Step 8: Save testset
@@ -958,45 +1210,8 @@ def main():
 
             file_saver = PipelineFileSaver(output_dir)
 
-            # Create default personas if not existing
-            default_personas = [
-                {
-                    "id": "technical_expert",
-                    "name": "Technical Expert",
-                    "description": "Domain expert asking technical questions",
-                    "question_style": "detailed",
-                    "complexity_preference": "high",
-                    "role_description": "A technical specialist who asks detailed questions about industrial processes and specifications.",
-                },
-                {
-                    "id": "business_user",
-                    "name": "Business User",
-                    "description": "Business stakeholder asking practical questions",
-                    "question_style": "concise",
-                    "complexity_preference": "medium",
-                    "role_description": "A quality inspector who focuses on measurement procedures and quality control standards.",
-                },
-            ]
-
-            # Create default scenarios
-            default_scenarios = [
-                {
-                    "id": "single_hop",
-                    "name": "Single Hop Query",
-                    "description": "Questions requiring single document lookup",
-                    "complexity": "low",
-                    "hop_type": "single",
-                    "expected_sources": 1,
-                },
-                {
-                    "id": "multi_hop",
-                    "name": "Multi Hop Query",
-                    "description": "Questions requiring multiple document connections",
-                    "complexity": "high",
-                    "hop_type": "multi",
-                    "expected_sources": "2+",
-                },
-            ]
+            default_personas = generation_settings.persona_records
+            default_scenarios = generation_settings.query_distribution_records
 
             # Save personas and scenarios
             personas_path = file_saver.save_personas_json(default_personas)
@@ -1022,6 +1237,14 @@ def main():
                     "testset": testset_filepath,
                     "personas": personas_path,
                     "scenarios": scenarios_path,
+                },
+                "prompt_profile": generation_settings.prompt_profile,
+                "query_distribution": generation_settings.query_distribution_records,
+                "async_generation": {
+                    "max_workers": generation_settings.run_config.max_workers,
+                    "batch_size": generation_settings.batch_size,
+                    "timeout": generation_settings.run_config.timeout,
+                    "max_retries": generation_settings.run_config.max_retries,
                 },
             }
 
