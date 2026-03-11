@@ -5,9 +5,9 @@ Logging configuration for the RAG Evaluation Pipeline.
 import logging
 import logging.handlers
 import sys
-from pathlib import Path
-from typing import Dict, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 def setup_logging(config: Dict[str, Any], run_id: str) -> logging.Logger:

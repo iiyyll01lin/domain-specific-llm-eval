@@ -1,9 +1,8 @@
 import sys
 from types import ModuleType, SimpleNamespace
 
-from langchain_core.documents import Document
-
 import run_pure_ragas_pipeline as pipeline
+from langchain_core.documents import Document
 
 
 def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_path):

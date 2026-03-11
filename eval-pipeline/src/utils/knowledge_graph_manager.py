@@ -47,4 +47,3 @@ class KnowledgeGraphManager:
         )
 
     # Phase 6: Federated Graph RBAC isolation
-    

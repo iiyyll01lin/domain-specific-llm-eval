@@ -3,30 +3,26 @@
 Integration module to use working pure RAGAS pipeline KG creation in main orchestrator
 """
 
+import asyncio
 import sys
 import uuid
-import asyncio
-from pathlib import Path
-from typing import List, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add RAGAS to path
 ragas_path = "/data/yy/domain-specific-llm-eval/ragas/ragas/src"
 if ragas_path not in sys.path:
     sys.path.insert(0, ragas_path)
 
+import logging
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType, Relationship
 from ragas.testset.transforms.relationship_builders import (
-    CosineSimilarityBuilder,
-    JaccardSimilarityBuilder,
-    OverlapScoreBuilder,
-)
-from ragas.testset.transforms.relationship_builders.cosine import (
-    SummaryCosineSimilarityBuilder,
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-import logging
+    CosineSimilarityBuilder, JaccardSimilarityBuilder, OverlapScoreBuilder)
+from ragas.testset.transforms.relationship_builders.cosine import \
+    SummaryCosineSimilarityBuilder
 
 logger = logging.getLogger(__name__)
 

@@ -6,13 +6,14 @@ Processes CSV files and converts them to document format for RAGAS testset gener
 Handles the JSON content parsing and template application as configured.
 """
 
+import hashlib
+import json
 import logging
 import sys
-import json
-import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-import hashlib
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 # Add parent directories to path to import existing code
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -255,7 +256,7 @@ class CSVDataProcessor:
         """
         # Basic text cleaning
         import re
-        
+
         # Remove excessive whitespace
         text = re.sub(r'\s+', ' ', text)
         

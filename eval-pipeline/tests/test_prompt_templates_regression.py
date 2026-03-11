@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from src.interfaces.english_prompts import (
-    create_custom_english_prompt,
-    get_english_system_prompt,
-)
-from src.utils.prompt_templates import load_prompt_library, resolve_prompt_library_path
+from src.interfaces.english_prompts import (create_custom_english_prompt,
+                                            get_english_system_prompt)
+
+from src.utils.prompt_templates import (load_prompt_library,
+                                        resolve_prompt_library_path)
 
 
 def test_prompt_library_loads_yaml_templates():

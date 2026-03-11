@@ -7,11 +7,12 @@ in the evaluation pipeline including sentence transformers, spaCy models,
 and other neural network components.
 """
 
-import os
-import torch
-from typing import Dict, Optional, Any, Union
-from pathlib import Path
 import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
+
+import torch
 
 logger = logging.getLogger(__name__)
 

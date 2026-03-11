@@ -12,10 +12,11 @@ This implements the CORRECT evaluation flow:
 import csv
 import json
 import logging
-import pandas as pd
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,8 @@ class RAGEvaluator:
         # Initialize keyword evaluator
         if self.eval_config.get("contextual_keywords", {}).get("enabled", False):
             try:
-                from evaluation.contextual_keyword_evaluator import (
-                    ContextualKeywordEvaluator,
-                )
+                from evaluation.contextual_keyword_evaluator import \
+                    ContextualKeywordEvaluator
 
                 self.keyword_evaluator = ContextualKeywordEvaluator(
                     self.eval_config.get("contextual_keywords", {})

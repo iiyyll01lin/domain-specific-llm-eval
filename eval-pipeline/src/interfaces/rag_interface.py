@@ -5,10 +5,11 @@ Provides a standardized interface to communicate with RAG systems for evaluation
 """
 
 import logging
-import requests
 import time
-from typing import Dict, Any, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,8 @@ class RAGInterface:
     def _load_english_prompt_helpers(self):
         """Load English prompt helper functions."""
         try:
-            from .english_prompts import (
-                get_english_system_prompt,
-                create_custom_english_prompt,
-            )
+            from .english_prompts import (create_custom_english_prompt,
+                                          get_english_system_prompt)
 
             self.get_english_system_prompt = get_english_system_prompt
             self.create_custom_english_prompt = create_custom_english_prompt

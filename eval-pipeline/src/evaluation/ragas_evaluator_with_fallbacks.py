@@ -8,13 +8,14 @@ This module implements a robust RAGAS evaluation system that:
 4. Provides comprehensive error handling and recovery
 """
 
-import logging
-import pandas as pd
 import json
+import logging
 import time
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,7 @@ try:
                 return len(next(iter(self.data.values())))
 
         DATASET_AVAILABLE = False
-        logger.warning(
-            "⚠️ datasets library not available, using fallback Dataset class"
-        )
+        logger.warning("⚠️ datasets library not available, using fallback Dataset class")
 
     # Try to import both LLM-based and Non-LLM metrics
     LLM_METRICS_AVAILABLE = False
@@ -52,14 +51,10 @@ try:
 
     # LLM-based metrics (primary)
     try:
-        from ragas.metrics import (
-            LLMContextPrecisionWithoutReference,
-            LLMContextPrecisionWithReference,
-            LLMContextRecall,
-            Faithfulness,
-            ResponseRelevancy,
-            AnswerRelevancy,
-        )
+        from ragas.metrics import (AnswerRelevancy, Faithfulness,
+                                   LLMContextPrecisionWithoutReference,
+                                   LLMContextPrecisionWithReference,
+                                   LLMContextRecall, ResponseRelevancy)
 
         LLM_METRICS_AVAILABLE = True
         logger.info("✅ LLM-based RAGAS metrics available")
@@ -67,28 +62,19 @@ try:
         logger.warning(f"⚠️ LLM-based RAGAS metrics not available: {e}")
         # Try alternative imports for older RAGAS versions
         try:
-            from ragas.metrics import (
-                ContextPrecision,
-                ContextRecall,
-                Faithfulness,
-                AnswerRelevancy,
-            )
+            from ragas.metrics import (AnswerRelevancy, ContextPrecision,
+                                       ContextRecall, Faithfulness)
 
             LLM_METRICS_AVAILABLE = True
             logger.info("✅ Alternative LLM-based RAGAS metrics available")
         except ImportError as e2:
-            logger.warning(
-                f"⚠️ Alternative LLM-based RAGAS metrics not available: {e2}"
-            )
+            logger.warning(f"⚠️ Alternative LLM-based RAGAS metrics not available: {e2}")
 
     # Non-LLM fallback metrics
     try:
-        from ragas.metrics import (
-            NonLLMContextPrecisionWithReference,
-            NonLLMContextRecall,
-            AnswerSimilarity,
-            AnswerCorrectness,
-        )
+        from ragas.metrics import (AnswerCorrectness, AnswerSimilarity,
+                                   NonLLMContextPrecisionWithReference,
+                                   NonLLMContextRecall)
 
         NONLLM_METRICS_AVAILABLE = True
         logger.info("✅ Non-LLM RAGAS metrics available")
@@ -98,12 +84,8 @@ try:
     # Legacy fallback metrics
     LEGACY_METRICS_AVAILABLE = False
     try:
-        from ragas.metrics import (
-            context_precision,
-            context_recall,
-            faithfulness,
-            answer_relevancy,
-        )
+        from ragas.metrics import (answer_relevancy, context_precision,
+                                   context_recall, faithfulness)
 
         LEGACY_METRICS_AVAILABLE = True
         logger.info("✅ Legacy RAGAS metrics available")
@@ -119,8 +101,7 @@ except ImportError as e:
 
 # LangChain LLM wrapper for custom endpoint
 try:
-    from langchain_openai import ChatOpenAI
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
     LANGCHAIN_AVAILABLE = True
 except ImportError as e:
@@ -251,7 +232,8 @@ class RAGASEvaluatorWithFallbacks:
                 logger.warning(f"Custom embeddings failed: {e}")
                 # Fallback to HuggingFace embeddings
                 try:
-                    from langchain_community.embeddings import HuggingFaceEmbeddings
+                    from langchain_community.embeddings import \
+                        HuggingFaceEmbeddings
 
                     hf_embeddings = HuggingFaceEmbeddings(
                         model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -295,15 +277,10 @@ class RAGASEvaluatorWithFallbacks:
             logger.info("🎯 Setting up RAG evaluation metrics...")
             try:
                 # Import the exact metrics from our available set
-                from ragas.metrics import (
-                    ContextPrecision,
-                    ContextRecall,
-                    Faithfulness,
-                    AnswerRelevancy,
-                )
+                from ragas.metrics import (AnswerRelevancy, ContextPrecision,
+                                           ContextRecall, Faithfulness)
 
                 # Setup each metric individually with proper error handling
-
                 # 1. ContextPrecision - measures precision of retrieved contexts
                 try:
                     context_precision = ContextPrecision(llm=self.llm)
@@ -569,9 +546,7 @@ class RAGASEvaluatorWithFallbacks:
 
                         sys.path.append(str(Path(__file__).parent.parent / "utils"))
                         from nan_handling import (
-                            calculate_robust_summary_stats,
-                            is_valid_score,
-                        )
+                            calculate_robust_summary_stats, is_valid_score)
 
                         # Calculate robust statistics
                         stats = calculate_robust_summary_stats(scores, metric_name)
@@ -1043,7 +1018,8 @@ class RAGASEvaluatorWithFallbacks:
             from pathlib import Path
 
             sys.path.append(str(Path(__file__).parent.parent / "utils"))
-            from nan_handling import apply_nan_tolerance, validate_metric_results
+            from nan_handling import (apply_nan_tolerance,
+                                      validate_metric_results)
 
             # Clean up results before saving
             all_results = apply_nan_tolerance(

@@ -6,19 +6,21 @@ to provide complete RAG evaluation capabilities.
 Now includes configurable gates system with weighted pass rates.
 """
 
-import logging
-import pandas as pd
 import json
+import logging
 import time
-import numpy as np
-from pathlib import Path
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from .ragas_evaluator_with_fallbacks import RAGASEvaluatorWithFallbacks
+import numpy as np
+import pandas as pd
+
 from .contextual_keyword_evaluator_fixed import ContextualKeywordEvaluatorFixed
-from .enhanced_contextual_keyword_evaluator import EnhancedContextualKeywordEvaluator
+from .enhanced_contextual_keyword_evaluator import \
+    EnhancedContextualKeywordEvaluator
 from .gates_system import GatesSystem
+from .ragas_evaluator_with_fallbacks import RAGASEvaluatorWithFallbacks
 
 # Keep fallback imports
 try:

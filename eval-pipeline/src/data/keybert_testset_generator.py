@@ -2,9 +2,10 @@
 KeyBERT-Enhanced Testset Generator for Pipeline Integration
 """
 import logging
-from typing import Dict, List, Any
-import pandas as pd
 from pathlib import Path
+from typing import Any, Dict, List
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

@@ -6,14 +6,15 @@ a pre-chunked piece of content. Each CSV row should generate exactly one
 testset question-answer pair.
 """
 
-import pandas as pd
-import numpy as np
-import logging
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 import json
+import logging
 import re
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ class CSVTestsetGenerator:
         """Simple fallback keyword extraction."""
         import re
         from collections import Counter
-        
+
         # Extract words (3+ characters)
         words = re.findall(r'\b[a-zA-Z\u4e00-\u9fff]{3,}\b', content.lower())
         

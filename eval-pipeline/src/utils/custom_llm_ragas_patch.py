@@ -9,7 +9,7 @@ that can be integrated directly into your run_pipeline.py.
 
 import logging
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -150,9 +150,10 @@ class CustomLLMRAGASPatch:
         This ensures testset generation works even if RAGAS filtering fails.
         """
         try:
-            import pandas as pd
             import json
             from datetime import datetime
+
+            import pandas as pd
 
             logger.info("🎯 Starting enhanced fallback generation...")
 

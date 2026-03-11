@@ -9,12 +9,13 @@ This module implements a configurable gates system that:
 4. Supports dynamic threshold adjustment based on human feedback
 """
 
+import json
 import logging
-import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
-import json
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

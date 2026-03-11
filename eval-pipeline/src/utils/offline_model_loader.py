@@ -4,10 +4,10 @@ Offline Model Loader for Sentence Transformers
 Forces all sentence-transformers models to use cached versions only
 """
 
-import os
 import logging
-from typing import Optional, Dict, Any
+import os
 from contextlib import contextmanager
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +117,10 @@ class OfflineModelLoader:
             # Try simple fallback loading without offline restriction
             logger.warning("🔄 Trying fallback loading with online access (limited)")
             try:
-                from sentence_transformers import SentenceTransformer
-
                 # Allow brief online access with timeout
                 import socket
+
+                from sentence_transformers import SentenceTransformer
 
                 original_timeout = socket.getdefaulttimeout()
                 socket.setdefaulttimeout(10)  # 10 second timeout

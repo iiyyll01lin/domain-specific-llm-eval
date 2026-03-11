@@ -11,37 +11,36 @@ This module implements the complete RAGAS testset generation pipeline with:
 Based on RAGAS documentation: docs/getstarted/rag_testset_generation.md
 """
 
-import logging
-import pandas as pd
 import json
-import requests
+import logging
 import time
-from pathlib import Path
-from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from pydantic import Field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import pandas as pd
+import requests
+from langchain.callbacks.manager import CallbackManagerForLLMRun
+from langchain.embeddings.base import Embeddings
+from langchain.llms.base import LLM
 # LangChain imports
 from langchain.schema import Document
-from langchain.llms.base import LLM
-from langchain.embeddings.base import Embeddings
-from langchain.callbacks.manager import CallbackManagerForLLMRun
-
+# HuggingFace embeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from pydantic import Field
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
 # RAGAS imports
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
-from ragas.testset.transforms import default_transforms, apply_transforms
 from ragas.testset.synthesizers import default_query_distribution
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-
-# HuggingFace embeddings
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from ragas.testset.transforms import apply_transforms, default_transforms
 
 logger = logging.getLogger(__name__)
 
 
 from pydantic import Field
+
 
 class InventecCustomLLM(LLM):
     """Custom LLM wrapper for Inventec gpt-4o API"""
@@ -124,7 +123,7 @@ class InventecCustomLLM(LLM):
         """Async generate method for RAGAS compatibility"""
         # For now, use sync version - can be made truly async later
         try:
-            from langchain_core.outputs import LLMResult, Generation
+            from langchain_core.outputs import Generation, LLMResult
             
             generations = []
             for prompt in prompts:
@@ -142,7 +141,7 @@ class InventecCustomLLM(LLM):
             
         except Exception as e:
             logger.error(f"Async generation failed: {e}")
-            from langchain_core.outputs import LLMResult, Generation
+            from langchain_core.outputs import Generation, LLMResult
             return LLMResult(generations=[[Generation(text=f"Error: {str(e)}")]])
     
     def generate_prompt(
@@ -154,7 +153,7 @@ class InventecCustomLLM(LLM):
     ) -> Any:
         """Sync generate method for RAGAS compatibility"""
         try:
-            from langchain_core.outputs import LLMResult, Generation
+            from langchain_core.outputs import Generation, LLMResult
             
             generations = []
             for prompt in prompts:
@@ -172,7 +171,7 @@ class InventecCustomLLM(LLM):
             
         except Exception as e:
             logger.error(f"Sync generation failed: {e}")
-            from langchain_core.outputs import LLMResult, Generation
+            from langchain_core.outputs import Generation, LLMResult
             return LLMResult(generations=[[Generation(text=f"Error: {str(e)}")]])
 
 
@@ -369,15 +368,13 @@ class FullRAGASPipeline:
             # ✅ Use CSV-compatible transforms instead of default_transforms
             # Default transforms include HeadlineSplitter which fails on CSV data
             
-            from ragas.testset.transforms import (
-                SummaryExtractor, 
-                KeyphrasesExtractor, 
-                EmbeddingExtractor,
-                CosineSimilarityBuilder,
-                OverlapScoreBuilder,
-                apply_transforms
-            )
-            
+            from ragas.testset.transforms import (CosineSimilarityBuilder,
+                                                  EmbeddingExtractor,
+                                                  KeyphrasesExtractor,
+                                                  OverlapScoreBuilder,
+                                                  SummaryExtractor,
+                                                  apply_transforms)
+
             # Create CSV-compatible transforms that work with our enhanced nodes
             transforms = [
                 # Skip problematic transforms:
@@ -418,7 +415,7 @@ class FullRAGASPipeline:
         """Extract simple keywords from text for RAGAS compatibility"""
         try:
             import re
-            
+
             # Simple keyword extraction without LLM
             # Remove special characters and split
             clean_text = re.sub(r'[^\w\s]', ' ', text)
@@ -442,7 +439,7 @@ class FullRAGASPipeline:
         """Extract simple entities from text for RAGAS compatibility"""
         try:
             import re
-            
+
             # Simple entity extraction patterns
             entities = []
             
@@ -510,8 +507,9 @@ class FullRAGASPipeline:
         self.logger.info("✅ RAGAS TestsetGenerator created")
         
         # Step 2: Define query distribution with only single-hop to avoid clustering issues
-        from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
-        
+        from ragas.testset.synthesizers.single_hop.specific import \
+            SingleHopSpecificQuerySynthesizer
+
         # Use only single-hop synthesizer to avoid clustering issues
         query_distribution = [
             (SingleHopSpecificQuerySynthesizer(llm=self.ragas_llm), 1.0)
@@ -734,7 +732,7 @@ def run_full_ragas_pipeline(config: Dict[str, Any], output_dir: Path) -> Dict[st
 if __name__ == "__main__":
     # Test the pipeline with sample configuration
     import yaml
-    
+
     # Load configuration
     config_file = Path(__file__).parent.parent.parent / "config" / "pipeline_config.yaml"
     

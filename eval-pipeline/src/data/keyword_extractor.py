@@ -7,13 +7,14 @@ The keywords will be used later for contextual keyword evaluation.
 Input: RAGAS testset CSV (user_input,reference_contexts,reference,synthesizer_name)
 Output: Enhanced testset CSV with auto_keywords column added
 """
-import pandas as pd
 import json
-import requests
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ Keywords:"""
         """Extract keywords from Chinese text"""
         try:
             import jieba
+
             # Use jieba for Chinese word segmentation
             words = jieba.lcut(text)
             
@@ -198,6 +200,7 @@ Keywords:"""
             logger.warning("jieba not available, using character-based extraction")
             # Fallback: extract Chinese phrases by character combinations
             import re
+
             # Extract sequences of Chinese characters
             chinese_words = re.findall(r'[\u4e00-\u9fff]{2,}', text)
             return list(set(chinese_words))[:num_keywords]

@@ -10,11 +10,12 @@ Each CSV row represents a pre-chunked piece of content that will generate one te
 """
 
 import json
-import pandas as pd
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

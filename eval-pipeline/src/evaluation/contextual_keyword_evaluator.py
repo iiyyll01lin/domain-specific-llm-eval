@@ -17,18 +17,20 @@ if str(utils_dir) not in sys.path:
 
 
 import logging
+import re
 import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 import torch
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-import re
 
 # Add parent directories to path to import existing code
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 try:
-    from contextual_keyword_gate import weighted_keyword_score, get_contextual_segments
+    from contextual_keyword_gate import (get_contextual_segments,
+                                         weighted_keyword_score)
 
     CONTEXTUAL_GATE_AVAILABLE = True
 except ImportError:
@@ -65,7 +67,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
-from nan_handling import safe_mean, safe_std, safe_min_max, is_valid_score
+from nan_handling import is_valid_score, safe_mean, safe_min_max, safe_std
 
 logger = logging.getLogger(__name__)
 

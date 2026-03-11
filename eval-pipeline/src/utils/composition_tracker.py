@@ -12,10 +12,10 @@ This information is valuable for understanding and debugging testset generation.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Set
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 

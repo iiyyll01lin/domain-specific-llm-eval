@@ -23,14 +23,15 @@ import csv
 import json
 import logging
 import math
-import pandas as pd
-import numpy as np
 import re
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
-import requests
 import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +65,8 @@ class ComprehensiveRAGEvaluator:
             # Add parent directories to access contextual_keyword_gate.py
             sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-            from contextual_keyword_gate import (
-                weighted_keyword_score,
-                get_contextual_segments,
-            )
+            from contextual_keyword_gate import (get_contextual_segments,
+                                                 weighted_keyword_score)
 
             self.contextual_functions = {
                 "weighted_keyword_score": weighted_keyword_score,
@@ -91,14 +90,11 @@ class ComprehensiveRAGEvaluator:
         """Initialize RAGAS metrics evaluator."""
         try:
             # Import RAGAS components
-            from ragas import evaluate
-            from ragas.metrics import (
-                context_precision,
-                context_recall,
-                faithfulness,
-                answer_relevancy,
-            )
             from ragas.llms import LangchainLLMWrapper
+            from ragas.metrics import (answer_relevancy, context_precision,
+                                       context_recall, faithfulness)
+
+            from ragas import evaluate
 
             # Configure RAGAS LLM
             ragas_config = self.eval_config.get("ragas_metrics", {})
@@ -465,7 +461,7 @@ class ComprehensiveRAGEvaluator:
 
     def _calculate_summary_stats(self, scores: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate summary statistics from scores with robust NaN handling."""
-        from nan_handling import safe_mean, safe_std, safe_min_max
+        from nan_handling import safe_mean, safe_min_max, safe_std
 
         stats = {}
 

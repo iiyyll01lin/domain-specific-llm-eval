@@ -7,10 +7,10 @@ This module provides fixes for:
 2. Query distribution float iteration errors  
 3. Configuration validation errors
 """
-import logging
 import json
-from typing import Dict, Any, List, Optional, Tuple, Union
+import logging
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,9 @@ class PureRAGASTestsetGeneratorFixes:
         try:
             # Try to import from RAGAS
             from ragas.testset.synthesizers import default_query_distribution
-            from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
-            
+            from ragas.testset.synthesizers.single_hop.specific import \
+                SingleHopSpecificQuerySynthesizer
+
             # Try default first
             if knowledge_graph:
                 query_dist = default_query_distribution(llm_wrapper, knowledge_graph)
@@ -98,7 +99,8 @@ class PureRAGASTestsetGeneratorFixes:
             
             # Create manual fallback distribution
             try:
-                from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
+                from ragas.testset.synthesizers.single_hop.specific import \
+                    SingleHopSpecificQuerySynthesizer
                 single_hop_synth = SingleHopSpecificQuerySynthesizer(llm=llm_wrapper)
                 fallback_dist = [(single_hop_synth, 1.0)]
                 self.logger.info("Created fallback query distribution")

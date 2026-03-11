@@ -6,14 +6,14 @@ This module ensures ALL models (sentence transformers, spaCy, HuggingFace) work 
 without any internet connection. It handles model loading, caching, and fallback strategies.
 """
 
+import json
+import logging
 import os
 import sys
-import logging
-import json
 import warnings
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Union
 from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -219,7 +219,8 @@ class OfflineModelManager:
                     for alt_model in alternative_models[clean_model_name]:
                         try:
                             # IMPORTANT: Prevent infinite recursion by calling SentenceTransformer directly
-                            from sentence_transformers import SentenceTransformer
+                            from sentence_transformers import \
+                                SentenceTransformer
 
                             model = SentenceTransformer(
                                 alt_model, local_files_only=True, **kwargs

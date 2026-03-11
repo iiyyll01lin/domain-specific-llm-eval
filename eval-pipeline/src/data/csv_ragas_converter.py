@@ -3,14 +3,15 @@ CSV to RAGAS Converter
 Converts CSV data to RAGAS-compatible documents for synthetic testset generation
 """
 
-import pandas as pd
 import json
 import logging
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-from langchain.schema import Document
-import requests
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+import requests
+from langchain.schema import Document
 
 logger = logging.getLogger(__name__)
 
@@ -284,9 +285,9 @@ class CSVToRagasConverter:
                 
                 # ✅ Create embeddings for RAGAS filtering compatibility
                 try:
-                    from sentence_transformers import SentenceTransformer
                     import numpy as np
-                    
+                    from sentence_transformers import SentenceTransformer
+
                     # Use the same embedding model configured in pipeline_config.yaml
                     embeddings_model_name = self.ragas_config.get('embeddings_model', 'sentence-transformers/all-MiniLM-L6-v2')
                     model = SentenceTransformer(embeddings_model_name)
@@ -343,7 +344,7 @@ class CSVToRagasConverter:
         try:
             # Simple keyword extraction for RAGAS compatibility
             import re
-            
+
             # Clean text and split into words
             clean_text = re.sub(r'[^\w\s]', ' ', text.lower())
             words = clean_text.split()
@@ -407,8 +408,8 @@ class CSVToRagasConverter:
     def create_embeddings_model(self):
         """Create embeddings model for RAGAS"""
         try:
-            from ragas.embeddings import LangchainEmbeddingsWrapper
             from langchain_community.embeddings import HuggingFaceEmbeddings
+            from ragas.embeddings import LangchainEmbeddingsWrapper
             
             embeddings_model_name = self.ragas_config.get('embeddings_model', 'sentence-transformers/all-MiniLM-L6-v2')
             langchain_embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
@@ -476,9 +477,10 @@ class CSVToRagasConverter:
             return None
         
         try:
-            from langchain.llms.base import LLM
+            from typing import Any, List, Optional
+
             from langchain.callbacks.manager import CallbackManagerForLLMRun
-            from typing import Optional, List, Any
+            from langchain.llms.base import LLM
             
             class InventecLLM(LLM):
                 """Custom LLM wrapper for Inventec API"""
@@ -587,10 +589,11 @@ class CSVToRagasConverter:
     def generate_ragas_testset(self, documents: List[Document]) -> Dict[str, Any]:
         """Generate testset using RAGAS with documents"""
         try:
-            from ragas.testset import TestsetGenerator
-            from ragas.embeddings import LangchainEmbeddingsWrapper
-            from langchain_community.embeddings import HuggingFaceEmbeddings
             import asyncio
+
+            from langchain_community.embeddings import HuggingFaceEmbeddings
+            from ragas.embeddings import LangchainEmbeddingsWrapper
+            from ragas.testset import TestsetGenerator
             
             logger.info("🔬 Initializing RAGAS TestsetGenerator...")
             

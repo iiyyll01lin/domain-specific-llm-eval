@@ -15,14 +15,15 @@ Key Features:
 - Saves knowledge graph for reuse
 """
 
-import os
 import json
 import logging
-import pandas as pd
+import os
 import sys
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
 
 # Add paths for imports
 current_dir = Path(__file__).parent
@@ -30,24 +31,24 @@ sys.path.append(str(current_dir))  # data directory
 sys.path.append(str(current_dir.parent))  # src directory
 sys.path.append(str(current_dir.parent.parent))  # eval-pipeline directory
 
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document as LCDocument
+# LangChain imports for LLM and Embeddings
+from langchain_openai import ChatOpenAI
+# Import fixes module and knowledge graph manager
+from pure_ragas_testset_generator_fixes import (PureRAGASTestsetGeneratorFixes,
+                                                apply_fixes_to_generator)
+from ragas.embeddings import LangchainEmbeddingsWrapper
+# RAGAS LLM wrapper
+from ragas.llms import LangchainLLMWrapper
 # RAGAS imports following the documentation
 from ragas.testset import TestsetGenerator
 from ragas.testset.graph import KnowledgeGraph, Node, NodeType
-from ragas.testset.transforms import default_transforms, apply_transforms
 from ragas.testset.synthesizers import default_query_distribution
+from ragas.testset.transforms import apply_transforms, default_transforms
 
-# LangChain imports for LLM and Embeddings
-from langchain_openai import ChatOpenAI
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_core.documents import Document as LCDocument
-
-# RAGAS LLM wrapper
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-
-# Import fixes module and knowledge graph manager
-from pure_ragas_testset_generator_fixes import PureRAGASTestsetGeneratorFixes, apply_fixes_to_generator
-from utils.knowledge_graph_manager import KnowledgeGraphManager, find_and_use_latest_kg
+from utils.knowledge_graph_manager import (KnowledgeGraphManager,
+                                           find_and_use_latest_kg)
 
 logger = logging.getLogger(__name__)
 
@@ -124,8 +125,10 @@ class PureRagasTestsetGenerator:
         """Initialize enhanced trackers if available from orchestrator."""
         try:
             # Try to import enhanced trackers
-            from pipeline.enhanced_trackers import PerformanceTracker, CompositionTracker, ParametersTracker
-            
+            from pipeline.enhanced_trackers import (CompositionTracker,
+                                                    ParametersTracker,
+                                                    PerformanceTracker)
+
             # Initialize performance tracker
             performance_config = self.config.get('evaluation', {}).get('performance_tracking', {})
             if performance_config.get('enabled', True):
@@ -316,10 +319,11 @@ class PureRagasTestsetGenerator:
             documents = documents[:max_docs]
         
         # Import required classes
-        from ragas.testset.graph import Node, NodeType, Relationship
         import re
+
         import numpy as np
-        
+        from ragas.testset.graph import Node, NodeType, Relationship
+
         # Step 1: Create empty knowledge graph
         kg = KnowledgeGraph()
         logger.info(f"📊 Creating KG from {len(documents)} documents...")
@@ -459,11 +463,10 @@ class PureRagasTestsetGenerator:
         try:
             # Use the exact same relationship builders that work in run_pure_ragas_pipeline.py
             from ragas.testset.transforms.relationship_builders import (
-                CosineSimilarityBuilder,
-                JaccardSimilarityBuilder, 
-                OverlapScoreBuilder
-            )
-            from ragas.testset.transforms.relationship_builders.cosine import SummaryCosineSimilarityBuilder
+                CosineSimilarityBuilder, JaccardSimilarityBuilder,
+                OverlapScoreBuilder)
+            from ragas.testset.transforms.relationship_builders.cosine import \
+                SummaryCosineSimilarityBuilder
             
             logger.info("🔗 Building relationships between nodes...")
             
@@ -711,8 +714,9 @@ class PureRagasTestsetGenerator:
                 logger.info(f"      headlines: {len(node.properties['headlines'])} items")
         
         # Import synthesizers
-        from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
-        
+        from ragas.testset.synthesizers.single_hop.specific import \
+            SingleHopSpecificQuerySynthesizer
+
         # Get distribution config from pipeline config
         distribution_config = self.config.get('testset_generation', {}).get('query_distribution', {})
         logger.info(f"📋 Configuration requests: {list(distribution_config.keys())}")
@@ -876,9 +880,11 @@ class PureRagasTestsetGenerator:
                 try:
                     # Try both import patterns that work according to our test
                     try:
-                        from ragas.testset.synthesizers import MultiHopAbstractQuerySynthesizer
+                        from ragas.testset.synthesizers import \
+                            MultiHopAbstractQuerySynthesizer
                     except ImportError:
-                        from ragas.testset.synthesizers.multi_hop.abstract import MultiHopAbstractQuerySynthesizer
+                        from ragas.testset.synthesizers.multi_hop.abstract import \
+                            MultiHopAbstractQuerySynthesizer
                     
                     synthesizer = MultiHopAbstractQuerySynthesizer(llm=self.llm)
                     # Check if synthesizer can get clusters from the KG
@@ -899,9 +905,11 @@ class PureRagasTestsetGenerator:
                 try:
                     # Try both import patterns that work according to our test
                     try:
-                        from ragas.testset.synthesizers import MultiHopSpecificQuerySynthesizer
+                        from ragas.testset.synthesizers import \
+                            MultiHopSpecificQuerySynthesizer
                     except ImportError:
-                        from ragas.testset.synthesizers.multi_hop.specific import MultiHopSpecificQuerySynthesizer
+                        from ragas.testset.synthesizers.multi_hop.specific import \
+                            MultiHopSpecificQuerySynthesizer
                     
                     synthesizer = MultiHopSpecificQuerySynthesizer(llm=self.llm)
                     # Check if synthesizer can get clusters from the KG
@@ -977,8 +985,9 @@ class PureRagasTestsetGenerator:
     def _apply_secondary_fixes(self):
         """Apply secondary issue fixes to the generator"""
         try:
-            from .pure_ragas_testset_generator_fixes import apply_fixes_to_generator
-            
+            from .pure_ragas_testset_generator_fixes import \
+                apply_fixes_to_generator
+
             # Apply fixes and get the fixed configuration
             self, fixed_config = apply_fixes_to_generator(self, self.config)
             self.config = fixed_config
@@ -1107,7 +1116,8 @@ class PureRagasTestsetGenerator:
             if apply_fixes:
                 logger.info("🔧 Applying OutputParserException fixes...")
                 try:
-                    from utils.output_parser_fix import apply_ragas_output_parser_fixes
+                    from utils.output_parser_fix import \
+                        apply_ragas_output_parser_fixes
                     if apply_ragas_output_parser_fixes():
                         fixes_applied.append("output_parser_exception_fix")
                         logger.info("✅ OutputParserException fixes applied")
@@ -1311,7 +1321,8 @@ class PureRagasTestsetGenerator:
                 # Apply output parser fixes before generation
                 if apply_fixes:
                     try:
-                        from utils.output_parser_fix import apply_ragas_output_parser_fixes
+                        from utils.output_parser_fix import \
+                            apply_ragas_output_parser_fixes
                         apply_ragas_output_parser_fixes()
                         logger.info("✅ OutputParserException fixes applied before generation")
                     except Exception as fix_error:
@@ -1353,7 +1364,8 @@ class PureRagasTestsetGenerator:
                 # Fallback: try direct generation with simple distribution
                 try:
                     # Create minimal single-hop distribution
-                    from ragas.testset.synthesizers import SingleHopSpecificQuerySynthesizer
+                    from ragas.testset.synthesizers import \
+                        SingleHopSpecificQuerySynthesizer
                     simple_distribution = [
                         (SingleHopSpecificQuerySynthesizer(llm=self.llm, property_name="page_content"), 1.0)
                     ]
@@ -1418,7 +1430,8 @@ class PureRagasTestsetGenerator:
                 
                 # Apply the RAGAS sample fix
                 try:
-                    from utils.output_parser_fix import fix_ragas_samples_with_none_eval
+                    from utils.output_parser_fix import \
+                        fix_ragas_samples_with_none_eval
                     fixed_samples = fix_ragas_samples_with_none_eval(testset_samples, logger)
                     logger.info(f"✅ Fixed {len(fixed_samples)} samples")
                 except Exception as fix_error:
@@ -1784,7 +1797,8 @@ class PureRagasTestsetGenerator:
                 logger.info("🔄 Trying with minimal single-hop distribution...")
                 
                 # Try with just entities synthesizer as minimal fallback
-                from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
+                from ragas.testset.synthesizers.single_hop.specific import \
+                    SingleHopSpecificQuerySynthesizer
                 minimal_distribution = [(SingleHopSpecificQuerySynthesizer(llm=self.llm, property_name="entities"), 1.0)]
                 
                 try:
@@ -2088,7 +2102,8 @@ class PureRagasTestsetGenerator:
                 logger.info("🔄 Trying with minimal single-hop distribution...")
                 
                 # Try with just entities synthesizer as minimal fallback
-                from ragas.testset.synthesizers.single_hop.specific import SingleHopSpecificQuerySynthesizer
+                from ragas.testset.synthesizers.single_hop.specific import \
+                    SingleHopSpecificQuerySynthesizer
                 minimal_distribution = [(SingleHopSpecificQuerySynthesizer(llm=self.llm, property_name="entities"), 1.0)]
                 
                 try:
@@ -2529,7 +2544,8 @@ class PureRagasTestsetGenerator:
         Enhanced method for comprehensive testset generation using document_paths.
         This method matches the orchestrator interface and provides working testset generation.
         """
-        from datetime import datetime  # Import at method level to avoid scoping issues
+        from datetime import \
+            datetime  # Import at method level to avoid scoping issues
         
         try:
             # Handle parameter conversion: document_paths -> csv_files

@@ -5,18 +5,18 @@ This module provides validation and cleaning of individual samples
 during testset generation to handle NaN values and validation errors.
 """
 
-from typing import Any, Dict, List, Optional, Union, Tuple
-import logging
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
 # Import pandas with fallback
 try:
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     PANDAS_AVAILABLE = True
 except ImportError:

@@ -9,31 +9,32 @@ This module creates a unified testset generation approach that leverages:
 4. Multi-format output with comprehensive metadata
 """
 
-import sys
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from pathlib import Path
+import gzip
+import hashlib
+import json
 import logging
+import os
+import sys
 import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 import requests
 import yaml
-from datetime import datetime, timedelta
-import json
-import hashlib
-import gzip
-import os
 
 # Add parent directories to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 sys.path.append(str(Path(__file__).parent.parent.parent.parent / "ragas"))
 
-# Import your existing systems
-from generate_dataset_configurable import ConfigurableDatasetGenerator
-from document_loader import DocumentLoader
-
 # Import DocumentProcessor for consistent document handling
 from data.document_processor import DocumentProcessor
+
+from document_loader import DocumentLoader
+# Import your existing systems
+from generate_dataset_configurable import ConfigurableDatasetGenerator
 
 # Import CSV processing components - Use existing DocumentLoader instead
 # from data.csv_document_processor import CSVDocumentProcessor
@@ -41,10 +42,10 @@ from data.document_processor import DocumentProcessor
 
 # Import RAGAS components
 try:
-    from ragas.testset import TestsetGenerator
     # Note: evolutions module no longer exists in current RAGAS version
     # Evolution types are now handled within the TestsetGenerator
     from langchain.embeddings import HuggingFaceEmbeddings
+    from ragas.testset import TestsetGenerator
     RAGAS_AVAILABLE = True
 except ImportError as e:
     RAGAS_AVAILABLE = False
@@ -186,7 +187,8 @@ class HybridTestsetGenerator:
                     
                     # Now import with proper path
                     self.logger.info("🔍 Attempting import of LocalSyntheticDatasetGenerator...")
-                    from local_dataset_generator import LocalSyntheticDatasetGenerator
+                    from local_dataset_generator import \
+                        LocalSyntheticDatasetGenerator
                     self.logger.info("✅ Import successful, creating generator instance...")
                     self.configurable_generator.generator = LocalSyntheticDatasetGenerator(minimal_config)
                     self.logger.info("✅ LocalSyntheticDatasetGenerator imported and initialized successfully")
@@ -290,12 +292,14 @@ class HybridTestsetGenerator:
         """Create a custom LLM wrapper for RAGAS"""
         try:
             # Import required libraries for custom LLM
+            from typing import Any, Dict, List, Optional
+
             import requests
             import yaml
-            from typing import List, Dict, Any, Optional
-            from langchain.llms.base import LLM
             from langchain.callbacks.manager import CallbackManagerForLLMRun
-            from ragas.llms import LangchainLLMWrapper  # ✅ Import RAGAS wrapper
+            from langchain.llms.base import LLM
+            from ragas.llms import \
+                LangchainLLMWrapper  # ✅ Import RAGAS wrapper
             
             class CustomLLMWrapper(LLM):
                 """Custom LLM wrapper for internal/private LLM endpoints"""
@@ -408,7 +412,7 @@ class HybridTestsetGenerator:
         """Load API key from secrets configuration file"""
         try:
             import yaml
-            
+
             # Get secrets file path
             secrets_file = custom_llm_config.get('api_key_file', 'config/secrets.yaml')
             api_key_path = custom_llm_config.get('api_key_path', 'api_key')
@@ -1399,7 +1403,7 @@ class HybridTestsetGenerator:
             
             # Import the CSV-to-RAGAS converter
             from data.csv_ragas_converter import CSVToRagasConverter
-            
+
             # Create converter with FULL pipeline configuration (not just generation_config)
             # The CSV converter needs access to data_sources.csv configuration
             full_config = {}
@@ -1671,11 +1675,12 @@ class HybridTestsetGenerator:
         
         try:
             # Import RAGAS components we need
-            from ragas.testset.synthesizers.generate import TestsetGenerator
+            from ragas.dataset_schema import SingleTurnSample
             from ragas.testset.graph import KnowledgeGraph, Node, NodeType
             from ragas.testset.synthesizers import default_query_distribution
-            from ragas.testset.synthesizers.testset_schema import Testset, TestsetSample
-            from ragas.dataset_schema import SingleTurnSample
+            from ragas.testset.synthesizers.generate import TestsetGenerator
+            from ragas.testset.synthesizers.testset_schema import (
+                Testset, TestsetSample)
             
             self.logger.info("🔧 Creating minimal knowledge graph manually...")
             
@@ -1782,8 +1787,9 @@ class HybridTestsetGenerator:
         self.logger.info("🔄 Creating fallback RAGAS-style testset...")
         
         try:
-            from ragas.testset.synthesizers.testset_schema import Testset, TestsetSample
             from ragas.dataset_schema import SingleTurnSample
+            from ragas.testset.synthesizers.testset_schema import (
+                Testset, TestsetSample)
             
             samples = []
             
@@ -2023,7 +2029,7 @@ class HybridTestsetGenerator:
             # Fallback to simple keyword extraction
             import re
             from collections import Counter
-            
+
             # Simple extraction based on word frequency
             combined_text = f"{question} {answer}".lower()
             words = re.findall(r'\b[a-zA-Z]{3,}\b', combined_text)
@@ -2057,7 +2063,7 @@ class HybridTestsetGenerator:
         
         try:
             from sentence_transformers import SentenceTransformer, util
-            
+
             # Use sentence transformer for similarity
             model = SentenceTransformer('all-MiniLM-L6-v2')
             questions = testset_df['question'].tolist()
@@ -2280,8 +2286,8 @@ class HybridTestsetGenerator:
     def _load_full_pdf_content(self, doc_path: str) -> str:
         """Load full PDF content without chunking for RAGAS"""
         try:
-            import PyPDF2
             import pdfplumber
+            import PyPDF2
             
             full_text = ""
             
@@ -2471,8 +2477,8 @@ class HybridTestsetGenerator:
             self.logger.info(f"📄 Processing {len(processed_content)} content items with RAGAS")
             
             # Create a temporary output directory
-            from pathlib import Path
             import tempfile
+            from pathlib import Path
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_output = Path(temp_dir)
                 
@@ -2595,9 +2601,10 @@ class HybridTestsetGenerator:
         4. Supports saving/loading for performance optimization
         """
         try:
-            from ragas.testset.graph import KnowledgeGraph, Node, NodeType, Relationship
             import numpy as np
-            
+            from ragas.testset.graph import (KnowledgeGraph, Node, NodeType,
+                                             Relationship)
+
             # Try to load existing knowledge graph first
             source_info = f"csv_docs_{len(documents)}"
             existing_kg = self._load_knowledge_graph(documents, source_info)
@@ -2614,7 +2621,8 @@ class HybridTestsetGenerator:
             
             # Step 1: Create embeddings model for summary similarity
             try:
-                from langchain_community.embeddings import HuggingFaceEmbeddings
+                from langchain_community.embeddings import \
+                    HuggingFaceEmbeddings
                 embeddings_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
                 self.logger.info("✅ Created embeddings model for similarity calculations")
             except Exception as e:
@@ -2861,11 +2869,10 @@ class HybridTestsetGenerator:
         
         try:
             from ragas.testset.synthesizers import (
-                SingleHopSpecificQuerySynthesizer,
-                MultiHopAbstractQuerySynthesizer, 
-                MultiHopSpecificQuerySynthesizer
-            )
-            
+                MultiHopAbstractQuerySynthesizer,
+                MultiHopSpecificQuerySynthesizer,
+                SingleHopSpecificQuerySynthesizer)
+
             # Single-hop synthesizers
             if "single_hop_entities" in distribution_config:
                 synthesizers["single_hop_entities"] = SingleHopSpecificQuerySynthesizer(
@@ -2940,7 +2947,7 @@ class HybridTestsetGenerator:
         try:
             from ragas.testset import TestsetGenerator
             from ragas.testset.persona import Persona
-            
+
             # Create personas for diversity
             personas = [
                 Persona(name="Technical Engineer", role_description="Engineer working with manufacturing processes"),
@@ -2950,9 +2957,10 @@ class HybridTestsetGenerator:
             
             # Create embeddings if needed
             try:
-                from sentence_transformers import SentenceTransformer
+                from langchain_community.embeddings import \
+                    HuggingFaceEmbeddings
                 from ragas.embeddings import LangchainEmbeddingsWrapper
-                from langchain_community.embeddings import HuggingFaceEmbeddings
+                from sentence_transformers import SentenceTransformer
                 
                 langchain_embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
                 ragas_embeddings = LangchainEmbeddingsWrapper(langchain_embeddings)
@@ -3301,7 +3309,7 @@ class HybridTestsetGenerator:
             # Import the comprehensive file saver
             sys.path.append(str(Path(__file__).parent.parent / 'utils'))
             from pipeline_file_saver import PipelineFileSaver
-            
+
             # Use the standardized file saver
             file_saver = PipelineFileSaver(output_path)
             

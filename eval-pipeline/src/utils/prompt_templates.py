@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-
 DEFAULT_LIBRARY: Dict[str, Any] = {
     "profiles": {
         "default": {
@@ -72,7 +71,9 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return result
 
 
-def resolve_prompt_library_path(path_value: Optional[str], base_dir: Optional[Path] = None) -> Path:
+def resolve_prompt_library_path(
+    path_value: Optional[str], base_dir: Optional[Path] = None
+) -> Path:
     base_dir = base_dir or Path(__file__).resolve().parents[2]
     if not path_value:
         return (base_dir / "prompts" / "instruction_templates.yaml").resolve()
@@ -83,7 +84,9 @@ def resolve_prompt_library_path(path_value: Optional[str], base_dir: Optional[Pa
 
 
 @lru_cache(maxsize=8)
-def load_prompt_library(path_value: Optional[str] = None, base_dir: Optional[Path] = None) -> Dict[str, Any]:
+def load_prompt_library(
+    path_value: Optional[str] = None, base_dir: Optional[Path] = None
+) -> Dict[str, Any]:
     library = DEFAULT_LIBRARY
     prompt_path = resolve_prompt_library_path(path_value, base_dir)
     if not prompt_path.exists():
@@ -94,7 +97,9 @@ def load_prompt_library(path_value: Optional[str] = None, base_dir: Optional[Pat
     return _deep_merge(library, loaded)
 
 
-def get_profile(library: Dict[str, Any], profile_name: str = "default") -> Dict[str, Any]:
+def get_profile(
+    library: Dict[str, Any], profile_name: str = "default"
+) -> Dict[str, Any]:
     profiles = library.get("profiles", {})
     return profiles.get(profile_name, profiles.get("default", {}))
 

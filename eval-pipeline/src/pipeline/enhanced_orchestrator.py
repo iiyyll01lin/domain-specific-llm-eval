@@ -11,9 +11,8 @@ Phase 2: Architecture Cleanup Implementation
 This version now uses the refactored enhanced orchestrator with separated concerns.
 """
 
-from pipeline.refactored_enhanced_orchestrator import (
-    RefactoredEnhancedPipelineOrchestrator,
-)
+from pipeline.refactored_enhanced_orchestrator import \
+    RefactoredEnhancedPipelineOrchestrator
 
 
 # For backward compatibility, alias the refactored version

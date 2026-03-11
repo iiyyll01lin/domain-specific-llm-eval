@@ -5,29 +5,23 @@ Coordinates the entire evaluation pipeline from document processing
 to final report generation.
 """
 
-import logging
-import time
-from pathlib import Path
-from typing import Dict, Any, List, Optional
-from datetime import datetime
-import time
 import json
 import logging
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from data.document_processor import DocumentProcessor
 from data.hybrid_testset_generator import HybridTestsetGenerator
-from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
-from evaluation.ragas_evaluator import RagasEvaluator
 from evaluation.human_feedback_manager import HumanFeedbackManager
-from reports.report_generator import ReportGenerator
+from evaluation.rag_evaluator import RAGEvaluator
+from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
-from pipeline.logger import (
-    PerformanceTimer,
-    MemoryTracker,
-    log_stage_start,
-    log_stage_end,
-)
+from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
+                             log_stage_start)
+from reports.report_generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +212,8 @@ class PipelineOrchestrator:
 
         if generator_class == "pure_ragas_testset_generator" or method == "pure_ragas":
             logger.info("🧠 Creating Enhanced Pure RAGAS testset generator...")
-            from data.pure_ragas_testset_generator import PureRagasTestsetGenerator
+            from data.pure_ragas_testset_generator import \
+                PureRagasTestsetGenerator
 
             return PureRagasTestsetGenerator(
                 config=self.config,  # Pass full config instead of just testset_generation section
@@ -275,8 +270,8 @@ class PipelineOrchestrator:
 
                 def make_json_serializable(obj):
                     """Convert objects to JSON-serializable format."""
-                    import pandas as pd
                     import numpy as np
+                    import pandas as pd
 
                     if hasattr(obj, "to_dict"):  # DataFrame
                         return obj.to_dict("records")

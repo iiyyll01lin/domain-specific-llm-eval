@@ -3,8 +3,8 @@ Offline tiktoken utility for handling network connectivity issues
 Provides fallback mechanisms when tiktoken can't access the internet
 """
 
-import os
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)

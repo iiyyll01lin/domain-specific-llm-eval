@@ -7,12 +7,12 @@ This is valuable for understanding what configuration was actually applied
 vs what was requested in the config file.
 """
 
-import logging
 import copy
-from typing import Dict, Any, List, Optional
+import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections import defaultdict
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

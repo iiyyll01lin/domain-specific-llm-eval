@@ -6,21 +6,21 @@ Advanced hybrid keyword extractor implementing language-detection-first pipeline
 with weighted source content processing and multiple extraction methods.
 """
 
+import asyncio
+import hashlib
+import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+import pickle
 import re
 import time
-from pathlib import Path
-import asyncio
 from collections import Counter
-import json
-import hashlib
-import pickle
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Language detection
 try:
-    from langdetect import detect, DetectorFactory
+    from langdetect import DetectorFactory, detect
 
     DetectorFactory.seed = 0  # For reproducible results
     LANGDETECT_AVAILABLE = True
@@ -55,9 +55,7 @@ except ImportError:
 # RAGAS LLM extractors
 try:
     from ragas.testset.transforms.extractors.llm_based import (
-        KeyphrasesExtractor,
-        NERExtractor,
-    )
+        KeyphrasesExtractor, NERExtractor)
 
     RAGAS_LLM_AVAILABLE = True
 except ImportError:
@@ -1334,9 +1332,7 @@ class EnhancedHybridKeywordExtractor:
         # ADVANCED ENHANCEMENT: Model health check
         health_status = self._model_health_check(model_to_use)
         if not health_status["available"] or health_status["fallback_recommended"]:
-            logger.warning(
-                f"⚠️ Model health issues detected: {health_status['issues']}"
-            )
+            logger.warning(f"⚠️ Model health issues detected: {health_status['issues']}")
             if "fallback" in semantic_models_config:
                 model_to_use = semantic_models_config["fallback"]
                 logger.info("🔄 Switching to fallback model")
@@ -1588,6 +1584,7 @@ class EnhancedHybridKeywordExtractor:
         """Load semantic model with configuration (offline-safe)."""
         try:
             import os
+
             from sentence_transformers import SentenceTransformer
 
             model_name = model_config.get("model_name")
@@ -1622,6 +1619,7 @@ class EnhancedHybridKeywordExtractor:
             if fallback_enabled:
                 try:
                     import os
+
                     from sentence_transformers import SentenceTransformer
 
                     os.environ.setdefault("HF_HUB_OFFLINE", "1")

@@ -4,16 +4,17 @@ RAG Evaluation with Saved Testsets
 This script evaluates RAG systems using pre-generated and saved testsets.
 """
 
-import sys
-import os
-from pathlib import Path
-import pandas as pd
 import json
-import requests
+import logging
+import os
+import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
-import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+import requests
 import yaml
 
 # Add project paths

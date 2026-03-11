@@ -21,24 +21,26 @@ if str(utils_dir) not in sys.path:
     sys.path.insert(0, str(utils_dir))
 
 
+import json
 import logging
+import re
 import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
-import json
-import re
-import time
 import torch
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Union
-from datetime import datetime
 
 # Add parent directory to access your contextual_keyword_gate.py
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 # Import your original contextual method
 try:
-    from contextual_keyword_gate import weighted_keyword_score, get_contextual_segments
+    from contextual_keyword_gate import (get_contextual_segments,
+                                         weighted_keyword_score)
 
     CONTEXTUAL_GATE_AVAILABLE = True
 except ImportError:
@@ -87,7 +89,7 @@ from pathlib import Path
 # Add utils to path
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 
-from nan_handling import safe_mean, safe_std, safe_min_max, is_valid_score
+from nan_handling import is_valid_score, safe_mean, safe_min_max, safe_std
 
 logger = logging.getLogger(__name__)
 

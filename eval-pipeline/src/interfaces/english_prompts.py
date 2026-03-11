@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.utils.prompt_templates import load_prompt_library, get_system_prompt
+from src.utils.prompt_templates import get_system_prompt, load_prompt_library
 
 
 def get_english_system_prompt(prompt_type: str = "default") -> str:
@@ -29,7 +29,10 @@ def create_custom_english_prompt(domain: str = "", requirements: list = None) ->
         Custom English system prompt
     """
     library = load_prompt_library(base_dir=Path(__file__).resolve().parents[2])
-    base = get_system_prompt("technical", library=library) or "You are a helpful assistant that must respond only in English."
+    base = (
+        get_system_prompt("technical", library=library)
+        or "You are a helpful assistant that must respond only in English."
+    )
 
     if domain:
         base += f"\nYou specialize in {domain} topics."

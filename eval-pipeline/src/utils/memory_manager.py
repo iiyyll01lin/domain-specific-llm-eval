@@ -2,11 +2,12 @@
 Memory Management Utilities for Performance Optimization
 """
 
-import psutil
 import gc
 import logging
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional
+
+import psutil
 
 logger = logging.getLogger(__name__)
 

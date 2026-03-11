@@ -5,13 +5,14 @@ This module implements contextual keyword evaluation using the enhanced testset
 and your custom RAG endpoint.
 """
 
-import logging
-import pandas as pd
 import json
-import requests
-from pathlib import Path
-from typing import Dict, List, Any, Optional
+import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -297,8 +298,9 @@ class ContextualKeywordEvaluatorFixed:
 
         try:
             # Try to use jieba for Chinese text segmentation
-            import jieba
             import re
+
+            import jieba
 
             # Segment Chinese text
             words = list(jieba.cut(text))

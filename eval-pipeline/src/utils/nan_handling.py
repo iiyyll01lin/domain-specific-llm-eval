@@ -2,10 +2,11 @@
 Utility functions for robust NaN handling in evaluation metrics.
 """
 
-import math
-import numpy as np
-from typing import List, Union, Optional, Any
 import logging
+import math
+from typing import Any, List, Optional, Union
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

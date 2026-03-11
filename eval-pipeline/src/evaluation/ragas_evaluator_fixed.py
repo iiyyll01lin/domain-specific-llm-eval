@@ -5,39 +5,38 @@ This module addresses the model_dump errors and RAGAS compatibility issues.
 Now includes comprehensive NaN handling for all 4 RAGAS metrics.
 """
 
-import logging
-import pandas as pd
 import json
+import logging
 import math
-import numpy as np
-from pathlib import Path
-from typing import Dict, List, Any, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pandas as pd
 
 # RAGAS imports with proper error handling
 try:
-    from ragas import evaluate
-    from ragas.metrics import (
-        LLMContextPrecisionWithoutReference,  # Updated for 0.2.x
-        LLMContextRecallWithReference,  # Updated for 0.2.x
-        Faithfulness,  # Updated for 0.2.x
-        ResponseRelevancy,  # Updated for 0.2.x
-    )
     from datasets import Dataset
+    from ragas.metrics import Faithfulness  # Updated for 0.2.x
+    from ragas.metrics import \
+        LLMContextPrecisionWithoutReference  # Updated for 0.2.x
+    from ragas.metrics import \
+        LLMContextRecallWithReference  # Updated for 0.2.x
+    from ragas.metrics import ResponseRelevancy  # Updated for 0.2.x
+
+    from ragas import evaluate
 
     RAGAS_AVAILABLE = True
     RAGAS_VERSION = "0.2.x"
 except ImportError:
     # Fallback to older metrics
     try:
-        from ragas import evaluate
-        from ragas.metrics import (
-            context_precision,
-            context_recall,
-            faithfulness,
-            answer_relevancy,
-        )
         from datasets import Dataset
+        from ragas.metrics import (answer_relevancy, context_precision,
+                                   context_recall, faithfulness)
+
+        from ragas import evaluate
 
         RAGAS_AVAILABLE = True
         RAGAS_VERSION = "legacy"
@@ -48,8 +47,7 @@ except ImportError:
 
 # LangChain LLM wrapper for custom endpoint
 try:
-    from langchain_openai import ChatOpenAI
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
     LANGCHAIN_AVAILABLE = True
 except ImportError as e:
@@ -162,7 +160,8 @@ class RAGASEvaluatorFixed:
                 logger.warning(f"Failed to setup custom embeddings: {e}")
                 # Fallback to HuggingFace embeddings
                 try:
-                    from langchain_community.embeddings import HuggingFaceEmbeddings
+                    from langchain_community.embeddings import \
+                        HuggingFaceEmbeddings
 
                     hf_embeddings = HuggingFaceEmbeddings(
                         model_name="sentence-transformers/all-MiniLM-L6-v2"

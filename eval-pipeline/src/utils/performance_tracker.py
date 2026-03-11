@@ -10,14 +10,14 @@ This module provides comprehensive performance tracking including:
 - Detailed timing breakdowns per question and metric
 """
 
-import time
 import logging
 import threading
-from typing import Dict, Any, List, Optional, Union
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+import time
 from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Union
 
 # Optional imports with fallbacks
 try:
