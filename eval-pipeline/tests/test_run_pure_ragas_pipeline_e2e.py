@@ -1,3 +1,4 @@
+import json
 import sys
 from types import ModuleType, SimpleNamespace
 
@@ -89,3 +90,15 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
     monkeypatch.setitem(sys.modules, "utils.pipeline_file_saver", fake_utils)
 
     assert pipeline.main(["--docs", "4", "--samples", "6"]) is True
+
+    telemetry_files = list(tmp_path.glob("outputs/pure_ragas_run_*/telemetry/pipeline_run_*.json"))
+    assert len(telemetry_files) == 1
+    telemetry_payload = json.loads(telemetry_files[0].read_text(encoding="utf-8"))
+    assert telemetry_payload["stage_events"]
+    assert {event["stage"] for event in telemetry_payload["stage_events"]} >= {
+        "configuration",
+        "document_loading",
+        "knowledge_graph",
+        "testset_generation",
+        "artifact_save",
+    }
