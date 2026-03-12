@@ -16,5 +16,6 @@ def test_neo4j_manager() -> None:
     manager = Neo4jGraphManager()
     manager.connect()
     assert manager.connected is True
+    manager.add_relationship("NodeA", "NodeB", "KNOWS")
     res = manager.execute_cypher("MATCH (n) RETURN n")
-    assert res[0]["hop_1"] == "NodeA"
+    assert res[0]["n"]["id"] == "NodeA"

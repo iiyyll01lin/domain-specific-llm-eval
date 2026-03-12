@@ -292,7 +292,6 @@ class PureRagasTestsetGenerator:
         
         logger.info(f"✅ Loaded {len(documents)} documents total")
         return documents
-    
     def _create_knowledge_graph(self, documents: List[LCDocument]) -> KnowledgeGraph:
         """Create knowledge graph with comprehensive debug logging"""
         logger.info("🧠 _create_knowledge_graph STARTED")
@@ -2881,3 +2880,6 @@ class PureRagasTestsetGenerator:
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
+
+
+PureRAGASTestsetGenerator = PureRagasTestsetGenerator

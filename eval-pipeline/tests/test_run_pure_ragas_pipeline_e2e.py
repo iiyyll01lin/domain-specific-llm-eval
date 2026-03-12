@@ -1,8 +1,10 @@
 import json
 import sys
+import uuid
 from types import ModuleType, SimpleNamespace
 
 from langchain_core.documents import Document
+from ragas.testset.graph import Node, NodeType
 
 import run_pure_ragas_pipeline as pipeline
 
@@ -102,3 +104,37 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
         "testset_generation",
         "artifact_save",
     }
+
+
+class DummyGraph:
+    def __init__(self, nodes):
+        self.nodes = nodes
+
+
+def test_verify_multihop_semantic_relationships_builds_verified_links():
+    node_a = Node(
+        id=uuid.uuid4(),
+        type=NodeType.DOCUMENT,
+        properties={
+            "entities": ["steel", "inspection"],
+            "keyphrases": ["steel plate inspection"],
+            "summary": "steel inspection checklist",
+        },
+    )
+    node_b = Node(
+        id=uuid.uuid4(),
+        type=NodeType.DOCUMENT,
+        properties={
+            "entities": ["steel", "surface"],
+            "keyphrases": ["steel plate inspection"],
+            "summary": "surface inspection checklist",
+        },
+    )
+
+    relationships = pipeline.asyncio.run(
+        pipeline.verify_multihop_semantic_relationships(DummyGraph([node_a, node_b]))
+    )
+
+    assert len(relationships) == 1
+    assert relationships[0].properties["verified_for_multihop"] is True
+    assert relationships[0].properties["semantic_correlation_score"] >= 0.15
