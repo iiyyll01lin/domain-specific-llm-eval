@@ -102,3 +102,17 @@ def test_generate_ragas_testset_passes_run_config_and_batch_size(monkeypatch):
     assert captured["init"]["persona_list"] == settings.personas
     assert captured["generate"]["run_config"].max_workers == 9
     assert captured["generate"]["batch_size"] == 4
+
+
+def test_apply_cli_overrides_updates_generation_limits():
+    config = {
+        "testset_generation": {
+            "max_documents_for_generation": 2,
+            "max_total_samples": 3,
+        }
+    }
+
+    updated = pipeline.apply_cli_overrides(config, docs=11, samples=13)
+
+    assert updated["testset_generation"]["max_documents_for_generation"] == 11
+    assert updated["testset_generation"]["max_total_samples"] == 13

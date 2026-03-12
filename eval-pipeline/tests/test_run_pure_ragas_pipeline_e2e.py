@@ -20,7 +20,7 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
         },
     }
 
-    monkeypatch.setattr(pipeline, "load_config", lambda: config)
+    monkeypatch.setattr(pipeline, "load_config", lambda *_args, **_kwargs: config)
     monkeypatch.setattr(
         pipeline,
         "load_txt_documents",
@@ -88,4 +88,4 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
     fake_utils.PipelineFileSaver = FakePipelineFileSaver
     monkeypatch.setitem(sys.modules, "utils.pipeline_file_saver", fake_utils)
 
-    assert pipeline.main() is True
+    assert pipeline.main(["--docs", "4", "--samples", "6"]) is True
