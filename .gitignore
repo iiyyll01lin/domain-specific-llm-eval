@@ -386,3 +386,5 @@ eval-pipeline/config/examples/
 
 # Additional files to ignore
 eval-pipeline/INTEGRATION_SUCCESS_REPORT.md
+.pyc
+__pycache__/
