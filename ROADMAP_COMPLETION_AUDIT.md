@@ -16,6 +16,8 @@ Status values:
 | V1 / V2 | Domain regex heuristic integration | Implemented | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` |
 | V2 | End-to-end orchestration trigger from dashboard | Implemented | `eval-pipeline/telemetry_dashboard.py`, `eval-pipeline/src/ui/dashboard_actions.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_dashboard_actions.py` |
 | V2 | CLI-based document/sample override hook | Implemented | `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_functional.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` |
+| V2 | Strict typing for validator / KG / orchestration core | Implemented | `eval-pipeline/src/validation/kg_validator.py`, `eval-pipeline/src/utils/knowledge_graph_manager.py`, `eval-pipeline/src/orchestration/multi_agent_router.py`, targeted mypy pass |
+| V4 / V5 | Object storage, webhook, and stage observability convergence | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/utils/pipeline_file_saver.py`, `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_pipeline_file_saver_storage.py`, `eval-pipeline/tests/test_webhook_daemon.py` |
 
 ## Executive Summary
 
@@ -34,7 +36,7 @@ Status values:
 | V1 | Custom evaluation metrics and rubrics | Implemented | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Domain regex heuristic is now wired into formatted metrics and `domain_score` |
 | V1 | Enhanced RAGAS synthesis rules | Partial | `eval-pipeline/run_pure_ragas_pipeline.py` | Query-distribution selection exists, but not full context-aware LLM synthesis verification |
 | V1 | Type hinting and linting rollout | Partial | `eval-pipeline/src/utils/pipeline_telemetry.py` | Some typing exists, but repo-wide mypy strictness is not complete |
-| V2 | Mypy strict type fixing | Partial | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/validation/kg_validator.py` | TypedDicts exist, but strict typing is not complete across pipeline modules |
+| V2 | Mypy strict type fixing | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/validation/kg_validator.py`, `eval-pipeline/src/utils/knowledge_graph_manager.py`, `eval-pipeline/src/orchestration/multi_agent_router.py` | Core validator / orchestrator / KG modules now carry concrete typing and pass targeted mypy validation |
 | V2 | Implement custom metric heuristics | Implemented | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Runtime regex scoring and weighted `domain_score` are implemented |
 | V2 | Local model memory management / caching | Implemented | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/src/utils/intelligent_cache.py`, `eval-pipeline/src/utils/offline_model_manager.py` | SQLiteCache plus model cache handling exist |
 | V2 | Multi-hop context-aware LLM synthesizing | Partial | `eval-pipeline/run_pure_ragas_pipeline.py` | Multi-hop synthesizer selection exists, but explicit asynchronous overlap verification logic is still absent |
@@ -43,13 +45,13 @@ Status values:
 | V3 | Dynamic metric weighting | Implemented | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Weighted `domain_score` combines RAGAS metrics and regex heuristic |
 | V3 | Human-in-the-loop edge case fixing | Partial | `eval-pipeline/src/evaluation/human_feedback_manager.py`, `dynamic_ragas_gate_with_human_feedback.py` | Human feedback handling exists, but manual review routing is not fully integrated into main pipeline |
 | V3 | Docker compose environment parity | Partial | `docker-compose.services.yml`, `docker-compose.dev.override.yml`, `helm/`, `deploy/helm/` | Infra files exist, but end-to-end parity is not verified by automated tests |
-| V4 | Cloud-native object storage unification | Partial | `eval-pipeline/src/utils/pipeline_telemetry.py`, `scripts/e2e_smoke.sh` | S3 upload helper exists, but pipeline outputs are not consistently routed through object storage |
+| V4 | Cloud-native object storage unification | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/utils/pipeline_file_saver.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_pipeline_file_saver_storage.py` | Telemetry and saved pipeline artifacts are now mirrored to the shared S3-compatible object store client when object store settings are present |
 | V4 | Advanced multi-agent LLM evaluators | Partial | `eval-pipeline/src/evaluation/ragas_evaluator.py` | Separate custom LLM and critic wiring exists, but not full actor/critic architecture |
 | V4 | Streaming UI dashboard refinements | Partial | `eval-pipeline/telemetry_dashboard.py`, `services/reporting/main.py` | UI trigger exists, but not true async queueing/live progress streaming |
 | V5 | Kubernetes orchestration transition | Partial | `helm/`, `deploy/helm/` | Helm charts exist, but this repo does not prove production deployment completeness |
 | V5 | Dynamic real-world database synthesizer | Partial | `eval-pipeline/src/utils/sql_document_loader.py` | SQL loader exists, but not a full Text-to-SQL or warehouse bridge |
-| V5 | Distributed tracing with LangSmith / Phoenix | Partial | `eval-pipeline/src/evaluation/ragas_evaluator.py` | LangSmith env-aware bootstrap exists, but no comprehensive instrumentation layer |
-| V5 | Webhook / CI auto-evaluator | Partial | `eval-pipeline/webhook_daemon.py` | FastAPI webhook exists and triggers the pipeline, but it is still minimal |
+| V5 | Distributed tracing with LangSmith / Phoenix | Partial | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | The pipeline now emits stage-level observability events end-to-end, but external OTEL/LangSmith/Phoenix export is still not fully wired |
+| V5 | Webhook / CI auto-evaluator | Implemented | `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_webhook_daemon.py` | Webhook payload validation, filtering, queueing, command execution, and event logging are implemented and tested |
 | V6 | Adversarial jailbreak synthesizers | Partial | `eval-pipeline/src/security/threat_intel.py` | Threat intel component exists, but current implementation is still lightweight |
 | V6 | Dynamic Agent-RAG support | Partial | `eval-pipeline/src/interfaces/rag_interface.py` | Interface exists, but agent reasoning/tool-use metrics are not fully implemented |
 | V6 | Human feedback RLHF loop | Partial | `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/src/evaluation/human_feedback_manager.py` | DPO queue exists, but end-to-end feedback-to-training automation is incomplete |
@@ -66,7 +68,7 @@ Status values:
 | V9 | Hardware acceleration patterns | Stub | `eval-pipeline/src/inference/vllm_client.py` | Client is still mock-like |
 | V9 | Real-time KG 3D topology | Stub | `eval-pipeline/src/ui/force_graph_viewer.py` | Placeholder rendering payload only |
 | V9 | Hallucination autocorrection | Stub | `eval-pipeline/src/evaluation/dspy_autocorrect.py` | No real DSPy execution graph |
-| V10 | Multi-agent cloud orchestration | Stub | `eval-pipeline/src/orchestration/multi_agent_router.py` | No real LangGraph/AutoGen orchestration |
+| V10 | Multi-agent cloud orchestration | Partial | `eval-pipeline/src/orchestration/multi_agent_router.py` | Orchestrator now performs typed job routing and environment selection, but is not a full LangGraph/AutoGen graph runtime |
 | V10 | Quantum-resistant PII tokenization | Stub | `eval-pipeline/src/security/quantum_pii_tokenizer.py` | Hash-based placeholder, not true format-preserving crypto |
 | V10 | Unified LLM application store | Stub | `eval-pipeline/src/ui/app_store_marketplace.py` | Static registry only |
 | V10 | Zero-shot taxonomy discovery | Stub | `eval-pipeline/src/loaders/taxonomy_discovery.py` | Placeholder extraction only |
@@ -93,13 +95,11 @@ These items are still materially incomplete even though some code exists:
 
 | Priority | Item | Current Gap |
 | --- | --- | --- |
-| High | Repo-wide mypy strict rollout | Core validator/orchestrator modules still fail strict typing |
+| High | Repo-wide mypy strict rollout | Core validator / orchestrator / KG modules are now typed, but the rest of the repository is not yet under strict mypy enforcement |
 | High | Multi-hop synthesis verification | No explicit asynchronous semantic-overlap verification pass |
-| High | Object storage end-to-end wiring | Upload helper exists, but pipeline does not consistently persist artifacts to S3/MinIO |
 | High | Actor/Critic evaluator split | Critic model is wired, but generation/evaluation separation is not fully formalized |
 | Medium | Human-in-the-loop review routing | Feedback exists, but low-quality generations are not automatically queued for review |
-| Medium | Observability spans | LangSmith bootstrap exists without end-to-end traces across pipeline stages |
-| Medium | Webhook auto-evaluator hardening | Webhook service exists, but lacks payload validation, filtering, and test coverage |
+| Medium | Observability spans | Stage-level observability is now wired locally, but external OTEL/LangSmith/Phoenix export remains incomplete |
 | Medium | Neo4j retrieval integration | Manager exists, but retrieval still uses placeholder responses |
 | Medium | Multimodal evaluation metrics | Loader exists, but evaluator lacks modality-aware scoring |
 | Medium | RLHF training backend | DPO queue exists, but no real training execution path |
