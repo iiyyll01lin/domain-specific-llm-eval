@@ -74,4 +74,35 @@ if st.button("Trigger Pipeline Action"):
 jobs_payload = list_dashboard_jobs()
 if jobs_payload["jobs"]:
     st.subheader("Dashboard Jobs")
-    st.dataframe(pd.DataFrame(jobs_payload["jobs"]), use_container_width=True)
+    jobs_df = pd.DataFrame(
+        [
+            {
+                "Job ID": job["job_id"],
+                "Status": job["status"],
+                "Docs": job["docs"],
+                "Samples": job["samples"],
+                "Progress %": job.get("progress", {}).get("percentage", 0.0),
+                "Latest Stage": job.get("progress", {}).get("latest_stage"),
+                "Telemetry Status": job.get("telemetry_status"),
+                "Updated At": job.get("updated_at"),
+            }
+            for job in jobs_payload["jobs"]
+        ]
+    )
+    st.dataframe(jobs_df, use_container_width=True)
+
+    selected_job_id = st.selectbox(
+        "Inspect job details:",
+        options=[job["job_id"] for job in jobs_payload["jobs"]],
+    )
+    selected_job = next(job for job in jobs_payload["jobs"] if job["job_id"] == selected_job_id)
+    progress = selected_job.get("progress", {})
+    st.progress(min(max(progress.get("percentage", 0.0) / 100.0, 0.0), 1.0))
+    st.caption(
+        f"Stage: {progress.get('latest_stage') or 'pending'} | "
+        f"Completed stages: {progress.get('completed_stages', 0)}/{progress.get('total_stages', 0)}"
+    )
+    if selected_job.get("stdout_tail"):
+        st.text_area("Recent stdout", selected_job["stdout_tail"], height=180)
+    if selected_job.get("stderr_tail"):
+        st.text_area("Recent stderr", selected_job["stderr_tail"], height=180)

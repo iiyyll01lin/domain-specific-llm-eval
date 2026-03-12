@@ -33,6 +33,7 @@ import logging
 import math
 import re
 # Apply global tiktoken patch BEFORE any other imports
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -51,6 +52,23 @@ except ImportError:
     pd = None
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LLMRoleBinding:
+    role: str
+    endpoint: str
+    model_name: str
+    temperature: float
+    max_tokens: int
+    enabled: bool = False
+
+
+class _ActorIdentityLLM:
+    """Fallback actor that preserves answers when actor preprocessing is disabled."""
+
+    def invoke(self, payload: Dict[str, Any]) -> str:
+        return str(payload.get("answer", ""))
 
 
 class DomainRegexHeuristic:
@@ -96,6 +114,13 @@ class RagasEvaluator:
         self.ragas_available = False
         self.metric_weights = self._load_metric_weights()
         self.heuristic = self._build_domain_heuristic()
+        self.actor_llm: Any = _ActorIdentityLLM()
+        self.critic_llm: Any = None
+        self.llm_roles: Dict[str, LLMRoleBinding] = {
+            "actor": LLMRoleBinding("actor", "", "identity", 0.0, 0, enabled=False),
+            "critic": LLMRoleBinding("critic", "", "default-ragas", 0.0, 0, enabled=False),
+        }
+        self.actor_preprocessing_enabled = False
 
         self._setup_ragas()
 
@@ -153,6 +178,11 @@ class RagasEvaluator:
     def _setup_custom_llm(self):
         """Setup custom LLM for RAGAS evaluation."""
         try:
+            self.actor_preprocessing_enabled = bool(
+                llm_config.get("enable_actor_preprocessing", False)
+                or llm_config.get("fill_missing_answers", False)
+            )
+
             # Get custom LLM configuration
             eval_config = self.config.get("evaluation", {})
             ragas_metrics_config = eval_config.get("ragas_metrics", {})
@@ -173,8 +203,13 @@ class RagasEvaluator:
                 from ragas import RunConfig
                 from ragas.llms import LangchainLLMWrapper
 
+                actor_config = dict(llm_config)
+                actor_config.update(llm_config.get("actor", {}))
+                critic_config = dict(llm_config)
+                critic_config.update(llm_config.get("critic", {}))
+
                 # Create custom LLM using your API
-                endpoint = llm_config.get("endpoint", "")
+                endpoint = actor_config.get("endpoint", "")
 
                 # ChatOpenAI automatically appends /v1/chat/completions, so we need to remove it if present
                 if endpoint.endswith("/chat/completions"):
@@ -193,26 +228,51 @@ class RagasEvaluator:
 
                 custom_llm = ChatOpenAI(
                     base_url=endpoint,
-                    api_key=llm_config.get("api_key"),
-                    model=llm_config.get("model_name", "gpt-4o"),
-                    temperature=llm_config.get("temperature", 0.1),
-                    max_tokens=llm_config.get("max_length", 512),
+                    api_key=actor_config.get("api_key"),
+                    model=actor_config.get("model_name", "gpt-4o"),
+                    temperature=actor_config.get("temperature", 0.1),
+                    max_tokens=actor_config.get("max_length", 512),
                     request_timeout=60,
                     max_retries=3,
                 )
 
                 # Wrap for RAGAS
                 self.custom_llm = LangchainLLMWrapper(custom_llm)
+                self.actor_llm = self.custom_llm
+                self.llm_roles["actor"] = LLMRoleBinding(
+                    role="actor",
+                    endpoint=endpoint,
+                    model_name=actor_config.get("model_name", "gpt-4o"),
+                    temperature=float(actor_config.get("temperature", 0.1)),
+                    max_tokens=int(actor_config.get("max_length", 512)),
+                    enabled=True,
+                )
 
                 # Setup Critic LLM (Independent model for Evaluation bias reduction)
+                critic_endpoint = critic_config.get("endpoint", endpoint)
+                if critic_endpoint.endswith("/chat/completions"):
+                    critic_endpoint = critic_endpoint.replace("/chat/completions", "")
+                if "/chat/completions" in critic_endpoint:
+                    critic_endpoint = critic_endpoint.replace("/chat/completions", "")
+                if critic_endpoint.endswith("/v1"):
+                    critic_endpoint = critic_endpoint.rstrip("/v1")
+
                 critic_llm = ChatOpenAI(
-                    api_key=llm_config.get("api_key"),
-                    model="gpt-4-turbo",  # Could be configurable, default to structurally different model
-                    temperature=0.0,
-                    max_tokens=llm_config.get("max_length", 512),
-                    base_url=endpoint if endpoint else None,
+                    api_key=critic_config.get("api_key", actor_config.get("api_key")),
+                    model=critic_config.get("model_name", "gpt-4-turbo"),
+                    temperature=critic_config.get("temperature", 0.0),
+                    max_tokens=critic_config.get("max_length", actor_config.get("max_length", 512)),
+                    base_url=critic_endpoint if critic_endpoint else None,
                 )
                 self.critic_llm = LangchainLLMWrapper(critic_llm)
+                self.llm_roles["critic"] = LLMRoleBinding(
+                    role="critic",
+                    endpoint=critic_endpoint,
+                    model_name=critic_config.get("model_name", "gpt-4-turbo"),
+                    temperature=float(critic_config.get("temperature", 0.0)),
+                    max_tokens=int(critic_config.get("max_length", actor_config.get("max_length", 512))),
+                    enabled=True,
+                )
 
                 # Set custom LLM for each metric
                 for metric in self.metrics:
@@ -221,9 +281,17 @@ class RagasEvaluator:
                             self.critic_llm
                         )  # Use critic specifically for metrics
 
-                logger.info("✅ Custom LLM configured for RAGAS evaluation")
-                logger.info(f"   📍 Endpoint: {llm_config.get('endpoint')}")
-                logger.info(f"   🤖 Model: {llm_config.get('model_name', 'gpt-4o')}")
+                logger.info("✅ Actor/Critic LLM roles configured for RAGAS evaluation")
+                logger.info(
+                    "   🎭 Actor: %s via %s",
+                    self.llm_roles["actor"].model_name,
+                    self.llm_roles["actor"].endpoint,
+                )
+                logger.info(
+                    "   🧪 Critic: %s via %s",
+                    self.llm_roles["critic"].model_name,
+                    self.llm_roles["critic"].endpoint,
+                )
 
             except ImportError as e:
                 logger.warning(f"⚠️ Cannot setup custom LLM, missing dependencies: {e}")
@@ -430,11 +498,23 @@ class RagasEvaluator:
         for i in range(min_length):
             resp = rag_responses[i] if i < len(rag_responses) else {}
             answer = resp.get("answer", "") if isinstance(resp, dict) else str(resp)
+            question = evaluation_data["question"][i] if i < len(evaluation_data["question"]) else ""
 
             # Convert to string and clean
             answer_str = str(answer).strip()
             if not answer_str:
-                answer_str = f"No answer available for question {i+1}"
+                answer_str = self._prepare_answer_for_evaluation(
+                    question=question,
+                    contexts=contexts[i] if i < len(contexts) else [],
+                    fallback_text=f"No answer available for question {i+1}",
+                )
+            elif self.actor_preprocessing_enabled:
+                answer_str = self._prepare_answer_for_evaluation(
+                    question=question,
+                    answer=answer_str,
+                    contexts=contexts[i] if i < len(contexts) else [],
+                    fallback_text=answer_str,
+                )
 
             evaluation_data["answer"].append(answer_str)
 
@@ -494,6 +574,36 @@ class RagasEvaluator:
             logger.debug(f"🔍 Sample answer: {evaluation_data['answer'][0][:100]}...")
 
         return evaluation_data
+
+    def _prepare_answer_for_evaluation(
+        self,
+        question: str,
+        contexts: Any,
+        fallback_text: str,
+        answer: str = "",
+    ) -> str:
+        if not self.actor_preprocessing_enabled:
+            return answer or fallback_text
+
+        actor = getattr(self, "actor_llm", None)
+        if actor is None or not hasattr(actor, "invoke"):
+            return answer or fallback_text
+
+        try:
+            prepared = actor.invoke(
+                {
+                    "question": question,
+                    "answer": answer,
+                    "contexts": contexts,
+                    "fallback_text": fallback_text,
+                }
+            )
+        except Exception as exc:
+            logger.warning("⚠️ Actor preprocessing failed, using fallback answer: %s", exc)
+            return answer or fallback_text
+
+        prepared_text = str(prepared).strip()
+        return prepared_text or answer or fallback_text
 
     def _score_domain_regex(self, answers: List[str]) -> List[float]:
         if not self.heuristic.is_enabled():
@@ -560,7 +670,21 @@ class RagasEvaluator:
                 "individual_scores": valid_scores,
             }
 
-        formatted: Dict[str, Any] = {"available": True, "metrics": {}, "summary": {}}
+        formatted: Dict[str, Any] = {
+            "available": True,
+            "metrics": {},
+            "summary": {},
+            "llm_roles": {
+                name: {
+                    "model_name": binding.model_name,
+                    "endpoint": binding.endpoint,
+                    "temperature": binding.temperature,
+                    "max_tokens": binding.max_tokens,
+                    "enabled": binding.enabled,
+                }
+                for name, binding in self.llm_roles.items()
+            },
+        }
 
         # Extract metric scores
         if hasattr(results, "to_pandas"):

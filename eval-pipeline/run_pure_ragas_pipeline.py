@@ -1282,10 +1282,13 @@ def main(argv: Optional[List[str]] = None):
         logger.info(f"🎯 Configuration: max_docs={max_docs}, max_samples={max_samples}")
 
         # Step 2: Setup output directory
-        output_dir = (
-            Path("outputs")
-            / f"pure_ragas_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        pipeline_run_id = os.environ.get("PIPELINE_RUN_ID")
+        output_dir_name = (
+            f"pure_ragas_run_{pipeline_run_id}"
+            if pipeline_run_id
+            else f"pure_ragas_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
+        output_dir = Path("outputs") / output_dir_name
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📁 Output directory: {output_dir}")
         telemetry = PipelineTelemetry(output_dir)
