@@ -1,5 +1,3 @@
-from langchain_community.embeddings import HuggingFaceEmbeddings
-
 #!/usr/bin/env python3
 """
 Simple Pure RAGAS Pipeline Runner
@@ -16,23 +14,9 @@ This fixes the design flaw where keywords were calculated before RAG testing.
 """
 
 import asyncio
+import argparse
 import json
 import logging
-
-from src.utils.pipeline_telemetry import PipelineTelemetry
-
-# Global telemetry instance
-GLOBAL_TELEMETRY = None
-
-# Global telemetry instance
-GLOBAL_TELEMETRY = None
-from src.utils.pipeline_telemetry import PipelineTelemetry
-
-# Global telemetry instance
-GLOBAL_TELEMETRY = None
-
-# Global telemetry instance
-GLOBAL_TELEMETRY = None
 import os
 import sys
 from dataclasses import dataclass
@@ -42,6 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import yaml
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # Add RAGAS to path
 ragas_path = str(
@@ -86,6 +71,10 @@ from src.utils.prompt_templates import (get_fallback_generation_templates,
                                         get_persona_templates,
                                         get_query_distribution_templates,
                                         load_prompt_library)
+from src.utils.pipeline_telemetry import PipelineTelemetry
+
+
+GLOBAL_TELEMETRY = None
 
 
 @dataclass
@@ -98,6 +87,26 @@ class GenerationSettings:
     query_distribution_records: List[Dict[str, Any]]
     prompt_profile: str
     fallback_templates: Dict[str, Dict[str, Any]]
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the pure RAGAS pipeline")
+    parser.add_argument("--config", type=str, default=None, help="Path to config YAML")
+    parser.add_argument("--docs", type=int, default=None, help="Override max documents")
+    parser.add_argument("--samples", type=int, default=None, help="Override max samples")
+    return parser.parse_args(argv)
+
+
+def apply_cli_overrides(
+    config: Dict[str, Any], docs: Optional[int] = None, samples: Optional[int] = None
+) -> Dict[str, Any]:
+    updated_config = json.loads(json.dumps(config))
+    testset_generation = updated_config.setdefault("testset_generation", {})
+    if docs is not None:
+        testset_generation["max_documents_for_generation"] = docs
+    if samples is not None:
+        testset_generation["max_total_samples"] = samples
+    return updated_config
 
 
 def get_prompt_config(config: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
@@ -169,7 +178,11 @@ def build_query_distribution(
     distribution_records: List[Dict[str, Any]] = []
 
     for item in configured_distribution:
+        if not isinstance(item, dict):
+            continue
         synthesizer_name = item.get("synthesizer")
+        if not isinstance(synthesizer_name, str):
+            continue
         weight = float(item.get("weight", 0.0))
         builder = synthesizer_builders.get(synthesizer_name)
         if builder is None or weight <= 0:
@@ -876,8 +889,8 @@ def setup_ragas_components(
                 "model", custom_llm_config.get("model_name", "gpt-4o-mini")
             ),
             temperature=custom_llm_config.get("temperature", 0.3),
-            max_tokens=custom_llm_config.get("max_tokens", 1000),
             timeout=custom_llm_config.get("timeout", 60),
+            model_kwargs={"max_tokens": custom_llm_config.get("max_tokens", 1000)},
         )
 
         generator_llm = LangchainLLMWrapper(llm)
@@ -894,7 +907,7 @@ def setup_ragas_components(
         from langchain_huggingface import HuggingFaceEmbeddings
 
         core_embeddings = HuggingFaceEmbeddings(model_name=embeddings_model)
-        generator_embeddings = LangchainEmbeddingsWrapper(embeddings)
+        generator_embeddings = LangchainEmbeddingsWrapper(core_embeddings)
         logger.info(f"🔗 Using HuggingFace embeddings: {embeddings_model}")
     except ImportError:
         try:
@@ -1183,9 +1196,10 @@ def save_testset(test_samples: List[Dict], output_dir: Path) -> str:
         raise
 
 
-def main():
+def main(argv: Optional[List[str]] = None):
     """Main pipeline execution"""
-    telemetry = None
+    global GLOBAL_TELEMETRY
+    args = parse_args(argv)
     telemetry = None
     logger.info("🚀 Starting Pure RAGAS Pipeline (Corrected Design)")
     logger.info("=" * 60)
@@ -1193,7 +1207,8 @@ def main():
     try:
         # Step 1: Load configuration
         logger.info("📋 Loading configuration...")
-        config = load_config()
+        config = load_config(args.config) if args.config else load_config()
+        config = apply_cli_overrides(config, docs=args.docs, samples=args.samples)
 
         testset_config = config.get("testset_generation", {})
         max_docs = testset_config.get("max_documents_for_generation", 10)
@@ -1210,6 +1225,8 @@ def main():
         )
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📁 Output directory: {output_dir}")
+        telemetry = PipelineTelemetry(output_dir)
+        GLOBAL_TELEMETRY = telemetry
 
         # Step 3: Load documents (TXT documents for steel plate inspection)
         document_files = (
@@ -1341,6 +1358,7 @@ def main():
 
         if telemetry:
             telemetry.finish(status="completed")
+        GLOBAL_TELEMETRY = None
 
         return True
 
@@ -1348,6 +1366,7 @@ def main():
         if telemetry:
             telemetry.log_error("pipeline_main", str(e))
             telemetry.finish(status="failed")
+        GLOBAL_TELEMETRY = None
         logger.error(f"❌ Pipeline failed: {e}")
         import traceback
 

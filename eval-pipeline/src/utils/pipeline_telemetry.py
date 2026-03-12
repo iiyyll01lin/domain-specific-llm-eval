@@ -126,6 +126,7 @@ class PipelineTelemetry:
 
     def _save(self):
         """Save metrics to JSON."""
+        self.telemetry_dir.mkdir(parents=True, exist_ok=True)
         file_path = self.telemetry_dir / f"pipeline_run_{self.session_id}.json"
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(self.metrics, f, indent=2)

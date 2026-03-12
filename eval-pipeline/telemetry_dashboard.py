@@ -1,9 +1,12 @@
 import glob
 import json
 import os
+import subprocess
 
 import pandas as pd
 import streamlit as st
+
+from src.ui.dashboard_actions import build_pipeline_command
 
 st.set_page_config(page_title="Telemetry Dashboard", layout="wide")
 st.title("Domain-Specific LLM Evaluation Telemetry")
@@ -22,8 +25,8 @@ def load_telemetry_data():
                     content = json.load(fp)
                     content["run_path"] = os.path.dirname(os.path.dirname(f))
                     data.append(content)
-                except:
-                    pass
+                except json.JSONDecodeError:
+                    continue
     return data
 
 
@@ -60,21 +63,17 @@ doc_count = st.number_input("Documents to process:", min_value=1, max_value=50, 
 sample_count = st.number_input(
     "Samples to generate:", min_value=1, max_value=50, value=2
 )
+config_override = st.text_input("Optional config path:", value="")
 if st.button("Trigger Pipeline Action"):
-    st.info(
-        f"Will execute `python3 run_pure_ragas_pipeline.py --docs {doc_count} --samples {sample_count}`."
+    command = build_pipeline_command(
+        docs=int(doc_count),
+        samples=int(sample_count),
+        config_path=config_override or None,
     )
-    import subprocess
+    st.info(f"Will execute `{' '.join(command)}`.")
 
     result = subprocess.run(
-        [
-            "python3",
-            "run_pure_ragas_pipeline.py",
-            "--docs",
-            str(int(doc_count)),
-            "--samples",
-            str(int(sample_count)),
-        ],
+        command,
         capture_output=True,
         text=True,
     )

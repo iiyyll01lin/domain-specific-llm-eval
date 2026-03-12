@@ -2,12 +2,7 @@ import os
 
 # Phase 5: Distributed Tracing with LangSmith
 if os.environ.get("LANGCHAIN_TRACING_V2") == "true":
-    import uuid
-
-    from langchain.callbacks.tracers import LangChainTracer
-
-    # Usually handled inherently by Langchain via env vars
-    # Here we just explicitly ensure the callbacks are bound if needed
+    # Usually handled inherently by Langchain via env vars.
     print("LangSmith Tracing Enabled globally.")
 
 """
@@ -16,7 +11,6 @@ RAGAS Evaluator for RAG Evaluation Pipeline
 Handles RAGAS-based evaluation of RAG systems.
 """
 
-# Import fix applied
 import sys
 from pathlib import Path
 
@@ -25,12 +19,8 @@ current_file_dir = Path(__file__).parent
 utils_dir = current_file_dir.parent / "utils"
 if str(utils_dir) not in sys.path:
     sys.path.insert(0, str(utils_dir))
-
-
-import os
-
 import langchain
-from langchain.cache import SQLiteCache
+from langchain_community.cache import SQLiteCache
 
 # Create cache directory if it doesn't exist
 os.makedirs(".cache", exist_ok=True)
@@ -41,9 +31,8 @@ except Exception as e:
 
 import logging
 import math
+import re
 # Apply global tiktoken patch BEFORE any other imports
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -67,14 +56,33 @@ logger = logging.getLogger(__name__)
 class DomainRegexHeuristic:
     """Custom evaluation metric that checks for domain-specific vocabulary constraints."""
 
-    def __init__(self, required_terms=None):
-        self.rules = required_terms or []
+    def __init__(
+        self,
+        required_terms: Optional[List[str]] = None,
+        regex_patterns: Optional[List[str]] = None,
+        case_sensitive: bool = False,
+    ):
+        self.required_terms = required_terms or []
+        flags = 0 if case_sensitive else re.IGNORECASE
+        self.regex_patterns = [re.compile(pattern, flags) for pattern in regex_patterns or []]
+        self.case_sensitive = case_sensitive
 
-    def score(self, text):
-        if not self.rules:
+    def is_enabled(self) -> bool:
+        return bool(self.required_terms or self.regex_patterns)
+
+    def score(self, text: str) -> float:
+        if not self.is_enabled():
             return 1.0
-        matches = sum(1 for r in self.rules if r in text)
-        return matches / len(self.rules)
+
+        normalized_text = text if self.case_sensitive else text.lower()
+        term_matches = sum(
+            1
+            for term in self.required_terms
+            if (term if self.case_sensitive else term.lower()) in normalized_text
+        )
+        regex_matches = sum(1 for pattern in self.regex_patterns if pattern.search(text))
+        total_rules = len(self.required_terms) + len(self.regex_patterns)
+        return (term_matches + regex_matches) / total_rules if total_rules else 1.0
 
 
 class RagasEvaluator:
@@ -84,9 +92,31 @@ class RagasEvaluator:
         """Initialize the RAGAS evaluator with configuration."""
         self.config = config
         self.ragas_config = config.get("evaluation", {}).get("ragas", {})
+        self.ragas_metrics_config = config.get("evaluation", {}).get("ragas_metrics", {})
         self.ragas_available = False
+        self.metric_weights = self._load_metric_weights()
+        self.heuristic = self._build_domain_heuristic()
 
         self._setup_ragas()
+
+    def _build_domain_heuristic(self) -> DomainRegexHeuristic:
+        domain_regex_config = self.ragas_metrics_config.get("domain_regex", {})
+        required_terms = domain_regex_config.get("required_terms", [])
+        regex_patterns = domain_regex_config.get("regex_patterns", [])
+        case_sensitive = domain_regex_config.get("case_sensitive", False)
+        return DomainRegexHeuristic(
+            required_terms=required_terms,
+            regex_patterns=regex_patterns,
+            case_sensitive=case_sensitive,
+        )
+
+    def _load_metric_weights(self) -> Dict[str, float]:
+        configured_weights = self.ragas_metrics_config.get("metric_weights", {})
+        return {
+            "context_precision": float(configured_weights.get("context_precision", 0.5)),
+            "faithfulness": float(configured_weights.get("faithfulness", 0.5)),
+            "domain_regex": float(configured_weights.get("domain_regex", 0.0)),
+        }
 
     def _setup_ragas(self):
         """Setup RAGAS evaluation components with custom LLM."""
@@ -102,12 +132,6 @@ class RagasEvaluator:
             self.evaluate_func = evaluate
             self.metrics = [context_precision, faithfulness]
 
-            # Inject domain heuristic
-            self.heuristic = DomainRegexHeuristic(
-                required_terms=["重要", "注意", "分析", "report"]
-            )
-
-            # We wrapper or process it within results
             # Default metrics
             self.Dataset = Dataset
 
@@ -323,8 +347,10 @@ class RagasEvaluator:
                     "mock_data": True,
                 }
 
+            domain_regex_scores = self._score_domain_regex(evaluation_data["answer"])
+
             # Format results
-            formatted_results = self._format_results(results)
+            formatted_results = self._format_results(results, domain_regex_scores)
 
             logger.info("✅ RAGAS evaluation completed successfully")
             return formatted_results
@@ -357,7 +383,7 @@ class RagasEvaluator:
             return {}
 
         # Prepare evaluation data with strict type checking and conversion
-        evaluation_data = {
+        evaluation_data: Dict[str, List[Any]] = {
             "question": [],
             "answer": [],
             "contexts": [],
@@ -469,7 +495,14 @@ class RagasEvaluator:
 
         return evaluation_data
 
-    def _format_results(self, results) -> Dict[str, Any]:
+    def _score_domain_regex(self, answers: List[str]) -> List[float]:
+        if not self.heuristic.is_enabled():
+            return []
+        return [self.heuristic.score(answer) for answer in answers]
+
+    def _format_results(
+        self, results: Any, domain_regex_scores: Optional[List[float]] = None
+    ) -> Dict[str, Any]:
         """Format RAGAS results for consistent output with robust NaN handling."""
 
         def safe_mean(values):
@@ -527,7 +560,7 @@ class RagasEvaluator:
                 "individual_scores": valid_scores,
             }
 
-        formatted = {"available": True, "metrics": {}, "summary": {}}
+        formatted: Dict[str, Any] = {"available": True, "metrics": {}, "summary": {}}
 
         # Extract metric scores
         if hasattr(results, "to_pandas"):
@@ -559,6 +592,18 @@ class RagasEvaluator:
                         "scores": stats["individual_scores"],
                     }
 
+        if domain_regex_scores:
+            regex_stats = calculate_robust_summary_stats(domain_regex_scores, "domain_regex")
+            formatted["metrics"]["domain_regex"] = {
+                "mean": regex_stats["mean_score"],
+                "std": regex_stats["std_score"],
+                "min": regex_stats["min_score"],
+                "max": regex_stats["max_score"],
+                "valid_count": regex_stats["valid_count"],
+                "total_count": regex_stats["total_count"],
+                "scores": regex_stats["individual_scores"],
+            }
+
         # Calculate overall summary with robust handling
         if formatted["metrics"]:
             valid_means = [
@@ -572,9 +617,26 @@ class RagasEvaluator:
                 "average_score": safe_mean(valid_means),
                 "metric_names": list(formatted["metrics"].keys()),
                 "valid_metrics": len(valid_means),
+                "domain_score": self._compute_weighted_domain_score(formatted["metrics"]),
             }
 
         return formatted
+
+    def _compute_weighted_domain_score(self, metrics: Dict[str, Dict[str, Any]]) -> float:
+        weighted_total = 0.0
+        total_weight = 0.0
+        for metric_name, weight in self.metric_weights.items():
+            metric_result = metrics.get(metric_name)
+            if not metric_result or weight <= 0:
+                continue
+            weighted_total += metric_result.get("mean", 0.0) * weight
+            total_weight += weight
+
+        if total_weight == 0:
+            available_means = [metric.get("mean", 0.0) for metric in metrics.values()]
+            return sum(available_means) / len(available_means) if available_means else 0.0
+
+        return weighted_total / total_weight
 
     def evaluate_testset(self, testset_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
