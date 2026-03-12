@@ -9,18 +9,53 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict
 
 logger = logging.getLogger(__name__)
+
+
+class ValidationStats(TypedDict):
+    files_processed: int
+    nodes_processed: int
+    edges_processed: int
+    nodes_preserved: int
+    edges_preserved: int
+    issues_found: int
+    fixes_applied: int
+
+
+class ValidationSummary(ValidationStats, total=False):
+    node_preservation_rate: float
+    edge_preservation_rate: float
+    overall_data_quality: float
+
+
+class ValidationReport(TypedDict, total=False):
+    file_name: str
+    nodes_original: int
+    edges_original: int
+    nodes_final: int
+    edges_final: int
+    nodes_removed: int
+    edges_removed: int
+    issues_found: List[str]
+    fixes_applied: List[str]
+    critical_issues: List[str]
+    warnings: List[str]
+    validation_timestamp: str
+    node_issues: List[str]
+    node_fixes: List[str]
+    edge_issues: List[str]
+    edge_fixes: List[str]
 
 
 class KnowledgeGraphValidator:
     """Validates knowledge graph data."""
 
-    def __init__(self, config: Dict[str, Any] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
         self.kg_config = self.config.get("knowledge_graph", {})
-        self.validation_stats = {
+        self.validation_stats: ValidationStats = {
             "files_processed": 0,
             "nodes_processed": 0,
             "edges_processed": 0,
@@ -30,7 +65,7 @@ class KnowledgeGraphValidator:
             "fixes_applied": 0,
         }
 
-    def validate_kg_file(self, kg_file: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def validate_kg_file(self, kg_file: Path) -> Tuple[Dict[str, Any], ValidationReport]:
         """
         Validate knowledge graph file.
 
@@ -52,7 +87,7 @@ class KnowledgeGraphValidator:
             logger.error(f"❌ Failed to load KG file {kg_file}: {e}")
             raise
 
-        validation_report = {
+        validation_report: ValidationReport = {
             "file_name": kg_file.name,
             "nodes_original": 0,
             "edges_original": 0,
@@ -96,7 +131,7 @@ class KnowledgeGraphValidator:
         return kg_data, validation_report
 
     def _validate_basic_structure(
-        self, kg_data: Dict[str, Any], report: Dict[str, Any]
+        self, kg_data: Dict[str, Any], report: ValidationReport
     ) -> Dict[str, Any]:
         """Validate basic knowledge graph structure."""
 
@@ -132,13 +167,13 @@ class KnowledgeGraphValidator:
 
     def _validate_nodes(
         self, nodes: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], ValidationReport]:
         """Validate and clean node data."""
 
-        report = {"node_issues": [], "node_fixes": []}
+        report: ValidationReport = {"node_issues": [], "node_fixes": []}
 
         valid_nodes = []
-        node_ids_seen = set()
+        node_ids_seen: Set[str] = set()
 
         for i, node in enumerate(nodes):
             try:
@@ -222,13 +257,15 @@ class KnowledgeGraphValidator:
 
     def _validate_edges(
         self, edges: List[Dict[str, Any]], nodes: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], ValidationReport]:
         """Validate and clean edge data."""
 
-        report = {"edge_issues": [], "edge_fixes": []}
+        report: ValidationReport = {"edge_issues": [], "edge_fixes": []}
 
         # Create set of valid node IDs for reference
-        valid_node_ids = {node.get("id") for node in nodes if node.get("id")}
+        valid_node_ids: Set[str] = {
+            str(node.get("id")) for node in nodes if node.get("id")
+        }
 
         valid_edges = []
 
@@ -256,7 +293,7 @@ class KnowledgeGraphValidator:
         return valid_edges, report
 
     def _validate_single_edge(
-        self, edge: Dict[str, Any], index: int, valid_node_ids: set
+        self, edge: Dict[str, Any], index: int, valid_node_ids: Set[str]
     ) -> Optional[Dict[str, Any]]:
         """Validate individual edge."""
 
@@ -307,7 +344,7 @@ class KnowledgeGraphValidator:
         return edge
 
     def _validate_relationships(
-        self, kg_data: Dict[str, Any], report: Dict[str, Any]
+        self, kg_data: Dict[str, Any], report: ValidationReport
     ) -> Dict[str, Any]:
         """Validate relationship consistency and add metadata."""
 
@@ -315,10 +352,8 @@ class KnowledgeGraphValidator:
         edges = kg_data.get("edges", [])
 
         # Create node lookup
-        node_lookup = {node.get("id"): node for node in nodes if node.get("id")}
-
         # Count relationship types
-        relationship_types = {}
+        relationship_types: Dict[str, int] = {}
         for edge in edges:
             rel_type = edge.get("type", "unknown")
             relationship_types[rel_type] = relationship_types.get(rel_type, 0) + 1
@@ -358,7 +393,7 @@ class KnowledgeGraphValidator:
         return kg_data
 
     def _final_cleanup(
-        self, kg_data: Dict[str, Any], report: Dict[str, Any]
+        self, kg_data: Dict[str, Any], report: ValidationReport
     ) -> Dict[str, Any]:
         """Final cleanup and optimization."""
 
@@ -427,7 +462,7 @@ class KnowledgeGraphValidator:
         cleaned = cleaned.replace("\x00", "")
         return cleaned
 
-    def _update_stats(self, report: Dict[str, Any]) -> None:
+    def _update_stats(self, report: ValidationReport) -> None:
         """Update global validation statistics."""
         self.validation_stats["files_processed"] += 1
         self.validation_stats["nodes_processed"] += report.get("nodes_original", 0)
@@ -456,7 +491,7 @@ class KnowledgeGraphValidator:
         return output_path
 
     def save_validation_report(
-        self, reports: List[Dict[str, Any]], output_dir: Path
+        self, reports: List[ValidationReport], output_dir: Path
     ) -> Path:
         """Save comprehensive validation report."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -478,9 +513,17 @@ class KnowledgeGraphValidator:
         logger.info(f"📄 Saved KG validation report: {report_path}")
         return report_path
 
-    def get_validation_summary(self) -> Dict[str, Any]:
+    def get_validation_summary(self) -> ValidationSummary:
         """Get summary of all validation operations."""
-        summary = self.validation_stats.copy()
+        summary: ValidationSummary = {
+            "files_processed": self.validation_stats["files_processed"],
+            "nodes_processed": self.validation_stats["nodes_processed"],
+            "edges_processed": self.validation_stats["edges_processed"],
+            "nodes_preserved": self.validation_stats["nodes_preserved"],
+            "edges_preserved": self.validation_stats["edges_preserved"],
+            "issues_found": self.validation_stats["issues_found"],
+            "fixes_applied": self.validation_stats["fixes_applied"],
+        }
 
         if summary["nodes_processed"] > 0:
             summary["node_preservation_rate"] = (
@@ -519,7 +562,7 @@ class KGIntegrityChecker:
             return {"warning": "No edges in graph - all nodes are isolated"}
 
         # Build adjacency list
-        adjacency = {}
+        adjacency: Dict[str, List[str]] = {}
         for edge in edges:
             source = edge.get("source")
             target = edge.get("target")
@@ -529,10 +572,10 @@ class KGIntegrityChecker:
                 adjacency[source].append(target)
 
         # Find connected components
-        visited = set()
-        components = []
+        visited: Set[str] = set()
+        components: List[List[str]] = []
 
-        def dfs(node):
+        def dfs(node: str) -> List[str]:
             if node in visited:
                 return []
             visited.add(node)

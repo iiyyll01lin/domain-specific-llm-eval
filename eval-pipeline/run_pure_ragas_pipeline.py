@@ -709,8 +709,6 @@ async def create_knowledge_graph_from_documents(
     logger.info(f"📄 Split {len(documents)} documents into {len(split_docs)} chunks")
     if GLOBAL_TELEMETRY:
         GLOBAL_TELEMETRY.log_document_stats(len(documents), len(split_docs))
-    if GLOBAL_TELEMETRY:
-        GLOBAL_TELEMETRY.log_document_stats(len(documents), len(split_docs))
 
     # Create nodes for each chunk
     import uuid
@@ -1227,6 +1225,15 @@ def main(argv: Optional[List[str]] = None):
         logger.info(f"📁 Output directory: {output_dir}")
         telemetry = PipelineTelemetry(output_dir)
         GLOBAL_TELEMETRY = telemetry
+        telemetry.log_stage_event(
+            "configuration",
+            "completed",
+            {
+                "config_override": bool(args.config),
+                "max_docs": max_docs,
+                "max_samples": max_samples,
+            },
+        )
 
         # Step 3: Load documents (TXT documents for steel plate inspection)
         document_files = (
@@ -1248,9 +1255,15 @@ def main(argv: Optional[List[str]] = None):
             raise ValueError(
                 "No document files or CSV files specified in configuration"
             )
+        telemetry.log_stage_event(
+            "document_loading",
+            "completed",
+            {"documents": len(documents), "csv_source": csv_file_path},
+        )
 
         # Step 4: Setup RAGAS components (before KG creation for embeddings)
         generator_llm, generator_embeddings = setup_ragas_components(config)
+        telemetry.log_stage_event("ragas_components", "completed")
 
         # Step 4.1: Build async settings baseline for KG creation
         run_config, _ = build_run_config(config)
@@ -1264,6 +1277,14 @@ def main(argv: Optional[List[str]] = None):
                     "max_workers": run_config.max_workers,
                 },
             )
+        )
+        telemetry.log_stage_event(
+            "knowledge_graph",
+            "completed",
+            {
+                "nodes": len(getattr(kg, "nodes", [])),
+                "relationships": len(getattr(kg, "relationships", []) or []),
+            },
         )
 
         # Rebuild generation settings using the actual KG for synthesizer availability checks
@@ -1280,9 +1301,19 @@ def main(argv: Optional[List[str]] = None):
             generation_settings,
             max_samples,
         )
+        telemetry.log_stage_event(
+            "testset_generation",
+            "completed",
+            {"samples": len(test_samples)},
+        )
 
         # Step 8: Save testset
         testset_filepath = save_testset(test_samples, output_dir)
+        telemetry.log_stage_event(
+            "artifact_save",
+            "completed",
+            {"knowledge_graph": kg_filepath, "testset": testset_filepath},
+        )
 
         # Step 9: Save personas and scenarios (NEW)
         try:
@@ -1357,6 +1388,7 @@ def main(argv: Optional[List[str]] = None):
         logger.info("5. 📈 Generate evaluation reports")
 
         if telemetry:
+            telemetry.log_stage_event("pipeline", "completed")
             telemetry.finish(status="completed")
         GLOBAL_TELEMETRY = None
 
@@ -1364,6 +1396,7 @@ def main(argv: Optional[List[str]] = None):
 
     except Exception as e:
         if telemetry:
+            telemetry.log_stage_event("pipeline", "failed", {"error": str(e)})
             telemetry.log_error("pipeline_main", str(e))
             telemetry.finish(status="failed")
         GLOBAL_TELEMETRY = None

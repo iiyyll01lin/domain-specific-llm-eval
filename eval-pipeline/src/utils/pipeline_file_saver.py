@@ -12,11 +12,22 @@ This module provides a standardized file saving system for the evaluation pipeli
 
 import json
 import logging
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+
+workspace_root = Path(__file__).resolve().parents[3]
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
+
+try:
+    from services.common.storage.object_store import ObjectStoreClient
+except Exception:  # pragma: no cover - optional dependency when env is not configured
+    ObjectStoreClient = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +46,8 @@ class PipelineFileSaver:
     def __init__(self, base_output_dir: Path):
         self.base_output_dir = Path(base_output_dir)
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.object_store_client = self._build_object_store_client()
+        self.mirrored_files: Dict[str, str] = {}
 
         # Standardized directory structure
         self.directories = {
@@ -52,11 +65,36 @@ class PipelineFileSaver:
         # Create all directories
         self._create_directories()
 
+    def _build_object_store_client(self) -> Optional[ObjectStoreClient]:
+        required = [
+            os.environ.get("OBJECT_STORE_ENDPOINT"),
+            os.environ.get("OBJECT_STORE_ACCESS_KEY"),
+            os.environ.get("OBJECT_STORE_SECRET_KEY"),
+            os.environ.get("OBJECT_STORE_BUCKET"),
+        ]
+        if not all(required) or ObjectStoreClient is None:
+            return None
+        try:
+            return ObjectStoreClient()
+        except Exception as exc:
+            logger.warning("⚠️ Object store mirroring disabled: %s", exc)
+            return None
+
     def _create_directories(self):
         """Create all required directories"""
         for dir_name, dir_path in self.directories.items():
             dir_path.mkdir(parents=True, exist_ok=True)
             logger.debug(f"📁 Created directory: {dir_path}")
+
+    def _mirror_file(self, file_path: Path, category: str) -> None:
+        if self.object_store_client is None:
+            return
+        object_key = f"eval-pipeline/{self.base_output_dir.name}/{category}/{file_path.name}"
+        try:
+            self.object_store_client.upload_file(bucket=None, key=object_key, file_path=str(file_path))
+            self.mirrored_files[str(file_path)] = object_key
+        except Exception as exc:
+            logger.warning("⚠️ Failed to mirror %s to object store: %s", file_path, exc)
 
     def save_testset_csv(
         self, test_samples: List[Dict], filename_prefix: str = "testset"
@@ -87,6 +125,7 @@ class PipelineFileSaver:
 
             # Save to CSV
             df.to_csv(csv_path, index=False, encoding="utf-8")
+            self._mirror_file(csv_path, "testsets")
 
             logger.info(
                 f"✅ Testset CSV saved: {csv_path} ({len(test_samples)} samples)"
@@ -122,6 +161,7 @@ class PipelineFileSaver:
             # Save to JSON with proper serialization
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(kg_data, f, indent=2, ensure_ascii=False, default=str)
+            self._mirror_file(json_path, "knowledge_graphs")
 
             nodes_count = len(kg_data.get("nodes", []))
             relationships_count = len(kg_data.get("relationships", []))
@@ -160,6 +200,7 @@ class PipelineFileSaver:
             # Save to JSON
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(personas_data, f, indent=2, ensure_ascii=False, default=str)
+            self._mirror_file(json_path, "personas")
 
             logger.info(
                 f"✅ Personas JSON saved: {json_path} ({len(personas_data)} personas)"
@@ -195,6 +236,7 @@ class PipelineFileSaver:
             # Save to JSON
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(scenarios_data, f, indent=2, ensure_ascii=False, default=str)
+            self._mirror_file(json_path, "scenarios")
 
             logger.info(
                 f"✅ Scenarios JSON saved: {json_path} ({len(scenarios_data)} scenarios)"
@@ -224,6 +266,7 @@ class PipelineFileSaver:
             metadata["directory_structure"] = {
                 name: str(path) for name, path in self.directories.items()
             }
+            metadata["mirrored_files"] = self.mirrored_files.copy()
 
             # Generate filename
             json_filename = f"{filename_prefix}_{self.timestamp}.json"
@@ -232,6 +275,7 @@ class PipelineFileSaver:
             # Save to JSON
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False, default=str)
+            self._mirror_file(json_path, "metadata")
 
             logger.info(f"✅ Pipeline metadata saved: {json_path}")
             return str(json_path)
@@ -242,11 +286,11 @@ class PipelineFileSaver:
 
     def save_all_pipeline_outputs(
         self,
-        test_samples: List[Dict] = None,
-        kg_data: Dict[str, Any] = None,
-        personas_data: List[Dict] = None,
-        scenarios_data: List[Dict] = None,
-        metadata: Dict[str, Any] = None,
+        test_samples: Optional[List[Dict]] = None,
+        kg_data: Optional[Dict[str, Any]] = None,
+        personas_data: Optional[List[Dict]] = None,
+        scenarios_data: Optional[List[Dict]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """
         Save all pipeline outputs in one call

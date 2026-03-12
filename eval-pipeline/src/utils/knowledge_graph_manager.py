@@ -1,49 +1,219 @@
 #!/usr/bin/env python3
-"""
-Knowledge Graph Manager for Pipeline
+"""Knowledge graph persistence and reuse helpers for the evaluation pipeline."""
 
-This module handles knowledge graph storage, loading, and reuse functionality.
-"""
+from __future__ import annotations
 
 import json
 import logging
-import os
 import pickle
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, MutableMapping, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
 
-class KnowledgeGraphManager:
-    """Manages knowledge graph storage and retrieval"""
+class KnowledgeGraphMetadata(TypedDict, total=False):
+    run_id: str
+    created_at: str
+    nodes_count: int
+    relationships_count: int
+    source_documents: int
+    notes: str
 
-    # Phase 6: Federated Graph RBAC isolation
-    def apply_tenant_isolation(self, tenant_id: str, role: str):
-        """
-        Filters knowledge nodes based on tenant_id and strict RBAC role requirements
-        so metrics generation won't bleed datasets across permission boundaries.
-        """
-        if not hasattr(self, "kg") or not self.kg:
+
+class KnowledgeGraphArtifact(TypedDict, total=False):
+    json_path: str
+    pickle_path: str
+    created_at: str
+    run_id: str
+    nodes_count: int
+    relationships_count: int
+    file_size: int
+    metadata: KnowledgeGraphMetadata
+
+
+class KnowledgeGraphManager:
+    """Manages knowledge graph storage, lookup, loading, and tenant filtering."""
+
+    def __init__(self, base_output_dir: str | Path) -> None:
+        self.base_output_dir = Path(base_output_dir)
+        self.testset_kg_dir = self.base_output_dir / "testsets" / "knowledge_graphs"
+        self.management_kg_dir = self.base_output_dir / "metadata" / "knowledge_graphs"
+        self.testset_kg_dir.mkdir(parents=True, exist_ok=True)
+        self.management_kg_dir.mkdir(parents=True, exist_ok=True)
+        self.kg: Optional[Any] = None
+
+    def save_knowledge_graph(
+        self,
+        kg: Any,
+        metadata: Optional[KnowledgeGraphMetadata] = None,
+        run_id: Optional[str] = None,
+    ) -> str:
+        """Persist a KG as JSON for RAGAS reuse and as pickle for local reuse."""
+        resolved_run_id = run_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+        serialized = self._serialize_knowledge_graph(kg)
+
+        artifact_metadata: KnowledgeGraphMetadata = {
+            "run_id": resolved_run_id,
+            "created_at": datetime.now().isoformat(),
+            "nodes_count": len(serialized.get("nodes", [])),
+            "relationships_count": len(serialized.get("relationships", [])),
+        }
+        if metadata:
+            artifact_metadata.update(metadata)
+        serialized["metadata"] = artifact_metadata
+
+        json_path = self.testset_kg_dir / f"knowledge_graph_{resolved_run_id}.json"
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(serialized, handle, indent=2, ensure_ascii=False, default=str)
+
+        pickle_path = self.management_kg_dir / f"knowledge_graph_{resolved_run_id}.pkl"
+        with open(pickle_path, "wb") as handle:
+            pickle.dump(kg, handle)
+
+        self.kg = kg
+        logger.info("💾 Knowledge graph saved to %s", json_path)
+        logger.info("💾 Knowledge graph pickle saved to %s", pickle_path)
+        return str(json_path)
+
+    def list_available_knowledge_graphs(self) -> List[KnowledgeGraphArtifact]:
+        """List all persisted JSON knowledge graph artifacts sorted by newest first."""
+        artifacts: List[KnowledgeGraphArtifact] = []
+        for json_path in sorted(self.testset_kg_dir.glob("knowledge_graph_*.json")):
+            try:
+                with open(json_path, "r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+                metadata = payload.get("metadata", {})
+                run_id = str(metadata.get("run_id", json_path.stem.replace("knowledge_graph_", "")))
+                pickle_path = self.management_kg_dir / f"knowledge_graph_{run_id}.pkl"
+                artifacts.append(
+                    {
+                        "json_path": str(json_path),
+                        "pickle_path": str(pickle_path) if pickle_path.exists() else "",
+                        "created_at": str(metadata.get("created_at", datetime.fromtimestamp(json_path.stat().st_mtime).isoformat())),
+                        "run_id": run_id,
+                        "nodes_count": int(metadata.get("nodes_count", len(payload.get("nodes", [])))),
+                        "relationships_count": int(metadata.get("relationships_count", len(payload.get("relationships", [])))),
+                        "file_size": json_path.stat().st_size,
+                        "metadata": metadata,
+                    }
+                )
+            except Exception as exc:
+                logger.warning("⚠️ Skipping unreadable KG artifact %s: %s", json_path, exc)
+
+        artifacts.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+        return artifacts
+
+    def get_latest_knowledge_graph(self) -> Optional[str]:
+        """Return the newest persisted JSON knowledge graph path if present."""
+        artifacts = self.list_available_knowledge_graphs()
+        if not artifacts:
+            return None
+        return artifacts[0].get("json_path")
+
+    def load_knowledge_graph_json(self, json_path: str | Path) -> Dict[str, Any]:
+        with open(json_path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def load_knowledge_graph_pickle(self, pickle_path: str | Path) -> Any:
+        with open(pickle_path, "rb") as handle:
+            kg = pickle.load(handle)
+        self.kg = kg
+        return kg
+
+    def apply_tenant_isolation(self, tenant_id: str, role: str) -> None:
+        """Filter the loaded KG in-place based on simple tenant and role metadata."""
+        if self.kg is None or not hasattr(self.kg, "nodes"):
             return
 
-        allowed_nodes = []
-        for node in self.kg.nodes:
-            # Metadata might not be configured, default to public, but block if strict
-            node_tenant = node.properties.get("tenant", "public")
-            node_role_req = node.properties.get("min_role", "viewer")
+        role_rank = {"viewer": 0, "editor": 1, "admin": 2}
+        current_role_rank = role_rank.get(role, 0)
 
-            # Simple simulation of access check
-            if node_tenant in ["public", tenant_id]:
-                # If required role is admin and user is viewer, exclude
-                if node_role_req == "admin" and role != "admin":
-                    continue
-                allowed_nodes.append(node)
+        allowed_nodes = []
+        allowed_node_ids = set()
+        for node in list(getattr(self.kg, "nodes", [])):
+            properties = getattr(node, "properties", {}) or {}
+            node_tenant = str(properties.get("tenant", "public"))
+            node_role = str(properties.get("min_role", "viewer"))
+            if node_tenant not in {"public", tenant_id}:
+                continue
+            if current_role_rank < role_rank.get(node_role, 0):
+                continue
+            allowed_nodes.append(node)
+            node_id = getattr(node, "id", None)
+            if node_id is not None:
+                allowed_node_ids.add(str(node_id))
+
+        if hasattr(self.kg, "relationships"):
+            filtered_relationships = []
+            for relationship in list(getattr(self.kg, "relationships", [])):
+                source_id = self._extract_endpoint_id(getattr(relationship, "source", None))
+                target_id = self._extract_endpoint_id(getattr(relationship, "target", None))
+                if source_id in allowed_node_ids and target_id in allowed_node_ids:
+                    filtered_relationships.append(relationship)
+            self.kg.relationships = filtered_relationships
 
         self.kg.nodes = allowed_nodes
-        logging.info(
-            f"🔒 Tenant isolation applied for {tenant_id}/{role}. Kept {len(allowed_nodes)} nodes."
+        logger.info(
+            "🔒 Tenant isolation applied for %s/%s. Kept %s nodes.",
+            tenant_id,
+            role,
+            len(allowed_nodes),
         )
 
-    # Phase 6: Federated Graph RBAC isolation
+    def _serialize_knowledge_graph(self, kg: Any) -> Dict[str, Any]:
+        nodes = []
+        for node in list(getattr(kg, "nodes", [])):
+            nodes.append(
+                {
+                    "id": str(getattr(node, "id", "")),
+                    "label": str(getattr(node, "label", "") or getattr(node, "name", "")),
+                    "type": str(getattr(node, "type", "entity")),
+                    "properties": deepcopy(getattr(node, "properties", {}) or {}),
+                }
+            )
+
+        relationships = []
+        for relationship in list(getattr(kg, "relationships", [])):
+            relationships.append(
+                {
+                    "id": str(getattr(relationship, "id", "")),
+                    "source": self._extract_endpoint_id(getattr(relationship, "source", None)),
+                    "target": self._extract_endpoint_id(getattr(relationship, "target", None)),
+                    "type": str(getattr(relationship, "type", getattr(relationship, "relation_type", "related_to"))),
+                    "properties": deepcopy(getattr(relationship, "properties", {}) or {}),
+                }
+            )
+
+        return {"nodes": nodes, "relationships": relationships}
+
+    @staticmethod
+    def _extract_endpoint_id(endpoint: Any) -> str:
+        if endpoint is None:
+            return ""
+        if hasattr(endpoint, "id"):
+            return str(getattr(endpoint, "id"))
+        return str(endpoint)
+
+
+def find_and_use_latest_kg(
+    config: MutableMapping[str, Any],
+    output_dir: str | Path,
+) -> MutableMapping[str, Any]:
+    """Update config to point at the newest persisted knowledge graph if available."""
+    kg_manager = KnowledgeGraphManager(output_dir)
+    latest_kg = kg_manager.get_latest_knowledge_graph()
+    if latest_kg is None:
+        return config
+
+    testset_generation = config.setdefault("testset_generation", {})
+    ragas_config = testset_generation.setdefault("ragas_config", {})
+    knowledge_graph_config = ragas_config.setdefault("knowledge_graph_config", {})
+    knowledge_graph_config["existing_kg_file"] = latest_kg
+    logger.info("🔁 Configured latest knowledge graph reuse: %s", latest_kg)
+    return config
+
+
+__all__ = ["KnowledgeGraphManager", "KnowledgeGraphArtifact", "KnowledgeGraphMetadata", "find_and_use_latest_kg"]
