@@ -375,6 +375,59 @@ def create_entities_overlap_relationships(kg: KnowledgeGraph):
     return relationships
 
 
+async def verify_multihop_semantic_relationships(kg: KnowledgeGraph):
+    """Build explicit semantic-correlation relationships for multihop generation."""
+    relationships = []
+    nodes = list(kg.nodes)
+
+    for i, node1 in enumerate(nodes):
+        for node2 in nodes[i + 1 :]:
+            shared_entities = set(node1.properties.get("entities", [])) & set(
+                node2.properties.get("entities", [])
+            )
+            shared_keyphrases = set(node1.properties.get("keyphrases", [])) & set(
+                node2.properties.get("keyphrases", [])
+            )
+            summary1 = str(node1.properties.get("summary", "")).lower()
+            summary2 = str(node2.properties.get("summary", "")).lower()
+            summary_terms_1 = {term for term in summary1.split() if len(term) > 3}
+            summary_terms_2 = {term for term in summary2.split() if len(term) > 3}
+            shared_summary_terms = summary_terms_1 & summary_terms_2
+
+            numerator = (
+                len(shared_entities) * 0.5
+                + len(shared_keyphrases) * 0.3
+                + len(shared_summary_terms) * 0.2
+            )
+            denominator = max(
+                len(set(node1.properties.get("entities", [])) | set(node2.properties.get("entities", []))),
+                1,
+            )
+            semantic_score = numerator / denominator
+
+            if semantic_score < 0.15:
+                continue
+
+            from ragas.testset.graph import Relationship
+
+            relationships.append(
+                Relationship(
+                    source=node1,
+                    target=node2,
+                    type="semantic_correlation",
+                    properties={
+                        "semantic_correlation_score": semantic_score,
+                        "shared_entities": sorted(shared_entities),
+                        "shared_keyphrases": sorted(shared_keyphrases),
+                        "shared_summary_terms": sorted(shared_summary_terms),
+                        "verified_for_multihop": True,
+                    },
+                )
+            )
+
+    return relationships
+
+
 def load_config(config_path: str = "config/pipeline_config.yaml") -> Dict[str, Any]:
     """Load pipeline configuration with environment variable expansion"""
     import os
@@ -666,6 +719,18 @@ async def build_relationships(kg: KnowledgeGraph, has_embeddings: bool = False) 
             )
         except Exception as e:
             logger.warning(f"Failed to build entities_overlap relationships: {e}")
+
+        logger.info("🔗 Verifying semantic correlation relationships for multihop paths...")
+        try:
+            semantic_rels = await verify_multihop_semantic_relationships(kg)
+            for rel in semantic_rels:
+                kg._add_relationship(rel)
+            total_relationships += len(semantic_rels)
+            logger.info(
+                f"✅ Built {len(semantic_rels)} semantic correlation relationships"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to build semantic correlation relationships: {e}")
 
     except Exception as e:
         logger.error(f"❌ Error building relationships: {e}")

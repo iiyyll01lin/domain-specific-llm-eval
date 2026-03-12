@@ -1,12 +1,11 @@
 import glob
 import json
 import os
-import subprocess
 
 import pandas as pd
 import streamlit as st
 
-from src.ui.dashboard_actions import build_pipeline_command
+from src.ui.dashboard_actions import create_dashboard_job, list_dashboard_jobs
 
 st.set_page_config(page_title="Telemetry Dashboard", layout="wide")
 st.title("Domain-Specific LLM Evaluation Telemetry")
@@ -65,20 +64,14 @@ sample_count = st.number_input(
 )
 config_override = st.text_input("Optional config path:", value="")
 if st.button("Trigger Pipeline Action"):
-    command = build_pipeline_command(
+    job = create_dashboard_job(
         docs=int(doc_count),
         samples=int(sample_count),
         config_path=config_override or None,
     )
-    st.info(f"Will execute `{' '.join(command)}`.")
+    st.success(f"Queued background job {job['job_id']} (pid={job['pid']}).")
 
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        st.success("Successfully completed!")
-        st.rerun()
-    else:
-        st.error(f"Failed with code {result.returncode}:\n{result.stderr}")
+jobs_payload = list_dashboard_jobs()
+if jobs_payload["jobs"]:
+    st.subheader("Dashboard Jobs")
+    st.dataframe(pd.DataFrame(jobs_payload["jobs"]), use_container_width=True)

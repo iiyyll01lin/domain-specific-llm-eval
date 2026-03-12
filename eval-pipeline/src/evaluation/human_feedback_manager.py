@@ -1,9 +1,8 @@
-"""
-Human Feedback Manager for RAG Evaluation Pipeline
+"""Human feedback queueing and review recommendation helpers."""
 
-Handles human feedback integration and processing.
-"""
+from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -23,6 +22,11 @@ class HumanFeedbackManager:
         self.feedback_enabled = self.feedback_config.get("enabled", False)
         self.feedback_threshold = self.feedback_config.get("threshold", 0.7)
         self.sampling_rate = self.feedback_config.get("sampling_rate", 0.2)
+        self.review_queue_dir = Path(
+            self.feedback_config.get("review_queue_dir", "outputs/human_feedback")
+        )
+        self.review_queue_dir.mkdir(parents=True, exist_ok=True)
+        self.review_queue_file = self.review_queue_dir / "review_queue.jsonl"
 
         logger.info(
             f"🤖 Human feedback manager initialized (enabled: {self.feedback_enabled})"
@@ -41,30 +45,27 @@ class HumanFeedbackManager:
         Returns:
             Dictionary containing human feedback results
         """
-        # Always return mocked results to bypass human feedback requirement
-        logger.info("🤖 Human feedback processing mocked - returning simulated results")
-        return {
-            "enabled": True,
-            "mocked": True,
-            "message": "Human feedback processing is mocked for evaluation purposes",
-            "samples_processed": len(rag_responses),
-            "feedback_candidates": 0,
-            "recommendations": {
-                "total_recommendations": 0,
-                "high_priority": 0,
-                "medium_priority": 0,
-                "low_priority": 0,
-                "recommendations": [],
-            },
-            "summary": {
-                "status": "mocked",
-                "total_feedback": 0,
-                "positive_feedback": 0,
-                "negative_feedback": 0,
-            },
-        }
-
         logger.info("👥 Processing human feedback...")
+
+        if not self.feedback_enabled:
+            return {
+                "enabled": False,
+                "samples_processed": len(rag_responses),
+                "feedback_candidates": 0,
+                "recommendations": {
+                    "total_recommendations": 0,
+                    "high_priority": 0,
+                    "medium_priority": 0,
+                    "low_priority": 0,
+                    "recommendations": [],
+                },
+                "summary": {
+                    "status": "disabled",
+                    "total_feedback": 0,
+                    "positive_feedback": 0,
+                    "negative_feedback": 0,
+                },
+            }
 
         try:
             # Identify samples that need human feedback
@@ -79,6 +80,7 @@ class HumanFeedbackManager:
             recommendations = self._generate_feedback_recommendations(
                 feedback_candidates
             )
+            queued_items = self._persist_review_queue(recommendations, feedback_candidates)
 
             results = {
                 "enabled": True,
@@ -86,6 +88,8 @@ class HumanFeedbackManager:
                 "feedback_candidates": len(feedback_candidates),
                 "existing_feedback": feedback_results,
                 "recommendations": recommendations,
+                "queued_reviews": queued_items,
+                "review_queue_path": str(self.review_queue_file),
                 "summary": self._generate_feedback_summary(
                     feedback_results, recommendations
                 ),
@@ -111,6 +115,7 @@ class HumanFeedbackManager:
         candidates = []
 
         questions = testset.get("questions", [])
+        qa_pairs = testset.get("qa_pairs", [])
 
         for i, response in enumerate(rag_responses):
             # Check if this response needs human feedback
@@ -120,7 +125,11 @@ class HumanFeedbackManager:
                 candidate = {
                     "index": i,
                     "question": (
-                        questions[i] if i < len(questions) else f"Question {i+1}"
+                        questions[i]
+                        if i < len(questions)
+                        else qa_pairs[i].get("user_input", f"Question {i+1}")
+                        if i < len(qa_pairs)
+                        else f"Question {i+1}"
                     ),
                     "response": response,
                     "reason": self._get_feedback_reason(response),
@@ -128,12 +137,11 @@ class HumanFeedbackManager:
                 candidates.append(candidate)
 
         # Apply sampling if too many candidates
-        if len(candidates) > int(len(rag_responses) * self.sampling_rate):
+        sample_limit = max(1, int(len(rag_responses) * self.sampling_rate))
+        if len(candidates) > sample_limit:
             import random
 
-            candidates = random.sample(
-                candidates, int(len(rag_responses) * self.sampling_rate)
-            )
+            candidates = random.sample(candidates, sample_limit)
 
         return candidates
 
@@ -142,6 +150,14 @@ class HumanFeedbackManager:
         # Check confidence/uncertainty scores
         confidence = response.get("confidence", 1.0)
         if confidence < self.feedback_threshold:
+            return True
+
+        answer = str(response.get("answer", "")).strip()
+        if len(answer) < 40:
+            return True
+
+        domain_score = float(response.get("domain_score", response.get("ragas_score", 1.0)))
+        if domain_score < self.feedback_threshold:
             return True
 
         # Check for conflicting metrics
@@ -153,12 +169,6 @@ class HumanFeedbackManager:
             if abs(ragas_score - keyword_score) > 0.3:
                 return True
 
-        # Random sampling for diverse feedback
-        import random
-
-        if random.random() < 0.1:  # 10% random sampling
-            return True
-
         return False
 
     def _get_feedback_reason(self, response: Dict[str, Any]) -> str:
@@ -166,6 +176,14 @@ class HumanFeedbackManager:
         confidence = response.get("confidence", 1.0)
         if confidence < self.feedback_threshold:
             return f"Low confidence score: {confidence:.2f}"
+
+        answer = str(response.get("answer", "")).strip()
+        if len(answer) < 40:
+            return f"Short answer length: {len(answer)}"
+
+        domain_score = float(response.get("domain_score", response.get("ragas_score", 1.0)))
+        if domain_score < self.feedback_threshold:
+            return f"Low evaluation score: {domain_score:.2f}"
 
         if "ragas_score" in response and "keyword_score" in response:
             ragas_score = response.get("ragas_score", 0.5)
@@ -175,6 +193,37 @@ class HumanFeedbackManager:
                 return f"Conflicting metrics - RAGAS: {ragas_score:.2f}, Keyword: {keyword_score:.2f}"
 
         return "Random sampling for quality assurance"
+
+    def _persist_review_queue(
+        self,
+        recommendations: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        candidate_by_index = {candidate["index"]: candidate for candidate in candidates}
+        queued_items: List[Dict[str, Any]] = []
+
+        if not recommendations.get("recommendations"):
+            return queued_items
+
+        with open(self.review_queue_file, "a", encoding="utf-8") as handle:
+            for recommendation in recommendations["recommendations"]:
+                candidate = candidate_by_index.get(recommendation["index"], {})
+                response = candidate.get("response", {})
+                queue_item = {
+                    "index": recommendation["index"],
+                    "question": recommendation["question"],
+                    "reason": recommendation["reason"],
+                    "priority": recommendation["priority"],
+                    "suggested_action": recommendation["suggested_action"],
+                    "answer": response.get("answer", ""),
+                    "confidence": response.get("confidence"),
+                    "ragas_score": response.get("ragas_score"),
+                    "keyword_score": response.get("keyword_score"),
+                }
+                handle.write(json.dumps(queue_item, ensure_ascii=False) + "\n")
+                queued_items.append(queue_item)
+
+        return queued_items
 
     def _process_existing_feedback(
         self, candidates: List[Dict[str, Any]]
@@ -284,7 +333,7 @@ class HumanFeedbackManager:
                 logger.warning("No QA pairs found in testset data")
                 return []
 
-            # Mock RAG responses for human feedback processing
+            # Convert qa_pairs into reviewable responses with real scoring hints
             mock_rag_responses = []
             for qa_pair in qa_pairs:
                 mock_response = {
@@ -292,7 +341,10 @@ class HumanFeedbackManager:
                     "answer": qa_pair.get("reference", ""),
                     "contexts": qa_pair.get("contexts", []),
                     "ground_truth": qa_pair.get("reference", ""),
-                    "confidence": 0.8,  # Mock confidence score
+                    "confidence": float(qa_pair.get("confidence", qa_pair.get("ragas_score", 0.8))),
+                    "ragas_score": float(qa_pair.get("ragas_score", qa_pair.get("domain_score", 0.8))),
+                    "keyword_score": float(qa_pair.get("keyword_score", qa_pair.get("ragas_score", 0.8))),
+                    "domain_score": float(qa_pair.get("domain_score", qa_pair.get("ragas_score", 0.8))),
                 }
                 mock_rag_responses.append(mock_response)
 
@@ -301,13 +353,17 @@ class HumanFeedbackManager:
 
             # Convert to list format expected by stage factory
             results = []
+            recommendations = {
+                item["index"]: item for item in feedback_result.get("queued_reviews", [])
+            }
             for i, qa_pair in enumerate(qa_pairs):
+                review_item = recommendations.get(i)
                 result_item = {
                     **qa_pair,
-                    "human_feedback_score": 0.0,  # Placeholder, would be filled by actual feedback
-                    "feedback_required": feedback_result.get(
-                        "requires_feedback", False
-                    ),
+                    "human_feedback_score": 0.0,
+                    "feedback_required": review_item is not None,
+                    "feedback_reason": review_item.get("reason") if review_item else None,
+                    "feedback_priority": review_item.get("priority") if review_item else None,
                     "human_feedback_data": feedback_result,
                 }
                 results.append(result_item)
@@ -320,6 +376,10 @@ class HumanFeedbackManager:
         except Exception as e:
             logger.error(f"❌ Human feedback processing failed: {e}")
             return []
+
+    def process_testset(self, testset_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Compatibility wrapper used by the stage executor."""
+        return self.evaluate_testset(testset_data)
 
     def is_enabled(self) -> bool:
         """Check if human feedback processing is enabled."""
