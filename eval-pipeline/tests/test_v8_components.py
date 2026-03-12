@@ -1,4 +1,5 @@
 import pytest
+
 from src.distributed.federated_learning import FederatedLearningClient
 from src.evaluation.swarm_agent import SwarmSynthesizer
 from src.loaders.multimodal_loader import MultimodalDocumentLoader

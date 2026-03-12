@@ -18,6 +18,7 @@ import pandas as pd
 # RAGAS imports with proper error handling
 try:
     from datasets import Dataset
+    from ragas import evaluate
     from ragas.metrics import Faithfulness  # Updated for 0.2.x
     from ragas.metrics import \
         LLMContextPrecisionWithoutReference  # Updated for 0.2.x
@@ -25,18 +26,15 @@ try:
         LLMContextRecallWithReference  # Updated for 0.2.x
     from ragas.metrics import ResponseRelevancy  # Updated for 0.2.x
 
-    from ragas import evaluate
-
     RAGAS_AVAILABLE = True
     RAGAS_VERSION = "0.2.x"
 except ImportError:
     # Fallback to older metrics
     try:
         from datasets import Dataset
+        from ragas import evaluate
         from ragas.metrics import (answer_relevancy, context_precision,
                                    context_recall, faithfulness)
-
-        from ragas import evaluate
 
         RAGAS_AVAILABLE = True
         RAGAS_VERSION = "legacy"

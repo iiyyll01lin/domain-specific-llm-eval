@@ -95,10 +95,9 @@ class RagasEvaluator:
             apply_ragas_model_dump_fix()
 
             from datasets import Dataset
+            from ragas import evaluate
             from ragas.metrics import (  # Use only metrics that work well with custom LLMs
                 context_precision, faithfulness)
-
-            from ragas import evaluate
 
             self.evaluate_func = evaluate
             self.metrics = [context_precision, faithfulness]
@@ -147,9 +146,8 @@ class RagasEvaluator:
             # Import necessary RAGAS components for custom LLM
             try:
                 from langchain_openai import ChatOpenAI
-                from ragas.llms import LangchainLLMWrapper
-
                 from ragas import RunConfig
+                from ragas.llms import LangchainLLMWrapper
 
                 # Create custom LLM using your API
                 endpoint = llm_config.get("endpoint", "")

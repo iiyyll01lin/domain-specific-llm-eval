@@ -42,11 +42,10 @@ from dynamic_ragas_gate_with_human_feedback import (
 
 # Import RAGAS components
 sys.path.append(str(Path(__file__).parent.parent.parent.parent / "ragas"))
+from ragas import evaluate
 from ragas.metrics import (answer_correctness, answer_relevancy,
                            answer_similarity, context_precision,
                            context_recall, faithfulness)
-
-from ragas import evaluate
 
 
 class HybridEvaluator:

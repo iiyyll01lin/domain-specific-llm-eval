@@ -1,0 +1,50 @@
+custom_data:
+  data_sources:
+    pdf_files: []
+  enabled: false
+testset_generation:
+  keyword_extraction:
+    keybert:
+      keyphrase_ngram_range:
+      - 1
+      - 2
+      model: all-MiniLM-L6-v2
+      stop_words: english
+    max_keywords: 8
+    methods:
+    - keybert
+    - yake
+    - spacy_ner
+    min_keywords: 3
+    yake:
+      deduplication_threshold: 0.7
+      language: en
+      max_ngram_size: 2
+  max_total_samples: 21
+  output:
+    format: excel
+    include_metadata: true
+    tag_source_files: true
+  ragas_config:
+    custom_llm:
+      api_key_file: config/secrets.yaml
+      api_key_path: inventec_llm.api_key
+      endpoint: http://llm-proxy.tao.inventec.net/v1/chat/completions
+      headers:
+        Accept: '*/*'
+        Content-Type: application/json
+        User-Agent: RAG-Evaluation-Pipeline/1.0
+      max_tokens: 1000
+      model: Qwen3-32B
+      stream: false
+      temperature: 0.3
+    embeddings_model: sentence-transformers/all-MiniLM-L6-v2
+    use_custom_llm: true
+    use_openai: false
+  samples_per_document: 17
+  strategies:
+    conditional: 0.1
+    multi_context: 0.3
+    reasoning: 0.2
+    simple: 0.4
+  use_ragas_generator: true

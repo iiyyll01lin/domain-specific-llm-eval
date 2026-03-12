@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.documents import Document
 from ragas.testset.graph import KnowledgeGraph, Node
+
 from run_pure_ragas_pipeline import (build_query_distribution,
                                      create_knowledge_graph_from_documents,
                                      save_testset)

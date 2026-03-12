@@ -90,11 +90,10 @@ class ComprehensiveRAGEvaluator:
         """Initialize RAGAS metrics evaluator."""
         try:
             # Import RAGAS components
+            from ragas import evaluate
             from ragas.llms import LangchainLLMWrapper
             from ragas.metrics import (answer_relevancy, context_precision,
                                        context_recall, faithfulness)
-
-            from ragas import evaluate
 
             # Configure RAGAS LLM
             ragas_config = self.eval_config.get("ragas_metrics", {})
