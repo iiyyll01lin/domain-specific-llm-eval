@@ -43,6 +43,7 @@ venv/
 # ============================================================================
 # Ignore all cache and output directories
 cache/
+.cache/
 outputs/
 test_output/
 test_outputs/
@@ -53,6 +54,7 @@ temp/
 
 # Ignore these directories wherever they appear
 **/__pycache__/
+**/.cache/
 **/cache/
 **/outputs/
 **/logs/
