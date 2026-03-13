@@ -64,18 +64,18 @@ Status values:
 | V4 | Streaming UI dashboard refinements | Partial | `eval-pipeline/telemetry_dashboard.py`, `eval-pipeline/src/ui/dashboard_job_runner.py`, `eval-pipeline/tests/test_dashboard_actions.py`, `services/reporting/main.py` | The dashboard now runs non-blocking background jobs, persists status, shows stage progress, and exposes recent stdout/stderr; automatic push-style streaming is still absent |
 | V5 | Kubernetes orchestration transition | Partial | `helm/`, `deploy/helm/` | Helm charts exist, but this repo does not prove production deployment completeness |
 | V5 | Dynamic real-world database synthesizer | Partial | `eval-pipeline/src/utils/sql_document_loader.py` | SQL loader exists, but not a full Text-to-SQL or warehouse bridge |
-| V5 | Distributed tracing with LangSmith / Phoenix | Partial | `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | The pipeline now emits stage-level observability events end-to-end, but external OTEL/LangSmith/Phoenix export is still not fully wired |
+| V5 | Distributed tracing with LangSmith / Phoenix | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | Stage telemetry now emits persisted observability spans plus LangSmith/Phoenix-compatible export artifacts when those backends are configured |
 | V5 | Webhook / CI auto-evaluator | Implemented | `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_webhook_daemon.py` | Webhook payload validation, filtering, queueing, command execution, and event logging are implemented and tested |
 | V6 | Adversarial jailbreak synthesizers | Partial | `eval-pipeline/src/security/threat_intel.py` | Threat intel component exists, but current implementation is still lightweight |
 | V6 | Dynamic Agent-RAG support | Partial | `eval-pipeline/src/interfaces/rag_interface.py` | Interface exists, but agent reasoning/tool-use metrics are not fully implemented |
-| V6 | Human feedback RLHF loop | Partial | `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/src/evaluation/human_feedback_manager.py` | DPO queue exists, but end-to-end feedback-to-training automation is incomplete |
+| V6 | Human feedback RLHF loop | Implemented | `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py`, `eval-pipeline/tests/test_rag_evaluator_regression.py` | Failed/low-confidence answers are persisted into a DPO queue, exported as training datasets, and can auto-trigger a configured alignment run |
 | V6 | Federated graph multi-tenant isolation | Stub | `eval-pipeline/src/distributed/federated_learning.py` | Placeholder structure only |
 | V7 | Ray / Dask distributed execution | Stub | `eval-pipeline/src/distributed/ray_runner.py` | Mock runner only |
-| V7 | Dynamic few-shot knowledge graphs / Neo4J | Partial | `eval-pipeline/src/utils/neo4j_manager.py`, `eval-pipeline/tests/test_neo4j_manager.py` | The manager now supports optional Neo4j-driver connectivity plus in-memory fallback and normalized Cypher result handling, but the pipeline is not yet wired to depend on a live external Neo4j deployment |
+| V7 | Dynamic few-shot knowledge graphs / Neo4J | Implemented | `eval-pipeline/src/utils/neo4j_manager.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_neo4j_manager.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | The main pipeline now syncs generated knowledge graphs into the Neo4j manager, records retrieval previews, and surfaces sync metadata in pipeline artifacts |
 | V7 | LLaMA-Factory / Unsloth automation | Partial | `eval-pipeline/src/optimization/dpo_alignment.py` | Alignment queue exists, but training job orchestration is missing |
 | V7 | Fully automate GitOps GitHub Actions | Partial | `.github/workflows/benchmarking.yml` | Workflow exists, but not full benchmark comment/report automation |
 | V8 | Federated learning edge tiers | Stub | `eval-pipeline/src/distributed/federated_learning.py` | Placeholder class, not full federated system |
-| V8 | Advanced multi-modal RAG | Partial | `eval-pipeline/src/loaders/multimodal_loader.py` | Loader exists, but multimodal evaluation metrics remain incomplete |
+| V8 | Advanced multi-modal RAG | Implemented | `eval-pipeline/src/loaders/multimodal_loader.py`, `eval-pipeline/src/evaluation/multimodal_metrics.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_multimodal_metrics.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Multimodal contexts are now normalized and scored via modality-aware faithfulness, relevance, and coverage metrics during evaluation |
 | V8 | Real-time threat intelligence API | Stub | `eval-pipeline/src/security/threat_intel.py` | Not a real external intel integration |
 | V8 | Multi-agent swarm synthesis | Stub | `eval-pipeline/src/evaluation/swarm_agent.py` | Placeholder behavior only |
 | V9 | Automated hyperparameter search | Stub | `eval-pipeline/src/optimization/hyperparam_search.py` | Optimizer shape exists, but not real Optuna/RayTune orchestration |
@@ -109,11 +109,7 @@ These items are still materially incomplete even though some code exists:
 
 | Priority | Item | Current Gap |
 | --- | --- | --- |
-| High | Repo-wide mypy strict rollout | Core validator / orchestrator / KG modules are now typed, but the rest of the repository is not yet under strict mypy enforcement |
-| Medium | Observability spans | Stage-level observability is now wired locally, but external OTEL/LangSmith/Phoenix export remains incomplete |
-| Medium | Neo4j retrieval adoption in pipeline | The manager can now talk to a real Neo4j backend, but the main pipeline still does not require or exercise Neo4j-backed retrieval end-to-end |
-| Medium | Multimodal evaluation metrics | Loader exists, but evaluator lacks modality-aware scoring |
-| Medium | RLHF training backend | DPO queue exists, but no real training execution path |
+| High | Repo-wide mypy strict rollout | Core validator / orchestration / KG modules remain the only areas under meaningful strict typing; the wider repository is still not under consistent strict mypy enforcement |
 | Low | Legacy pytest warning cleanup | Full suite passes, but many historical tests still return non-`None` values and generate `PytestReturnNotNoneWarning` |
 | Low | Most V8+ roadmap items | Current code is mostly demo/mock level rather than production logic |
 
@@ -122,3 +118,4 @@ These items are still materially incomplete even though some code exists:
 - This audit is based on repository code paths, not roadmap prose.
 - Presence of a file alone does not count as completion unless it participates in a real execution path.
 - Several later-phase files are intentionally classified as `Stub` because they return hardcoded or simulated values.
+- Validation now includes `cd eval-pipeline && pytest -q` -> `238 passed, 159 warnings` and repository-root `pytest -q` -> `703 passed, 1 skipped, 229 warnings` with the vendored `ragas/ragas/tests` tree excluded from the monorepo default suite.
