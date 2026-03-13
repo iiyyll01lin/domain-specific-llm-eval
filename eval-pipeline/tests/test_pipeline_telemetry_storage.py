@@ -15,6 +15,8 @@ class _FakeObjectStoreClient:
 def test_pipeline_telemetry_records_stage_events_and_mirrors(tmp_path, monkeypatch):
     fake_client = _FakeObjectStoreClient()
     monkeypatch.setattr(PipelineTelemetry, "_build_object_store_client", lambda self: fake_client)
+    monkeypatch.setenv("LANGCHAIN_TRACING_V2", "true")
+    monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "http://phoenix.local")
 
     telemetry = PipelineTelemetry(tmp_path)
     telemetry.log_stage_event("knowledge_graph", "completed", {"nodes": 3})
@@ -28,3 +30,6 @@ def test_pipeline_telemetry_records_stage_events_and_mirrors(tmp_path, monkeypat
     assert payload["stage_events"][0]["stage"] == "knowledge_graph"
     assert payload["summary"]["total_generated"] == 2
     assert fake_client.uploads
+    assert (tmp_path / "telemetry" / "observability_spans.jsonl").exists()
+    assert (tmp_path / "telemetry" / "langsmith_spans.jsonl").exists()
+    assert (tmp_path / "telemetry" / "phoenix_spans.jsonl").exists()

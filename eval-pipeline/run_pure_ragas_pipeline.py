@@ -71,6 +71,7 @@ from src.utils.prompt_templates import (get_fallback_generation_templates,
                                         get_persona_templates,
                                         get_query_distribution_templates,
                                         load_prompt_library)
+from src.utils.neo4j_manager import Neo4jGraphManager
 from src.utils.pipeline_telemetry import PipelineTelemetry
 
 
@@ -928,6 +929,57 @@ def save_knowledge_graph(kg: KnowledgeGraph, output_dir: Path) -> str:
     return str(kg_filepath)
 
 
+def sync_knowledge_graph_to_neo4j(
+    kg: KnowledgeGraph, config: Dict[str, Any]
+) -> Dict[str, Any]:
+    neo4j_config = (
+        config.get("testset_generation", {})
+        .get("knowledge_graph_config", {})
+        .get("neo4j", {})
+    )
+    if not neo4j_config.get("enabled", False):
+        return {"enabled": False, "synced_nodes": 0, "synced_relationships": 0}
+
+    manager = Neo4jGraphManager(
+        uri=neo4j_config.get("uri", "bolt://localhost:7687"),
+        username=neo4j_config.get("username"),
+        password=neo4j_config.get("password"),
+        database=neo4j_config.get("database"),
+        allow_in_memory_fallback=bool(
+            neo4j_config.get("allow_in_memory_fallback", True)
+        ),
+    )
+    manager.connect()
+
+    synced_nodes = 0
+    for node in getattr(kg, "nodes", []):
+        manager.add_node(str(node.id), **_to_json_safe(node.properties))
+        synced_nodes += 1
+
+    synced_relationships = 0
+    for relationship in getattr(kg, "relationships", []) or []:
+        manager.add_relationship(
+            str(relationship.source.id),
+            str(relationship.target.id),
+            str(relationship.type),
+            **_to_json_safe(relationship.properties),
+        )
+        synced_relationships += 1
+
+    sample_query = neo4j_config.get(
+        "sample_query", "MATCH (a)-[r]->(b) RETURN a, r, b"
+    )
+    retrieval_preview = manager.execute_cypher(sample_query)
+    return {
+        "enabled": True,
+        "backend": manager.backend,
+        "synced_nodes": synced_nodes,
+        "synced_relationships": synced_relationships,
+        "retrieval_preview_count": len(retrieval_preview),
+        "retrieval_preview": retrieval_preview[:5],
+    }
+
+
 def setup_ragas_components(
     config: Dict[str, Any],
 ) -> Tuple[LangchainLLMWrapper, LangchainEmbeddingsWrapper]:
@@ -1360,6 +1412,9 @@ def main(argv: Optional[List[str]] = None):
 
         # Step 6: Save knowledge graph for reuse (as requested)
         kg_filepath = save_knowledge_graph(kg, output_dir)
+        neo4j_sync = sync_knowledge_graph_to_neo4j(kg, config)
+        if neo4j_sync.get("enabled"):
+            telemetry.log_stage_event("neo4j_sync", "completed", neo4j_sync)
 
         # Step 7: Generate synthetic testset using RAGAS
         test_samples = generate_ragas_testset(
@@ -1419,6 +1474,7 @@ def main(argv: Optional[List[str]] = None):
                     "personas": personas_path,
                     "scenarios": scenarios_path,
                 },
+                "neo4j_sync": neo4j_sync,
                 "prompt_profile": generation_settings.prompt_profile,
                 "query_distribution": generation_settings.query_distribution_records,
                 "async_generation": {

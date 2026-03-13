@@ -1,41 +1,10 @@
-import io
-import json
-import os
-
-import boto3
-
-
-def upload_to_s3(file_path, s3_key):
-    try:
-        s3 = boto3.client(
-            "s3",
-            endpoint_url="http://localhost:9000",
-            aws_access_key_id=os.environ.get("MINIO_ROOT_USER", "minioadmin"),
-            aws_secret_access_key=os.environ.get(
-                "MINIO_ROOT_PASSWORD", "minioadmin123"
-            ),
-        )
-        bucket = os.environ.get("MINIO_BUCKET", "rag-eval-dev")
-
-        # Check if bucket exists, if not create it
-        try:
-            s3.head_bucket(Bucket=bucket)
-        except:
-            try:
-                s3.create_bucket(Bucket=bucket)
-            except:
-                pass
-
-        s3.upload_file(file_path, bucket, s3_key)
-        print(f"Uploaded {file_path} to S3 bucket {bucket} at {s3_key}")
-    except Exception as e:
-        print(f"S3 Upload failed: {e}")
-
+from __future__ import annotations
 
 import json
 import logging
 import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
@@ -94,6 +63,39 @@ class TelemetryMetrics(TypedDict, total=False):
     summary: TelemetrySummary
 
 
+class TelemetrySpan(TypedDict, total=False):
+    trace_id: str
+    span_id: str
+    parent_span_id: str
+    timestamp: str
+    name: str
+    status: str
+    attributes: Dict[str, Any]
+
+
+class _SpanExporter:
+    def export(self, span: TelemetrySpan) -> None:
+        raise NotImplementedError
+
+
+class _JsonlSpanExporter(_SpanExporter):
+    def __init__(self, destination: Path):
+        self.destination = destination
+
+    def export(self, span: TelemetrySpan) -> None:
+        with open(self.destination, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(span, ensure_ascii=False, sort_keys=True))
+            handle.write("\n")
+
+
+class _LangSmithSpanExporter(_JsonlSpanExporter):
+    pass
+
+
+class _PhoenixSpanExporter(_JsonlSpanExporter):
+    pass
+
+
 class PipelineTelemetry:
     """Automated telemetry for RAGAS pipeline generation"""
 
@@ -102,6 +104,9 @@ class PipelineTelemetry:
         self.telemetry_dir = self.output_dir / "telemetry"
         self.telemetry_dir.mkdir(parents=True, exist_ok=True)
         self.object_store_client = self._build_object_store_client()
+        self.trace_id = uuid.uuid4().hex
+        self.spans_path = self.telemetry_dir / "observability_spans.jsonl"
+        self.span_exporters = self._build_span_exporters()
 
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.metrics: TelemetryMetrics = {
@@ -117,6 +122,20 @@ class PipelineTelemetry:
             "errors": [],
             "stage_events": [],
         }
+
+    def _build_span_exporters(self) -> List[_SpanExporter]:
+        exporters: List[_SpanExporter] = [_JsonlSpanExporter(self.spans_path)]
+        if os.environ.get("LANGCHAIN_TRACING_V2", "").lower() == "true":
+            exporters.append(
+                _LangSmithSpanExporter(self.telemetry_dir / "langsmith_spans.jsonl")
+            )
+        if os.environ.get("PHOENIX_COLLECTOR_ENDPOINT") or os.environ.get(
+            "PHOENIX_API_KEY"
+        ):
+            exporters.append(
+                _PhoenixSpanExporter(self.telemetry_dir / "phoenix_spans.jsonl")
+            )
+        return exporters
 
     def _build_object_store_client(self) -> Optional[ObjectStoreClient]:
         required = [
@@ -177,7 +196,25 @@ class PipelineTelemetry:
                 "details": details or {},
             }
         )
+        self._export_span(stage, status, details or {})
         self._save()
+
+    def _export_span(
+        self, stage: str, status: str, details: Dict[str, Any]
+    ) -> None:
+        span: TelemetrySpan = {
+            "trace_id": self.trace_id,
+            "span_id": uuid.uuid4().hex,
+            "timestamp": datetime.now().isoformat(),
+            "name": stage,
+            "status": status,
+            "attributes": details,
+        }
+        for exporter in self.span_exporters:
+            try:
+                exporter.export(span)
+            except Exception as exc:
+                logger.warning("⚠️ Failed to export telemetry span: %s", exc)
 
     def finish(self, status: str = "completed") -> None:
         """Mark telemetry as finished and save final state."""

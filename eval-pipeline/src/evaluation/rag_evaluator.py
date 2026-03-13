@@ -64,9 +64,7 @@ class RAGEvaluator:
             try:
                 from evaluation.ragas_evaluator import RagasEvaluator
 
-                self.ragas_evaluator = RagasEvaluator(
-                    self.eval_config.get("ragas_metrics", {})
-                )
+                self.ragas_evaluator = RagasEvaluator({"evaluation": self.eval_config})
             except Exception as e:
                 logger.warning(f"Failed to initialize RAGAS evaluator: {e}")
                 self.ragas_evaluator = None
@@ -473,9 +471,9 @@ class RAGEvaluator:
                 # Combine with original test data
                 combined_data = {
                     **qa_pair,
-                    "rag_answer": rag_response.get("answer", ""),
-                    "rag_confidence": rag_response.get("confidence"),
-                    "rag_contexts": rag_response.get("contexts", []),
+                    "rag_answer": rag_response.get("rag_answer", ""),
+                    "rag_confidence": rag_response.get("rag_confidence"),
+                    "rag_contexts": rag_response.get("rag_contexts", []),
                     "rag_response_time": rag_response.get("response_time", 0),
                     "query_timestamp": datetime.now().isoformat(),
                 }

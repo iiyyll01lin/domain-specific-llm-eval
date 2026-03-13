@@ -42,6 +42,18 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
     monkeypatch.setattr(pipeline, "save_knowledge_graph", lambda kg, output_dir: str(output_dir / "kg.json"))
     monkeypatch.setattr(
         pipeline,
+        "sync_knowledge_graph_to_neo4j",
+        lambda kg, config: {
+            "enabled": True,
+            "backend": "memory",
+            "synced_nodes": 1,
+            "synced_relationships": 0,
+            "retrieval_preview_count": 1,
+            "retrieval_preview": [{"hop_1": "A", "hop_2": "B"}],
+        },
+    )
+    monkeypatch.setattr(
+        pipeline,
         "build_generation_settings",
         lambda config, llm, kg: pipeline.GenerationSettings(
             run_config=pipeline.RunConfig(max_workers=4),
@@ -101,9 +113,51 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
         "configuration",
         "document_loading",
         "knowledge_graph",
+        "neo4j_sync",
         "testset_generation",
         "artifact_save",
     }
+
+
+def test_sync_knowledge_graph_to_neo4j_uses_manager_backend(monkeypatch):
+    node = SimpleNamespace(id="A", properties={"title": "Alpha"})
+    relationship = SimpleNamespace(
+        source=SimpleNamespace(id="A"),
+        target=SimpleNamespace(id="B"),
+        type="RELATED_TO",
+        properties={"score": 0.9},
+    )
+    kg = SimpleNamespace(nodes=[node], relationships=[relationship])
+
+    class _FakeManager:
+        def __init__(self, *args, **kwargs):
+            self.backend = "memory"
+
+        def connect(self):
+            return None
+
+        def add_node(self, *args, **kwargs):
+            return None
+
+        def add_relationship(self, *args, **kwargs):
+            return None
+
+        def execute_cypher(self, query):
+            return [{"hop_1": "A", "hop_2": "B", "relation": "RELATED_TO"}]
+
+    monkeypatch.setattr(pipeline, "Neo4jGraphManager", _FakeManager)
+
+    result = pipeline.sync_knowledge_graph_to_neo4j(
+        kg,
+        {
+            "testset_generation": {
+                "knowledge_graph_config": {"neo4j": {"enabled": True}}
+            }
+        },
+    )
+
+    assert result["enabled"] is True
+    assert result["retrieval_preview_count"] == 1
 
 
 class DummyGraph:

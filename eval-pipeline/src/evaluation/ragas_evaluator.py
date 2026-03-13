@@ -45,6 +45,8 @@ apply_global_tiktoken_patch()
 
 # Import RAGAS model_dump fix
 from .ragas_model_dump_fix import RagasModelDumpFix, apply_ragas_model_dump_fix
+from src.evaluation.multimodal_metrics import MultimodalResponseEvaluator
+from src.optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
 
 try:
     import pandas as pd
@@ -109,11 +111,21 @@ class RagasEvaluator:
     def __init__(self, config: Dict[str, Any]):
         """Initialize the RAGAS evaluator with configuration."""
         self.config = config
-        self.ragas_config = config.get("evaluation", {}).get("ragas", {})
-        self.ragas_metrics_config = config.get("evaluation", {}).get("ragas_metrics", {})
+        evaluation_config = config.get("evaluation") if isinstance(config, dict) else None
+        if isinstance(evaluation_config, dict):
+            self.ragas_config = evaluation_config.get("ragas", {})
+            self.ragas_metrics_config = evaluation_config.get("ragas_metrics", {})
+        else:
+            self.ragas_config = config.get("ragas", {}) if isinstance(config, dict) else {}
+            self.ragas_metrics_config = (
+                config.get("ragas_metrics", config) if isinstance(config, dict) else {}
+            )
         self.ragas_available = False
         self.metric_weights = self._load_metric_weights()
         self.heuristic = self._build_domain_heuristic()
+        self.multimodal_evaluator = MultimodalResponseEvaluator()
+        alignment_config = self.ragas_metrics_config.get("alignment", {})
+        self.alignment_pipeline = DirectPreferenceOptimizationPipeline(alignment_config)
         self.actor_llm: Any = _ActorIdentityLLM()
         self.critic_llm: Any = None
         self.llm_roles: Dict[str, LLMRoleBinding] = {
@@ -178,15 +190,11 @@ class RagasEvaluator:
     def _setup_custom_llm(self):
         """Setup custom LLM for RAGAS evaluation."""
         try:
+            llm_config = self.ragas_metrics_config.get("llm", {})
             self.actor_preprocessing_enabled = bool(
                 llm_config.get("enable_actor_preprocessing", False)
                 or llm_config.get("fill_missing_answers", False)
             )
-
-            # Get custom LLM configuration
-            eval_config = self.config.get("evaluation", {})
-            ragas_metrics_config = eval_config.get("ragas_metrics", {})
-            llm_config = ragas_metrics_config.get("llm", {})
 
             # Check if we should use custom LLM
             use_custom_llm = llm_config.get("use_custom_llm", False)
@@ -300,6 +308,85 @@ class RagasEvaluator:
         except Exception as e:
             logger.error(f"❌ Error setting up custom LLM: {e}")
             logger.info("💡 Continuing with default RAGAS configuration")
+
+    def _merge_metric_payloads(
+        self,
+        base_result: Dict[str, Any],
+        extra_metrics: Dict[str, Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        if not extra_metrics:
+            return base_result
+        base_result.setdefault("metrics", {}).update(extra_metrics)
+        valid_means = [
+            metric.get("mean", 0.0)
+            for metric in base_result["metrics"].values()
+            if metric.get("mean") is not None
+        ]
+        base_result.setdefault("summary", {})
+        base_result["summary"]["total_metrics"] = len(base_result["metrics"])
+        base_result["summary"]["average_score"] = (
+            sum(valid_means) / len(valid_means) if valid_means else 0.0
+        )
+        base_result["summary"]["metric_names"] = list(base_result["metrics"].keys())
+        base_result["summary"]["valid_metrics"] = len(valid_means)
+        base_result["summary"]["domain_score"] = self._compute_weighted_domain_score(
+            base_result["metrics"]
+        )
+        return base_result
+
+    def _collect_alignment_failures(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        threshold = float(
+            self.ragas_metrics_config.get("alignment", {}).get(
+                "confidence_threshold", 0.6
+            )
+        )
+        queued = 0
+        for response in rag_responses:
+            answer = str(response.get("answer") or response.get("rag_answer") or "").strip()
+            reference = str(
+                response.get("ground_truth")
+                or response.get("reference")
+                or response.get("expected_answer")
+                or ""
+            ).strip()
+            confidence = response.get("confidence", response.get("rag_confidence", 1.0))
+            try:
+                confidence_value = float(confidence)
+            except (TypeError, ValueError):
+                confidence_value = 1.0
+            if not reference:
+                continue
+            if answer and confidence_value >= threshold:
+                continue
+            self.alignment_pipeline.ingest_failure(
+                prompt=str(response.get("question") or response.get("user_input") or ""),
+                bad_response=answer,
+                expected_ideal=reference,
+                metadata={
+                    "confidence": confidence_value,
+                    "response_id": response.get("id"),
+                },
+            )
+            queued += 1
+
+        result: Dict[str, Any] = {"queued_failures": queued}
+        if queued and self.alignment_pipeline.should_auto_run():
+            result["training_run"] = self.alignment_pipeline.run_alignment_cycle()
+        elif queued:
+            result["training_run"] = {
+                "executed": False,
+                "sample_count": len(self.alignment_pipeline.failure_queue),
+                "dataset_path": str(self.alignment_pipeline.dataset_file),
+            }
+        else:
+            result["training_run"] = {
+                "executed": False,
+                "sample_count": 0,
+                "dataset_path": str(self.alignment_pipeline.dataset_file),
+            }
+        return result
 
     def evaluate(
         self, testset: Dict[str, Any], rag_responses: List[Dict[str, Any]]
@@ -419,6 +506,20 @@ class RagasEvaluator:
 
             # Format results
             formatted_results = self._format_results(results, domain_regex_scores)
+
+            multimodal_results = self.multimodal_evaluator.evaluate_responses(
+                rag_responses
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                multimodal_results.get("metrics", {}),
+            )
+            formatted_results["multimodal"] = {
+                "modalities_present": multimodal_results.get("modalities_present", {})
+            }
+            formatted_results["alignment"] = self._collect_alignment_failures(
+                rag_responses
+            )
 
             logger.info("✅ RAGAS evaluation completed successfully")
             return formatted_results
@@ -849,3 +950,47 @@ class RagasEvaluator:
     def is_available(self) -> bool:
         """Check if RAGAS evaluation is available."""
         return self.ragas_available
+
+    def evaluate_responses(self, rag_responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Evaluate already collected RAG responses from the pipeline coordinator."""
+        questions: List[str] = []
+        ground_truths: List[str] = []
+        contexts: List[List[Any]] = []
+        normalized_responses: List[Dict[str, Any]] = []
+
+        for response in rag_responses:
+            question = str(response.get("question") or response.get("user_input") or "")
+            answer = str(response.get("answer") or response.get("rag_answer") or "")
+            ground_truth = str(
+                response.get("ground_truth") or response.get("reference") or ""
+            )
+            context_payload = (
+                response.get("contexts")
+                or response.get("rag_contexts")
+                or response.get("retrieved_contexts")
+                or []
+            )
+            if isinstance(context_payload, list):
+                contexts_list = context_payload
+            else:
+                contexts_list = [context_payload]
+
+            questions.append(question)
+            ground_truths.append(ground_truth)
+            contexts.append(contexts_list)
+            normalized_responses.append(
+                {
+                    **response,
+                    "answer": answer,
+                    "contexts": contexts_list,
+                }
+            )
+
+        return self.evaluate(
+            {
+                "questions": questions,
+                "ground_truths": ground_truths,
+                "contexts": contexts,
+            },
+            normalized_responses,
+        )
