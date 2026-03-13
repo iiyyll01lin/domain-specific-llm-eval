@@ -18,6 +18,7 @@ if str(utils_dir) not in sys.path:
 
 import logging
 import re
+from difflib import SequenceMatcher
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -94,6 +95,13 @@ class ContextualKeywordEvaluator:
         self.threshold = config.get("threshold", 0.6)
         self.similarity_model_name = config.get("similarity_model", "all-MiniLM-L6-v2")
         self.spacy_model_name = config.get("spacy_model", "en_core_web_sm")
+        self.synonym_weight = float(config.get("synonym_weight", 0.9))
+        self.partial_match_weight = float(config.get("partial_match_weight", 0.75))
+        self.semantic_match_weight = float(config.get("semantic_match_weight", 0.7))
+        self.semantic_threshold = float(config.get("semantic_threshold", 0.55))
+        self.keyword_synonyms = self._normalize_synonym_map(
+            config.get("keyword_synonyms", {})
+        )
 
         # Initialize models using offline manager
         self.similarity_model = None
@@ -168,15 +176,18 @@ class ContextualKeywordEvaluator:
             else:
                 self.nlp = None
 
-        # Initialize components
+        # Initialize any components still missing after offline loading.
         self._initialize_models()
 
         logger.info("Contextual keyword evaluator initialized")
 
     def _initialize_models(self) -> None:
         """Initialize required models."""
+        if self.similarity_model is not None and self.nlp is not None:
+            return
+
         # Initialize sentence transformer model
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
+        if SENTENCE_TRANSFORMERS_AVAILABLE and self.similarity_model is None:
             try:
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
                 self.similarity_model = SentenceTransformer(
@@ -188,19 +199,124 @@ class ContextualKeywordEvaluator:
             except Exception as e:
                 logger.warning(f"Failed to load sentence transformer: {e}")
                 self.similarity_model = None
-        else:
+        elif not SENTENCE_TRANSFORMERS_AVAILABLE:
             self.similarity_model = None
 
         # Initialize spaCy model
-        if SPACY_AVAILABLE:
+        if SPACY_AVAILABLE and self.nlp is None:
             try:
                 self.nlp = spacy.load(self.spacy_model_name)
                 logger.info(f"✅ Loaded spaCy model: {self.spacy_model_name}")
             except Exception as e:
                 logger.warning(f"Failed to load spaCy model: {e}")
                 self.nlp = None
-        else:
+        elif not SPACY_AVAILABLE:
             self.nlp = None
+
+    def _normalize_synonym_map(
+        self, raw_synonyms: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        normalized: Dict[str, List[str]] = {}
+        for keyword, synonyms in raw_synonyms.items():
+            normalized[str(keyword).strip().lower()] = [
+                str(synonym).strip().lower()
+                for synonym in synonyms
+                if str(synonym).strip()
+            ]
+        return normalized
+
+    def _keyword_variants(self, keyword: str) -> List[str]:
+        normalized = keyword.strip().lower()
+        variants = [normalized]
+        variants.extend(self.keyword_synonyms.get(normalized, []))
+        if " " in normalized:
+            variants.append(normalized.replace(" ", ""))
+        return list(dict.fromkeys(variant for variant in variants if variant))
+
+    def _partial_match_score(self, keyword: str, response_text: str) -> float:
+        normalized_keyword = keyword.strip().lower()
+        if not normalized_keyword:
+            return 0.0
+
+        if self._contains_chinese(normalized_keyword):
+            chars = [char for char in normalized_keyword if char.strip()]
+            if not chars:
+                return 0.0
+            char_matches = sum(1 for char in chars if char in response_text)
+            return char_matches / len(chars)
+
+        keyword_tokens = [token for token in re.split(r"\W+", normalized_keyword) if token]
+        response_tokens = [token for token in re.split(r"\W+", response_text) if token]
+        if not keyword_tokens or not response_tokens:
+            return SequenceMatcher(None, normalized_keyword, response_text).ratio()
+
+        token_overlap = sum(1 for token in keyword_tokens if token in response_tokens)
+        overlap_score = token_overlap / len(keyword_tokens)
+        sequence_score = max(
+            SequenceMatcher(None, normalized_keyword, token).ratio()
+            for token in response_tokens
+        )
+        return max(overlap_score, sequence_score)
+
+    def _semantic_keyword_score(self, keyword: str, response: str) -> float:
+        if not self.similarity_model:
+            return 0.0
+        try:
+            segments = self._extract_segments_fallback(response)
+            if not segments:
+                segments = [response]
+            keyword_embedding = self.similarity_model.encode(keyword, convert_to_tensor=True)
+            segment_embeddings = self.similarity_model.encode(segments, convert_to_tensor=True)
+            similarities = util.cos_sim(keyword_embedding, segment_embeddings)[0]
+            return float(torch.max(similarities).item())
+        except Exception as exc:
+            logger.debug("Semantic keyword scoring failed for '%s': %s", keyword, exc)
+            return 0.0
+
+    def _score_keyword_match(self, keyword: str, response: str) -> Dict[str, Any]:
+        response_lower = response.lower()
+        variants = self._keyword_variants(keyword)
+
+        best_match_score = 0.0
+        best_match_type = "missing"
+        matched_variant = ""
+
+        for variant in variants:
+            if variant in response_lower:
+                return {
+                    "keyword": keyword,
+                    "score": 1.0,
+                    "match_type": "exact" if variant == keyword.lower().strip() else "synonym",
+                    "matched_variant": variant,
+                }
+
+        for variant in variants:
+            partial_score = self._partial_match_score(variant, response_lower)
+            if partial_score >= best_match_score:
+                best_match_score = partial_score
+                matched_variant = variant
+                best_match_type = "partial"
+
+        semantic_score = self._semantic_keyword_score(keyword, response)
+        if semantic_score >= self.semantic_threshold and semantic_score > best_match_score:
+            best_match_score = semantic_score
+            best_match_type = "semantic"
+            matched_variant = keyword
+
+        if best_match_type == "semantic":
+            weighted_score = min(1.0, best_match_score * self.semantic_match_weight)
+        elif best_match_type == "partial":
+            weighted_score = min(1.0, best_match_score * self.partial_match_weight)
+        else:
+            weighted_score = 0.0
+
+        return {
+            "keyword": keyword,
+            "score": weighted_score,
+            "raw_score": best_match_score,
+            "match_type": best_match_type,
+            "matched_variant": matched_variant,
+        }
 
     def evaluate_response(
         self,
@@ -287,40 +403,40 @@ class ContextualKeywordEvaluator:
         Returns:
             Evaluation results dictionary
         """
-        # Enhanced keyword matching for Chinese text
-        response_lower = response.lower()
+        mandatory_matches = [
+            self._score_keyword_match(keyword, response)
+            for keyword in mandatory_keywords
+            if keyword
+        ]
+        optional_matches = [
+            self._score_keyword_match(keyword, response)
+            for keyword in optional_keywords
+            if keyword
+        ]
 
-        # Check mandatory keywords with enhanced Chinese matching
-        mandatory_found = 0
-        mandatory_matched = []
-        mandatory_missing = []
+        mandatory_score = (
+            float(safe_mean([match["score"] for match in mandatory_matches]))
+            if mandatory_matches
+            else 1.0
+        )
+        optional_score = (
+            float(safe_mean([match["score"] for match in optional_matches]))
+            if optional_matches
+            else 1.0
+        )
 
-        if mandatory_keywords:  # Ensure list is not empty
-            for keyword in mandatory_keywords:
-                if keyword and self._is_keyword_present(keyword, response_lower):
-                    mandatory_found += 1
-                    mandatory_matched.append(keyword)
-                else:
-                    mandatory_missing.append(keyword)
-            mandatory_score = mandatory_found / len(mandatory_keywords)
-        else:
-            mandatory_score = 1.0  # If no mandatory keywords, consider it a pass
-
-        # Check optional keywords with enhanced Chinese matching
-        optional_found = 0
-        optional_matched = []
-        optional_missing = []
-
-        if optional_keywords:  # Ensure list is not empty
-            for keyword in optional_keywords:
-                if keyword and self._is_keyword_present(keyword, response_lower):
-                    optional_found += 1
-                    optional_matched.append(keyword)
-                else:
-                    optional_missing.append(keyword)
-            optional_score = optional_found / len(optional_keywords)
-        else:
-            optional_score = 1.0  # If no optional keywords, consider it a pass
+        mandatory_matched = [
+            match["keyword"] for match in mandatory_matches if match["score"] >= 0.5
+        ]
+        mandatory_missing = [
+            match["keyword"] for match in mandatory_matches if match["score"] < 0.5
+        ]
+        optional_matched = [
+            match["keyword"] for match in optional_matches if match["score"] >= 0.5
+        ]
+        optional_missing = [
+            match["keyword"] for match in optional_matches if match["score"] < 0.5
+        ]
 
         # Calculate weighted total score with safety checks
         mandatory_weight = self.weights.get("mandatory", 0.8)
@@ -345,6 +461,13 @@ class ContextualKeywordEvaluator:
             "missing_mandatory": mandatory_missing,
             "matched_optional": optional_matched,
             "missing_optional": optional_missing,
+            "mandatory_match_details": mandatory_matches,
+            "optional_match_details": optional_matches,
+            "keyword_relevance_score": float(
+                safe_mean([match["score"] for match in mandatory_matches + optional_matches])
+            )
+            if (mandatory_matches or optional_matches)
+            else 0.0,
             "evaluation_method": "enhanced_fallback_keyword_presence",
         }
 
@@ -385,6 +508,77 @@ class ContextualKeywordEvaluator:
                 return True
 
         return False
+
+    def evaluate_responses(self, rag_responses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Evaluate normalized RAG responses and aggregate contextual keyword metrics."""
+        evaluations: List[Dict[str, Any]] = []
+
+        for item in rag_responses:
+            keywords = item.get("expected_keywords") or item.get("mandatory_keywords") or item.get(
+                "extracted_keywords"
+            ) or []
+            optional_keywords = item.get("optional_keywords") or []
+            answer = str(item.get("rag_answer") or item.get("answer") or "")
+
+            if isinstance(keywords, str):
+                keywords = [token.strip() for token in re.split(r"[,，、]", keywords) if token.strip()]
+            if isinstance(optional_keywords, str):
+                optional_keywords = [
+                    token.strip()
+                    for token in re.split(r"[,，、]", optional_keywords)
+                    if token.strip()
+                ]
+
+            if not keywords:
+                continue
+
+            evaluations.append(
+                {
+                    "response": answer,
+                    "mandatory_keywords": list(keywords),
+                    "optional_keywords": list(optional_keywords),
+                }
+            )
+
+        batch_results = self.evaluate_batch(evaluations)
+        stats = batch_results.get("aggregate_stats", {})
+
+        return {
+            "available": True,
+            "pass_count": int(stats.get("passed_evaluations", 0)),
+            "fail_count": int(stats.get("failed_evaluations", 0)),
+            "total_evaluations": int(stats.get("total_evaluations", 0)),
+            "average_score": float(stats.get("mean_total_score", 0.0)),
+            "pass_rate": float(stats.get("pass_rate", 0.0)),
+            "metrics": {
+                "contextual_keyword_score": {
+                    "mean": float(stats.get("mean_total_score", 0.0)),
+                    "scores": [
+                        float(result.get("total_score", 0.0))
+                        for result in batch_results.get("individual_results", [])
+                    ],
+                },
+                "keyword_relevance_score": {
+                    "mean": float(
+                        safe_mean(
+                            [
+                                float(result.get("keyword_relevance_score", 0.0))
+                                for result in batch_results.get("individual_results", [])
+                            ]
+                        )
+                    )
+                    if batch_results.get("individual_results")
+                    else 0.0,
+                    "scores": [
+                        float(result.get("keyword_relevance_score", 0.0))
+                        for result in batch_results.get("individual_results", [])
+                    ],
+                },
+            },
+            "individual_results": batch_results.get("individual_results", []),
+            "evaluation_config": batch_results.get("evaluation_config", {}),
+            "method": "contextual_keyword_matching",
+        }
 
     def _contains_chinese(self, text: str) -> bool:
         """Check if text contains Chinese characters."""
@@ -694,10 +888,12 @@ Configuration:
                 rag_response = qa_pair.get("rag_answer", qa_pair.get("reference", ""))
 
                 if expected_keywords:
+                    merged_mandatory_keywords = list(expected_keywords) + list(
+                        mandatory_keywords
+                    )
                     eval_result = self.evaluate_response(
                         rag_response,
-                        expected_keywords,
-                        mandatory_keywords,
+                        merged_mandatory_keywords,
                         optional_keywords,
                     )
                     results.append(

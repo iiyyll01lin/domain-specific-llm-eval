@@ -354,7 +354,7 @@ eval-pipeline/src/utils/ragas_fixes.py
 eval-pipeline/src/utils/ragas_testset_fixes.py
 eval-pipeline/src/utils/spacy_fixes.py
 eval-pipeline/test_documents/
-eval-pipeline/tests/
+eval-pipeline/tests/*.log
 
 # Root-level dev/status markdown files
 DATA_VALIDATION.md
