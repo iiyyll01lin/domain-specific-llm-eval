@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
-from scripts.generate_supplychain_artifacts import build_sbom_diff, prune_directory, write_provenance
+
+_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "generate_supplychain_artifacts.py"
+_SPEC = importlib.util.spec_from_file_location("root_generate_supplychain_artifacts", _SCRIPT_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+_MODULE = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = _MODULE
+_SPEC.loader.exec_module(_MODULE)
+
+build_sbom_diff = _MODULE.build_sbom_diff
+prune_directory = _MODULE.prune_directory
+write_provenance = _MODULE.write_provenance
 
 
 def test_build_sbom_diff_detects_component_changes() -> None:

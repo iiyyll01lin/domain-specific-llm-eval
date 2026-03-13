@@ -9,6 +9,9 @@ import tempfile
 import pytest
 
 
+SCRIPT_PATH = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "check_bundle_size.py"
+
+
 def _write_js(directory: pathlib.Path, name: str, size_bytes: int) -> pathlib.Path:
     """Write a JS file of exactly *size_bytes* to *directory*."""
     path = directory / name
@@ -22,7 +25,7 @@ class TestCheckBundleSize:
         # Write a small file (will compress well below 300 KB)
         _write_js(tmp_path, "KgPanel-abc123.js", 1024)
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path), "--budget-kb", "300"],
             capture_output=True, text=True,
         )
@@ -32,7 +35,7 @@ class TestCheckBundleSize:
         """A KgPanel chunk over budget should return exit code 1."""
         _write_js(tmp_path, "KgPanel-big.js", 4096)
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path), "--budget-kb", "0"],  # 0 KB budget → always fails
             capture_output=True, text=True,
         )
@@ -44,7 +47,7 @@ class TestCheckBundleSize:
         _write_js(tmp_path, "vendor-huge.js", 1024 * 1024)  # 1 MB, not KG
         _write_js(tmp_path, "KgPanel-small.js", 1024)        # tiny KG chunk
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path), "--budget-kb", "300"],
             capture_output=True, text=True,
         )
@@ -55,7 +58,7 @@ class TestCheckBundleSize:
         _write_js(tmp_path, "KgPanel-xyz.js", 10 * 1024)
         report_path = tmp_path / "report.json"
         subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path),
              "--budget-kb", "300",
              "--report", str(report_path)],
@@ -72,7 +75,7 @@ class TestCheckBundleSize:
         _write_js(tmp_path, "KgPanel-test.js", 5 * 1024)
         report_path = tmp_path / "r.json"
         subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path),
              "--budget-kb", "300",
              "--report", str(report_path)],
@@ -87,7 +90,7 @@ class TestCheckBundleSize:
     def test_missing_build_dir_exits_nonzero(self, tmp_path):
         """Missing build directory should exit with code 1."""
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path / "nonexistent")],
             capture_output=True, text=True,
         )
@@ -96,7 +99,7 @@ class TestCheckBundleSize:
     def test_empty_dir_exits_nonzero(self, tmp_path):
         """A build dir with no JS files should exit 1."""
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path)],
             capture_output=True, text=True,
         )
@@ -107,7 +110,7 @@ class TestCheckBundleSize:
         _write_js(tmp_path, "MyCustomChunk-abc.js", 5 * 1024)
         # With budget of 0 KB any file will fail
         result = subprocess.run(
-            [sys.executable, "scripts/check_bundle_size.py",
+            [sys.executable, str(SCRIPT_PATH),
              "--build-dir", str(tmp_path),
              "--budget-kb", "0",
              "--pattern", "mycustom"],

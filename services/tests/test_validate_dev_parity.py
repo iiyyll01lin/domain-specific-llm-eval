@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
-from scripts import validate_dev_parity
+
+_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "validate_dev_parity.py"
+_SPEC = importlib.util.spec_from_file_location("root_validate_dev_parity", _SCRIPT_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+validate_dev_parity = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = validate_dev_parity
+_SPEC.loader.exec_module(validate_dev_parity)
 
 
 def test_compare_snapshots_detects_dependency_drift() -> None:

@@ -18,7 +18,12 @@ class OfflineTiktokenFallback:
         self.max_token_value = 200000
         self.eot_token = 199999
         
-    def encode(self, text: str) -> List[int]:
+    def encode(
+        self,
+        text: str,
+        allowed_special: Optional[set] = None,
+        disallowed_special: object = "raise",
+    ) -> List[int]:
         """Simple word-based tokenization fallback"""
         if not text:
             return []
@@ -60,7 +65,19 @@ class OfflineTiktokenFallback:
     # Additional methods that ragas or other libraries might expect
     def encode_with_unstable(self, text: str, allowed_special: set = None, disallowed_special: str = "raise") -> List[int]:
         """Encode with special tokens - fallback ignores special handling"""
-        return self.encode(text)
+        return self.encode(
+            text,
+            allowed_special=allowed_special,
+            disallowed_special=disallowed_special,
+        )
+
+    @property
+    def vocab_size(self) -> int:
+        return 100000
+
+    @property
+    def n_vocab(self) -> int:
+        return self.vocab_size
     
     def decode_single_token_bytes(self, token: int) -> bytes:
         """Decode single token to bytes"""
@@ -114,6 +131,7 @@ def create_tiktoken_module():
     # Add main functions
     module.get_encoding = OfflineTiktokenModule.get_encoding
     module.encoding_for_model = OfflineTiktokenModule.encoding_for_model
+    module.Encoding = OfflineTiktokenFallback
     
     # Create and add core submodule (this is what RAGAS is looking for)
     core_module = types.ModuleType('tiktoken.core')
