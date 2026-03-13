@@ -24,14 +24,18 @@ Status values:
 | V4 | Dashboard progress tracking and job inspection | Implemented | `eval-pipeline/src/ui/dashboard_job_runner.py`, `eval-pipeline/telemetry_dashboard.py`, `eval-pipeline/tests/test_dashboard_actions.py` |
 | V7 | Neo4j retrieval compatibility hardening | Implemented | `eval-pipeline/src/utils/neo4j_manager.py`, `eval-pipeline/tests/test_neo4j_manager.py`, `eval-pipeline/tests/test_v7_components.py` |
 | V4 / V5 | Object storage, webhook, and stage observability convergence | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/utils/pipeline_file_saver.py`, `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_pipeline_file_saver_storage.py`, `eval-pipeline/tests/test_webhook_daemon.py` |
+| README limitations | Contextual keyword scoring no longer degrades to simple binary-only fallback behavior | Implemented | `eval-pipeline/src/evaluation/contextual_keyword_evaluator.py`, `eval-pipeline/tests/test_contextual_keyword_evaluator.py`, `LIMITATIONS_PROGRESS_20260313.md` |
+| Legacy diagnostics | Formal pytest coverage added for report-generation and integration smoke checks previously covered only by standalone scripts | Implemented | `eval-pipeline/tests/test_report_generator_regression.py`, `eval-pipeline/tests/test_contextual_keyword_evaluator.py` |
 
 ## Validation Summary
 
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Focused regression / functional / e2e suite | Passed | `cd eval-pipeline && pytest -q tests/test_dashboard_actions.py tests/test_human_feedback_manager.py tests/test_neo4j_manager.py tests/test_run_pure_ragas_pipeline_e2e.py tests/test_v7_components.py tests/test_webhook_daemon.py` |
+| Contextual keyword / report regression suite | Passed | `cd eval-pipeline && pytest -q tests/test_contextual_keyword_evaluator.py tests/test_report_generator_regression.py tests/test_rag_evaluator_regression.py tests/test_ragas_evaluator_domain_metrics.py` -> `10 passed` |
+| Service-layer smoke check | Passed | `python3 e2e_smoke.py` -> `E2E smoke test passed` |
 | Full eval-pipeline pytest suite | Passed | `cd eval-pipeline && pytest -q` -> `232 passed, 159 warnings` |
-| Targeted typing check on changed modules | Partial | `mypy` still reports missing third-party stubs (`ragas`, `pandas`, `boto3`, internal storage package), so runtime modules were validated by tests rather than a clean strict-mypy pass |
+| Targeted typing check on changed modules | Passed | `python3 -m mypy --config-file mypy.ini eval-pipeline/src/utils/pipeline_telemetry.py eval-pipeline/src/evaluation/ragas_evaluator.py eval-pipeline/src/evaluation/rag_evaluator.py eval-pipeline/src/evaluation/ragas_model_dump_fix.py eval-pipeline/src/interfaces/english_prompts.py eval-pipeline/src/interfaces/rag_interface.py services/common/config.py services/common/errors.py services/common/storage/object_store.py` |
 
 ## Executive Summary
 
@@ -110,7 +114,7 @@ These items are still materially incomplete even though some code exists:
 | Priority | Item | Current Gap |
 | --- | --- | --- |
 | High | Repo-wide mypy strict rollout | Core validator / orchestration / KG modules remain the only areas under meaningful strict typing; the wider repository is still not under consistent strict mypy enforcement |
-| Low | Legacy pytest warning cleanup | Full suite passes, but many historical tests still return non-`None` values and generate `PytestReturnNotNoneWarning` |
+| Low | Legacy pytest warning cleanup | Maintained pytest coverage now exists for some former standalone diagnostics, but many historical root / `eval-pipeline/test_*.py` scripts still need conversion into `eval-pipeline/tests/` |
 | Low | Most V8+ roadmap items | Current code is mostly demo/mock level rather than production logic |
 
 ## Evidence Notes
