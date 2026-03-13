@@ -46,7 +46,7 @@ class RAGInterface:
 
         logger.info(f"RAG interface initialized for endpoint: {self.endpoint}")
 
-    def _load_english_prompt_helpers(self):
+    def _load_english_prompt_helpers(self) -> None:
         """Load English prompt helper functions."""
         try:
             from .english_prompts import (create_custom_english_prompt,
@@ -75,7 +75,7 @@ EVALUATION CONTEXT:
 Remember: ALL responses must be in English only for proper evaluation."""
 
             def create_custom_english_prompt(
-                domain: str = "", requirements: list = None
+                domain: str = "", requirements: Optional[List[str]] = None
             ) -> str:
                 base = "You are a helpful assistant that MUST respond only in English."
                 if domain:
@@ -400,7 +400,7 @@ EVALUATION CONTEXT:
         # Check for custom prompt in config
         custom_prompt = self.config.get("english_system_prompt")
         if custom_prompt:
-            return custom_prompt
+            return str(custom_prompt)
 
         # Check for prompt type preference
         prompt_type = self.config.get("english_prompt_type", "default")

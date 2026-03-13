@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import yaml
 
@@ -100,8 +100,8 @@ def load_prompt_library(
 def get_profile(
     library: Dict[str, Any], profile_name: str = "default"
 ) -> Dict[str, Any]:
-    profiles = library.get("profiles", {})
-    return profiles.get(profile_name, profiles.get("default", {}))
+    profiles = cast(Dict[str, Dict[str, Any]], library.get("profiles", {}))
+    return cast(Dict[str, Any], profiles.get(profile_name, profiles.get("default", {})))
 
 
 def get_system_prompt(
@@ -112,8 +112,8 @@ def get_system_prompt(
 ) -> str:
     library = library or DEFAULT_LIBRARY
     profile = get_profile(library, profile_name)
-    prompts = profile.get("system_prompts", {})
-    return prompts.get(prompt_type, prompts.get("default", ""))
+    prompts = cast(Dict[str, str], profile.get("system_prompts", {}))
+    return cast(str, prompts.get(prompt_type, prompts.get("default", "")))
 
 
 def get_persona_templates(
@@ -123,7 +123,7 @@ def get_persona_templates(
 ) -> List[Dict[str, Any]]:
     library = library or DEFAULT_LIBRARY
     profile = get_profile(library, profile_name)
-    return profile.get("personas", [])
+    return cast(List[Dict[str, Any]], profile.get("personas", []))
 
 
 def get_fallback_generation_templates(
@@ -133,7 +133,7 @@ def get_fallback_generation_templates(
 ) -> Dict[str, Dict[str, Any]]:
     library = library or DEFAULT_LIBRARY
     profile = get_profile(library, profile_name)
-    return profile.get("fallback_generation", {})
+    return cast(Dict[str, Dict[str, Any]], profile.get("fallback_generation", {}))
 
 
 def get_query_distribution_templates(
@@ -143,4 +143,4 @@ def get_query_distribution_templates(
 ) -> List[Dict[str, Any]]:
     library = library or DEFAULT_LIBRARY
     profile = get_profile(library, profile_name)
-    return profile.get("query_distribution", [])
+    return cast(List[Dict[str, Any]], profile.get("query_distribution", []))

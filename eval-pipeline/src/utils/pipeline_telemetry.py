@@ -13,10 +13,12 @@ workspace_root = Path(__file__).resolve().parents[3]
 if str(workspace_root) not in sys.path:
     sys.path.insert(0, str(workspace_root))
 
+_ObjectStoreClient: Any = None
+
 try:
-    from services.common.storage.object_store import ObjectStoreClient
+    from services.common.storage.object_store import ObjectStoreClient as _ObjectStoreClient
 except Exception:  # pragma: no cover - optional dependency for eval-pipeline runtime
-    ObjectStoreClient = None  # type: ignore[assignment]
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -137,17 +139,17 @@ class PipelineTelemetry:
             )
         return exporters
 
-    def _build_object_store_client(self) -> Optional[ObjectStoreClient]:
+    def _build_object_store_client(self) -> Optional[Any]:
         required = [
             os.environ.get("OBJECT_STORE_ENDPOINT"),
             os.environ.get("OBJECT_STORE_ACCESS_KEY"),
             os.environ.get("OBJECT_STORE_SECRET_KEY"),
             os.environ.get("OBJECT_STORE_BUCKET"),
         ]
-        if not all(required) or ObjectStoreClient is None:
+        if not all(required) or _ObjectStoreClient is None:
             return None
         try:
-            return ObjectStoreClient()
+            return _ObjectStoreClient()
         except Exception as exc:
             logger.warning("⚠️ Object store client unavailable for telemetry mirroring: %s", exc)
             return None

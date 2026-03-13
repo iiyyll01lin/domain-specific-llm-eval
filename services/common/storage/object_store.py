@@ -1,7 +1,7 @@
 import hashlib
 import logging
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 import boto3
 from botocore.client import BaseClient
@@ -43,7 +43,9 @@ class ObjectStoreClient:
             use_ssl=settings.object_store_use_ssl,
         )
 
-    def _execute_with_retry(self, operation: str, func: Callable, *args, **kwargs):
+    def _execute_with_retry(
+        self, operation: str, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         last_exception: Optional[Exception] = None
         for attempt in range(1, self._max_attempts + 1):
             try:
@@ -118,7 +120,7 @@ class ObjectStoreClient:
             Bucket=target_bucket,
             Key=key,
         )
-        body = response["Body"].read()
+        body = cast(bytes, response["Body"].read())
         metadata_checksum = response.get("Metadata", {}).get("checksum")
         checksum_to_compare = expected_checksum or metadata_checksum
         if checksum_to_compare:

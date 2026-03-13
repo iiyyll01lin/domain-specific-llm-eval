@@ -16,7 +16,7 @@ class ChecksumMismatchError(ObjectStoreError):
     def __init__(self, message: str = "Checksum mismatch detected"):
         super().__init__(error_code="object_store_checksum_mismatch", message=message, http_status=status.HTTP_409_CONFLICT)
 
-async def service_error_handler(request: Request, exc: ServiceError):
+async def service_error_handler(request: Request, exc: ServiceError) -> JSONResponse:
     trace_id = getattr(request.state, 'trace_id', 'n/a')
     response = JSONResponse(
         status_code=exc.http_status,
@@ -29,7 +29,7 @@ async def service_error_handler(request: Request, exc: ServiceError):
     response.headers['x-trace-id'] = trace_id
     return response
 
-async def generic_error_handler(request: Request, exc: Exception):
+async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
     trace_id = getattr(request.state, 'trace_id', 'n/a')
     response = JSONResponse(
         status_code=500,
@@ -43,7 +43,7 @@ async def generic_error_handler(request: Request, exc: Exception):
     return response
 
 
-async def validation_error_handler(request: Request, exc: RequestValidationError):
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     trace_id = getattr(request.state, 'trace_id', 'n/a')
     response = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,

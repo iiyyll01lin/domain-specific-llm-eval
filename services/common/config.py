@@ -89,11 +89,7 @@ def _resolve_env_alias(field_name: str) -> str:
         return field_name.upper()
     if isinstance(alias, str):
         return alias
-    try:
-        # AliasChoices implements __iter__
-        return next(iter(alias))  # type: ignore[arg-type]
-    except (TypeError, StopIteration):
-        return field_name.upper()
+    return field_name.upper()
 
 
 def _apply_service_overrides(service_name: str, current: Settings) -> Settings:

@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import List, Optional
 
-from src.utils.prompt_templates import get_system_prompt, load_prompt_library
+from utils.prompt_templates import get_system_prompt, load_prompt_library
 
 
 def get_english_system_prompt(prompt_type: str = "default") -> str:
@@ -17,7 +18,9 @@ def get_english_system_prompt(prompt_type: str = "default") -> str:
     return get_system_prompt(prompt_type, library=library)
 
 
-def create_custom_english_prompt(domain: str = "", requirements: list = None) -> str:
+def create_custom_english_prompt(
+    domain: str = "", requirements: Optional[List[str]] = None
+) -> str:
     """
     Create a custom English system prompt for specific domains.
 

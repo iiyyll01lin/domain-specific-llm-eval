@@ -45,8 +45,8 @@ apply_global_tiktoken_patch()
 
 # Import RAGAS model_dump fix
 from .ragas_model_dump_fix import RagasModelDumpFix, apply_ragas_model_dump_fix
-from src.evaluation.multimodal_metrics import MultimodalResponseEvaluator
-from src.optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
+from evaluation.multimodal_metrics import MultimodalResponseEvaluator
+from optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
 
 try:
     import pandas as pd
@@ -155,14 +155,14 @@ class RagasEvaluator:
             "domain_regex": float(configured_weights.get("domain_regex", 0.0)),
         }
 
-    def _setup_ragas(self):
+    def _setup_ragas(self) -> None:
         """Setup RAGAS evaluation components with custom LLM."""
         try:
             # Apply RAGAS model_dump compatibility fix first
             apply_ragas_model_dump_fix()
 
             from datasets import Dataset
-            from ragas import evaluate
+            from ragas import evaluate  # type: ignore[attr-defined]
             from ragas.metrics import (  # Use only metrics that work well with custom LLMs
                 context_precision, faithfulness)
 
@@ -187,7 +187,7 @@ class RagasEvaluator:
             logger.error(f"❌ Error setting up RAGAS: {e}")
             self.ragas_available = False
 
-    def _setup_custom_llm(self):
+    def _setup_custom_llm(self) -> None:
         """Setup custom LLM for RAGAS evaluation."""
         try:
             llm_config = self.ragas_metrics_config.get("llm", {})
@@ -208,7 +208,7 @@ class RagasEvaluator:
             # Import necessary RAGAS components for custom LLM
             try:
                 from langchain_openai import ChatOpenAI
-                from ragas import RunConfig
+                from ragas import RunConfig  # type: ignore[attr-defined]
                 from ragas.llms import LangchainLLMWrapper
 
                 actor_config = dict(llm_config)
@@ -217,7 +217,7 @@ class RagasEvaluator:
                 critic_config.update(llm_config.get("critic", {}))
 
                 # Create custom LLM using your API
-                endpoint = actor_config.get("endpoint", "")
+                endpoint = str(actor_config.get("endpoint", "") or "")
 
                 # ChatOpenAI automatically appends /v1/chat/completions, so we need to remove it if present
                 if endpoint.endswith("/chat/completions"):
@@ -234,12 +234,13 @@ class RagasEvaluator:
 
                 logger.info(f"🔧 Using cleaned endpoint: {endpoint}")
 
-                custom_llm = ChatOpenAI(
+                actor_max_tokens = int(actor_config.get("max_length", 512) or 512)
+                custom_llm = ChatOpenAI(  # type: ignore[call-arg]
                     base_url=endpoint,
                     api_key=actor_config.get("api_key"),
                     model=actor_config.get("model_name", "gpt-4o"),
                     temperature=actor_config.get("temperature", 0.1),
-                    max_tokens=actor_config.get("max_length", 512),
+                    max_tokens=actor_max_tokens,
                     request_timeout=60,
                     max_retries=3,
                 )
@@ -252,12 +253,12 @@ class RagasEvaluator:
                     endpoint=endpoint,
                     model_name=actor_config.get("model_name", "gpt-4o"),
                     temperature=float(actor_config.get("temperature", 0.1)),
-                    max_tokens=int(actor_config.get("max_length", 512)),
+                    max_tokens=actor_max_tokens,
                     enabled=True,
                 )
 
                 # Setup Critic LLM (Independent model for Evaluation bias reduction)
-                critic_endpoint = critic_config.get("endpoint", endpoint)
+                critic_endpoint = str(critic_config.get("endpoint", endpoint) or endpoint)
                 if critic_endpoint.endswith("/chat/completions"):
                     critic_endpoint = critic_endpoint.replace("/chat/completions", "")
                 if "/chat/completions" in critic_endpoint:
@@ -265,11 +266,16 @@ class RagasEvaluator:
                 if critic_endpoint.endswith("/v1"):
                     critic_endpoint = critic_endpoint.rstrip("/v1")
 
-                critic_llm = ChatOpenAI(
+                critic_max_tokens = int(
+                    critic_config.get("max_length", actor_config.get("max_length", 512))
+                    or actor_config.get("max_length", 512)
+                    or 512
+                )
+                critic_llm = ChatOpenAI(  # type: ignore[call-arg]
                     api_key=critic_config.get("api_key", actor_config.get("api_key")),
                     model=critic_config.get("model_name", "gpt-4-turbo"),
                     temperature=critic_config.get("temperature", 0.0),
-                    max_tokens=critic_config.get("max_length", actor_config.get("max_length", 512)),
+                    max_tokens=critic_max_tokens,
                     base_url=critic_endpoint if critic_endpoint else None,
                 )
                 self.critic_llm = LangchainLLMWrapper(critic_llm)
@@ -278,7 +284,7 @@ class RagasEvaluator:
                     endpoint=critic_endpoint,
                     model_name=critic_config.get("model_name", "gpt-4-turbo"),
                     temperature=float(critic_config.get("temperature", 0.0)),
-                    max_tokens=int(critic_config.get("max_length", actor_config.get("max_length", 512))),
+                    max_tokens=critic_max_tokens,
                     enabled=True,
                 )
 

@@ -1,22 +1,17 @@
-"""
-RAGAS Model Dump Compatibility Fix
+"""RAGAS model_dump compatibility helpers."""
 
-This module fixes the 'str' object has no attribute 'model_dump' error
-by ensuring proper data formatting and using RAGAS-compatible data structures.
-"""
 import logging
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
 class ModelDumpWrapper:
-    """Wrapper class that adds model_dump method to any object."""
-    
-    def __init__(self, data):
+    """Wrapper class that adds a ``model_dump`` method to plain data."""
+
+    def __init__(self, data: Any) -> None:
         self.data = data
-    
-    def model_dump(self, exclude_none=True, **kwargs):
+
+    def model_dump(self, exclude_none: bool = True, **kwargs: Any) -> Any:
         """Return the wrapped data."""
         if hasattr(self.data, 'model_dump'):
             return self.data.model_dump(exclude_none=exclude_none, **kwargs)
@@ -27,10 +22,10 @@ class ModelDumpWrapper:
         else:
             return self.data
     
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.data)
-    
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         return f"ModelDumpWrapper({repr(self.data)})"
 
 class RagasModelDumpFix:
@@ -40,7 +35,7 @@ class RagasModelDumpFix:
     """
     
     @staticmethod
-    def fix_ragas_dataset_format(data: Dict[str, List]) -> Dict[str, List]:
+    def fix_ragas_dataset_format(data: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
         """
         Fix RAGAS dataset format to ensure compatibility with RAGAS 0.2.x
         
@@ -53,7 +48,7 @@ class RagasModelDumpFix:
         logger.info("🔧 Fixing RAGAS dataset format for model_dump compatibility...")
         
         # RAGAS 0.2.x expects these column names
-        fixed_data = {}
+        fixed_data: Dict[str, List[Any]] = {}
         
         # Map old column names to new RAGAS 0.2.x column names
         column_mapping = {
@@ -67,7 +62,7 @@ class RagasModelDumpFix:
             if old_key in data:
                 # Ensure data is properly formatted as strings/lists
                 raw_values = data[old_key]
-                fixed_values = []
+                fixed_values: List[Any] = []
                 
                 for i, value in enumerate(raw_values):
                     if old_key == 'contexts' or new_key == 'retrieved_contexts':
@@ -105,13 +100,13 @@ class RagasModelDumpFix:
                 if col == 'retrieved_contexts':
                     fixed_data[col] = [["No context available"] for _ in range(len(fixed_data.get('user_input', [])))]
                 else:
-                    fixed_data[col] = ["No data available" for _ in range(len(fixed_data.get('user_input', [])))]
+                        fixed_data[col] = ["No data available" for _ in range(len(fixed_data.get('user_input', [])))]
         
         logger.info(f"✅ Fixed RAGAS dataset format: {list(fixed_data.keys())}")
         return fixed_data
     
     @staticmethod
-    def create_safe_ragas_dataset(data: Dict[str, List]):
+    def create_safe_ragas_dataset(data: Dict[str, List[Any]]) -> Any:
         """
         Create a RAGAS dataset with safe error handling for model_dump issues.
         
@@ -145,7 +140,9 @@ class RagasModelDumpFix:
             raise
     
     @staticmethod
-    def safe_ragas_evaluate(dataset, metrics, **kwargs):
+    def safe_ragas_evaluate(
+        dataset: Any, metrics: List[Any], **kwargs: Any
+    ) -> Any:
         """
         Safely run RAGAS evaluation with model_dump error handling.
         
@@ -158,7 +155,7 @@ class RagasModelDumpFix:
             RAGAS evaluation results or None if failed
         """
         try:
-            from ragas import evaluate
+            from ragas import evaluate  # type: ignore[attr-defined]
             
             logger.info("🚀 Running safe RAGAS evaluation...")
             
@@ -269,7 +266,7 @@ class RagasModelDumpFix:
         logger.info(f"✅ Generated mock results for {len(mock_results)} metrics with {num_samples} samples each")
         return mock_results
 
-def apply_ragas_model_dump_fix():
+def apply_ragas_model_dump_fix() -> bool:
     """
     Apply comprehensive RAGAS model_dump compatibility fix.
     This version doesn't try to patch built-in types.
