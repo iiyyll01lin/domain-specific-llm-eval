@@ -160,11 +160,21 @@ Only mark a roadmap item `Implemented` once:
 
 ## Current Practical Priority Order
 
-1. Threat intelligence real API adapter
-2. Agent-RAG structured tool trace metrics
-3. GitHub benchmark comment automation
-4. Hyperparameter search persistence and runner abstraction
-5. Swarm synthesis structured verdicts
-6. WikiData sync hardening
-7. Alignment backend command execution
-8. Remaining design-only items only after external simulator/backend decisions are made
+Completed in recent passes:
+- Threat intelligence real API adapter
+- Agent-RAG structured tool trace metrics
+- GitHub benchmark comment automation
+- WikiData sync hardening
+- Alignment backend command execution
+- Hyperparameter search persistence and local trial history
+- Swarm synthesis structured verdicts
+
+Next practical priority order:
+
+1. Wire V8-V10 partial modules into real primary execution paths
+2. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
+3. Deepen taxonomy discovery beyond header/value heuristics
+4. Add richer hardware capability and benchmark telemetry for accelerated inference
+5. Promote graph topology payloads into a real UI runtime
+6. Replace simulated tokenization/app-store flows with backend-backed implementations where appropriate
+7. Keep remaining design-only items gated behind concrete backend or simulator decisions
