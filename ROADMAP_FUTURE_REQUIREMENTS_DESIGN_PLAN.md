@@ -168,13 +168,15 @@ Completed in recent passes:
 - Alignment backend command execution
 - Hyperparameter search persistence and local trial history
 - Swarm synthesis structured verdicts
+- Main-path symbolic / spatial / intent metric wiring
+- Maintained regression migration for legacy RAGAS and pure-RAGAS smoke checks
 
 Next practical priority order:
 
-1. Wire V8-V10 partial modules into real primary execution paths
-2. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
-3. Deepen taxonomy discovery beyond header/value heuristics
-4. Add richer hardware capability and benchmark telemetry for accelerated inference
-5. Promote graph topology payloads into a real UI runtime
-6. Replace simulated tokenization/app-store flows with backend-backed implementations where appropriate
+1. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
+2. Deepen taxonomy discovery beyond header/value heuristics
+3. Add richer hardware capability and benchmark telemetry for accelerated inference
+4. Promote graph topology payloads into a real UI runtime
+5. Replace simulated tokenization/app-store flows with backend-backed implementations where appropriate
+6. Move federated, swarm, and symbolic paths from evaluator hooks to richer end-to-end runtimes
 7. Keep remaining design-only items gated behind concrete backend or simulator decisions

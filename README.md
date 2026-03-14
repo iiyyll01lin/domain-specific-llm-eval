@@ -415,7 +415,7 @@ iteration line graph:
 ## Limitations
 
 Progress note:
-See [LIMITATIONS_PROGRESS_20260314.md](/data/yy/domain-specific-llm-eval/LIMITATIONS_PROGRESS_20260314.md) for the latest status of these limitations, the improvements now implemented in code, and the remaining gaps that still need engineering work.
+See [LIMITATIONS_PROGRESS_20260314B.md](/data/yy/domain-specific-llm-eval/LIMITATIONS_PROGRESS_20260314B.md) for the latest status of these limitations, the improvements now implemented in code, and the remaining gaps that still need engineering work.
 
 1. **Binary Keyword Presence Check**: Currently, keywords are only checked for presence, not relevance or contextual fit. Improvements could include:
     - **Keyword Context Matching:** Adding a semantic similarity check to ensure keywords fit contextually.
