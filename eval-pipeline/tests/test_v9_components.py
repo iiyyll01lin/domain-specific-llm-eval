@@ -51,6 +51,21 @@ def test_force_graph() -> None:
     assert '"link_count": 1' in html
 
 
+def test_force_graph_export_from_kg_artifact(tmp_path) -> None:
+    vis = ForceGraphVisualizer()
+    kg_path = tmp_path / "kg.json"
+    kg_path.write_text(
+        '{"nodes": [{"id": "A"}, {"id": "B"}, {"id": "C"}], "relationships": [{"source": "A", "target": "B"}]}',
+        encoding="utf-8",
+    )
+
+    exported = vis.export_from_kg_artifact(kg_path, tmp_path / "topology")
+
+    assert (tmp_path / "topology" / "topology_payload.json").exists()
+    assert (tmp_path / "topology" / "topology.html").exists()
+    assert exported["html_path"].endswith("topology.html")
+
+
 def test_dspy_corrector() -> None:
     corr = DSPyHallucinationCorrector()
     ans1 = corr.autocorrect("ans", "ctx", 0.9)

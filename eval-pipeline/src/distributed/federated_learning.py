@@ -4,7 +4,10 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +29,16 @@ class FederatedLearningClient:
         server_url: str = "http://central-parameter-server.internal",
         *,
         signing_secret: str = "federated-demo-secret",
+        session: Optional[requests.Session] = None,
+        timeout: int = 5,
+        spool_dir: str | Path = "outputs/federated_spool",
     ):
         self.server_url = server_url
         self.signing_secret = signing_secret
+        self.session = session or requests.Session()
+        self.timeout = timeout
+        self.spool_dir = Path(spool_dir)
+        self.spool_dir.mkdir(parents=True, exist_ok=True)
         self.is_connected = False
 
     def connect(self) -> None:
@@ -113,3 +123,25 @@ class FederatedLearningClient:
             "tenants": tenants,
             "envelopes": [asdict(envelope) for envelope in valid_envelopes],
         }
+
+    def submit_aggregation(
+        self, local_scores: List[Dict[str, Any] | EdgeResultEnvelope]
+    ) -> Dict[str, Any]:
+        aggregated = self.aggregate_gradients(local_scores)
+        try:
+            response = self.session.post(
+                f"{self.server_url.rstrip('/')}/aggregate",
+                json=aggregated,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            payload = response.json() if hasattr(response, "json") else {}
+            aggregated["submitted"] = True
+            aggregated["server_response"] = payload if isinstance(payload, dict) else {}
+            return aggregated
+        except Exception:
+            spool_path = self.spool_dir / "pending_federated_submission.json"
+            spool_path.write_text(json.dumps(aggregated, indent=2), encoding="utf-8")
+            aggregated["submitted"] = False
+            aggregated["spool_path"] = str(spool_path)
+            return aggregated

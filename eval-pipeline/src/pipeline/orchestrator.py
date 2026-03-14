@@ -14,15 +14,20 @@ from typing import Any, Dict, List, Optional
 
 from data.document_processor import DocumentProcessor
 from data.hybrid_testset_generator import HybridTestsetGenerator
+from distributed.federated_learning import FederatedLearningClient
 from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
 from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
+from loaders.taxonomy_discovery import ZeroShotTaxonomyDiscoverer
 from optimization.hyperparam_search import OptunaOptimizer
 from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
                              log_stage_start)
 from reports.report_generator import ReportGenerator
+from ui.app_store_marketplace import UnifiedAppStore
+from ui.force_graph_viewer import ForceGraphVisualizer
+from utils.knowledge_graph_manager import KnowledgeGraphManager
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +184,30 @@ class PipelineOrchestrator:
                 output_dir=str(self.output_dirs["metadata"] / "hyperparameter_search"),
             )
 
+        taxonomy_config = self.config.get("taxonomy_discovery", {})
+        self.taxonomy_discoverer = ZeroShotTaxonomyDiscoverer(
+            llm_endpoint=str(taxonomy_config.get("endpoint", "local")),
+        )
+        self.topology_visualizer = ForceGraphVisualizer()
+
+        app_store_config = self.config.get("app_store", {})
+        self.app_store = UnifiedAppStore(
+            manifest_dir=app_store_config.get("manifest_dir"),
+            install_dir=self.output_dirs["metadata"] / "installed_runbooks",
+        )
+
+        federated_config = self.config.get("distributed", {}).get(
+            "federated_learning", {}
+        )
+        self.federated_client = FederatedLearningClient(
+            server_url=str(
+                federated_config.get(
+                    "server_url", "http://central-parameter-server.internal"
+                )
+            ),
+            spool_dir=self.output_dirs["metadata"] / "federated_spool",
+        )
+
         logger.info("✅ Pipeline components initialized")
 
     def _create_data_processor(self):
@@ -244,6 +273,59 @@ class PipelineOrchestrator:
                 evaluation_results.get("success_rate", 0.0)
                 + (params.get("metric_weight", 0.0) * 0.05)
             )
+        )
+
+    def _run_taxonomy_discovery(self) -> Optional[Dict[str, Any]]:
+        taxonomy_config = self.config.get("taxonomy_discovery", {})
+        if not taxonomy_config.get("enabled", False):
+            return None
+        csv_files = self.config.get("data_sources", {}).get("csv", {}).get("csv_files", [])
+        if not csv_files:
+            return None
+        proposal_path = self.output_dirs["metadata"] / f"taxonomy_proposal_{self.run_id}.json"
+        return self.taxonomy_discoverer.extract_ontology_from_csv_file(
+            csv_files[0], persist_path=proposal_path
+        )
+
+    def _export_topology_artifact(self) -> Optional[Dict[str, str]]:
+        topology_config = self.config.get("topology", {})
+        if not topology_config.get("enabled", False):
+            return None
+        kg_manager = KnowledgeGraphManager(self.output_dirs["metadata"].parent)
+        latest_kg = kg_manager.get_latest_knowledge_graph()
+        if latest_kg is None:
+            return None
+        return self.topology_visualizer.export_from_kg_artifact(
+            latest_kg, self.output_dirs["reports"] / "topology"
+        )
+
+    def _install_requested_runbooks(self) -> List[str]:
+        app_store_config = self.config.get("app_store", {})
+        if not app_store_config.get("enabled", False):
+            return []
+        installed: List[str] = []
+        for runbook_id in app_store_config.get("auto_install", []):
+            if self.app_store.install_runbook(str(runbook_id)):
+                installed.append(str(runbook_id))
+        return installed
+
+    def _submit_federated_summary(
+        self, evaluation_results: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        federated_config = self.config.get("distributed", {}).get(
+            "federated_learning", {}
+        )
+        if not federated_config.get("enabled", False):
+            return None
+        return self.federated_client.submit_aggregation(
+            [
+                {
+                    "node_id": self.run_id,
+                    "score": float(evaluation_results.get("success_rate", 0.0)),
+                    "sample_count": int(evaluation_results.get("total_queries", 0) or 1),
+                    "tenant": str(federated_config.get("tenant", "default")),
+                }
+            ]
         )
 
     def _run_testset_generation(self) -> Dict[str, Any]:
@@ -340,6 +422,14 @@ class PipelineOrchestrator:
                     "generation_metadata": make_json_serializable(metadata_results),
                     "results_by_method": make_json_serializable(generation_results),
                 }
+                taxonomy_discovery = self._run_taxonomy_discovery()
+                if taxonomy_discovery is not None:
+                    metadata["taxonomy_discovery"] = make_json_serializable(
+                        taxonomy_discovery
+                    )
+                installed_runbooks = self._install_requested_runbooks()
+                if installed_runbooks:
+                    metadata["installed_runbooks"] = installed_runbooks
 
                 # Save metadata
                 metadata_file = (
@@ -439,6 +529,11 @@ class PipelineOrchestrator:
                 )
                 if hyperparameter_search is not None:
                     metadata["hyperparameter_search"] = hyperparameter_search
+                federated_submission = self._submit_federated_summary(
+                    evaluation_results
+                )
+                if federated_submission is not None:
+                    metadata["federated_submission"] = federated_submission
 
                 # Save evaluation metadata
                 eval_metadata_file = (
@@ -521,6 +616,9 @@ class PipelineOrchestrator:
                     "report_files": [r["file_path"] for r in report_results],
                     "report_directory": str(self.output_dirs["reports"]),
                 }
+                topology_artifact = self._export_topology_artifact()
+                if topology_artifact is not None:
+                    metadata["topology_artifact"] = topology_artifact
 
                 # Save reporting metadata
                 report_metadata_file = (

@@ -29,6 +29,15 @@ class _FakeSession:
         self.calls.append((endpoint, headers, timeout))
         return _FakeResponse(self.payload)
 
+    def post(
+        self,
+        endpoint: str,
+        json: object = None,
+        timeout: int = 0,
+    ) -> _FakeResponse:
+        self.calls.append((endpoint, json, timeout))
+        return _FakeResponse(self.payload)
+
 
 def test_federated_client() -> None:
     client = FederatedLearningClient(signing_secret="secret")
@@ -49,6 +58,18 @@ def test_federated_client() -> None:
     assert res["aggregated_count"] == 1
     assert res["rejected_count"] == 1
     assert res["weighted_score"] == 0.9
+
+
+def test_federated_client_submit_aggregation_success() -> None:
+    session = _FakeSession({"accepted": True})
+    client = FederatedLearningClient(signing_secret="secret", session=session)
+
+    res = client.submit_aggregation(
+        [{"node_id": "edge-1", "score": 0.8, "sample_count": 2, "tenant": "tenant-a"}]
+    )
+
+    assert res["submitted"] is True
+    assert res["server_response"]["accepted"] is True
 
 
 def test_multimodal_loader() -> None:
