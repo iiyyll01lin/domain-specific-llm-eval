@@ -14,4 +14,5 @@ class DSPyHallucinationCorrector:
         logger.warning(
             f"Hallucination detected (score={faithfulness_score}). Autocorrecting via DSPy..."
         )
-        return f"Corrected based strictly on context: {context}"
+        snippet = context[:200].strip()
+        return f"Corrected based strictly on context: {snippet} [citation: context]"

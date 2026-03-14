@@ -11,7 +11,14 @@ class ForceGraphVisualizer:
 
     def generate_html_payload(self, kg_data: Dict[str, Any]) -> str:
         logger.info("Mounting Real-time 3D Topology WebGL canvas...")
-        node_count = len(kg_data.get("nodes", []))
+        nodes = kg_data.get("nodes", [])
+        links = kg_data.get("links", kg_data.get("relationships", []))
+        payload = {
+            "node_count": len(nodes),
+            "link_count": len(links),
+            "nodes": nodes,
+            "links": links,
+        }
         return (
-            f"<div id='3d-graph' data-nodes='{node_count}'>[WebGL Graph Rendered]</div>"
+            f"<div id='3d-graph' data-graph='{json.dumps(payload)}'>[WebGL Graph Rendered]</div>"
         )

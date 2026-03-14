@@ -217,20 +217,9 @@ class RagasEvaluator:
                 critic_config.update(llm_config.get("critic", {}))
 
                 # Create custom LLM using your API
-                endpoint = str(actor_config.get("endpoint", "") or "")
-
-                # ChatOpenAI automatically appends /v1/chat/completions, so we need to remove it if present
-                if endpoint.endswith("/chat/completions"):
-                    endpoint = endpoint.replace("/chat/completions", "")
-
-                # Also handle the duplication case
-                if "/chat/completions" in endpoint:
-                    # Remove all instances of /chat/completions since ChatOpenAI will add it
-                    endpoint = endpoint.replace("/chat/completions", "")
-
-                # Remove /v1 if present since ChatOpenAI will add it automatically
-                if endpoint.endswith("/v1"):
-                    endpoint = endpoint.rstrip("/v1")
+                endpoint = self._normalize_chat_endpoint(
+                    str(actor_config.get("endpoint", "") or "")
+                )
 
                 logger.info(f"🔧 Using cleaned endpoint: {endpoint}")
 
@@ -258,13 +247,9 @@ class RagasEvaluator:
                 )
 
                 # Setup Critic LLM (Independent model for Evaluation bias reduction)
-                critic_endpoint = str(critic_config.get("endpoint", endpoint) or endpoint)
-                if critic_endpoint.endswith("/chat/completions"):
-                    critic_endpoint = critic_endpoint.replace("/chat/completions", "")
-                if "/chat/completions" in critic_endpoint:
-                    critic_endpoint = critic_endpoint.replace("/chat/completions", "")
-                if critic_endpoint.endswith("/v1"):
-                    critic_endpoint = critic_endpoint.rstrip("/v1")
+                critic_endpoint = self._normalize_chat_endpoint(
+                    str(critic_config.get("endpoint", endpoint) or endpoint)
+                )
 
                 critic_max_tokens = int(
                     critic_config.get("max_length", actor_config.get("max_length", 512))
@@ -314,6 +299,17 @@ class RagasEvaluator:
         except Exception as e:
             logger.error(f"❌ Error setting up custom LLM: {e}")
             logger.info("💡 Continuing with default RAGAS configuration")
+
+    def _normalize_chat_endpoint(self, endpoint: str) -> str:
+        normalized = endpoint.strip()
+        while normalized.endswith("/"):
+            normalized = normalized[:-1]
+        if normalized.endswith("/chat/completions"):
+            normalized = normalized[: -len("/chat/completions")]
+        normalized = normalized.replace("/chat/completions", "")
+        if normalized.endswith("/v1"):
+            normalized = normalized[: -len("/v1")]
+        return normalized
 
     def _merge_metric_payloads(
         self,

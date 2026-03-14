@@ -6,23 +6,49 @@ from src.optimization.hyperparam_search import OptunaOptimizer
 from src.ui.force_graph_viewer import ForceGraphVisualizer
 
 
-def test_optuna_optimizer() -> None:
-    opt = OptunaOptimizer()
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get(self, url, timeout=0):
+        return _FakeResponse(self.payload)
+
+
+def test_optuna_optimizer(tmp_path) -> None:
+    opt = OptunaOptimizer(output_dir=str(tmp_path), n_trials=6)
     res = opt.optimize()
-    assert res["best_chunk_size"] == 512
+    assert res["trial_count"] == 6
+    assert (tmp_path / "trial_history.json").exists()
+    assert (tmp_path / "best_config.json").exists()
+    assert res["best_f1"] > 0
 
 
 def test_vllm_client() -> None:
-    client = vLLMInferenceClient()
+    client = vLLMInferenceClient(session=_FakeSession({"data": [{"id": "model-a"}]}))
+    caps = client.get_capabilities()
     ans = client.generate("test")
+    assert caps["connected"] is True
+    assert caps["model_count"] == 1
     assert client.is_connected is True
     assert "Accelerated" in ans
 
 
 def test_force_graph() -> None:
     vis = ForceGraphVisualizer()
-    html = vis.generate_html_payload({"nodes": [1, 2]})
+    html = vis.generate_html_payload({"nodes": [{"id": "A"}, {"id": "B"}], "links": [{"source": "A", "target": "B"}]})
     assert "WebGL" in html
+    assert '"link_count": 1' in html
 
 
 def test_dspy_corrector() -> None:
@@ -31,3 +57,4 @@ def test_dspy_corrector() -> None:
     assert ans1 == "ans"
     ans2 = corr.autocorrect("ans", "ctx", 0.3)
     assert "ctx" in ans2
+    assert "citation" in ans2

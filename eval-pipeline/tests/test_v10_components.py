@@ -17,16 +17,27 @@ def test_quantum_tokenizer() -> None:
     token = tokenizer.tokenize_pii("Sensitive Data")
     assert token.startswith("QTK-")
     assert len(tokenizer.tokenize_pii("")) == 0
+    assert tokenizer.detokenize(token, access_granted=False) is None
+    assert tokenizer.detokenize(token, access_granted=True) == "Sensitive Data"
 
 
 def test_app_store() -> None:
     store = UnifiedAppStore()
+    manifest = store.get_runbook_manifest("legal-tax-suite")
     assert store.install_runbook("legal-tax-suite") is True
     assert store.install_runbook("invalid-id") is False
+    assert manifest is not None
+    assert manifest["trust"] == "verified"
 
 
 def test_taxonomy_discovery() -> None:
     discoverer = ZeroShotTaxonomyDiscoverer()
-    ontology = discoverer.extract_ontology("id,name,value\n1,test,yes")
+    ontology = discoverer.extract_ontology(
+        "patient_id,policy_name,organization\n1,HIPAA,HealthOrg"
+    )
+    assert "Patient" in ontology["entities"]
+    assert "Policy" in ontology["entities"]
     assert "Organization" in ontology["entities"]
     assert "AFFECTS" in ontology["relations"]
+    assert ontology["proposals"]
+
