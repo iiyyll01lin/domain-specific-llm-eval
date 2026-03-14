@@ -98,3 +98,29 @@ def test_evaluate_responses_merges_multimodal_metrics_and_alignment(tmp_path):
     assert merged["summary"]["domain_score"] > 0
     assert alignment["queued_failures"] == 1
     assert alignment["training_run"]["executed"] is True
+
+
+def test_agentic_metrics_score_tool_selection_and_efficiency() -> None:
+    evaluator = object.__new__(RagasEvaluator)
+
+    metrics = evaluator._evaluate_agentic_metrics(
+        [
+            {
+                "tool_calls": [
+                    {"tool": "retriever", "status": "success"},
+                    {"tool": "calculator", "status": "success"},
+                ],
+                "expected_tools": ["retriever", "calculator"],
+            },
+            {
+                "tool_calls": [
+                    {"tool": "retriever", "status": "success"},
+                    {"tool": "retriever", "status": "error"},
+                ],
+                "expected_tools": ["retriever"],
+            },
+        ]
+    )
+
+    assert metrics["tool_selection_accuracy"]["mean"] == 1.0
+    assert metrics["tool_use_efficiency"]["mean"] < 1.0

@@ -25,6 +25,31 @@ def test_dpo_alignment():
     assert pipeline.run_dpo_finetuning() is True
     assert len(pipeline.failure_queue) == 0
 
+
+def test_dpo_alignment_executes_trainer_command_template(tmp_path):
+    output_file = tmp_path / "trainer-output.txt"
+    pipeline = DirectPreferenceOptimizationPipeline(
+        {
+            "output_dir": str(tmp_path),
+            "trainer_command": [
+                "python3",
+                "-c",
+                (
+                    "from pathlib import Path; import sys; "
+                    f"Path(r'{output_file}').write_text(Path(sys.argv[1]).read_text(), encoding='utf-8')"
+                ),
+                "{dataset_path}",
+            ],
+        }
+    )
+    pipeline.ingest_failure("What is 2+2?", "5", "4")
+
+    result = pipeline.run_alignment_cycle()
+
+    assert result["returncode"] == 0
+    assert output_file.exists()
+    assert '"prompt": "What is 2+2?"' in output_file.read_text(encoding="utf-8")
+
 def test_edge_wasm_miner():
     miner = DecentralizedEdgeMiner()
     miner.register_edge_node("iphone-15-pro")

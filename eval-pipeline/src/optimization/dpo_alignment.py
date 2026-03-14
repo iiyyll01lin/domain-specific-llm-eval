@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shlex
 import subprocess
 from datetime import datetime
@@ -25,6 +26,7 @@ class DirectPreferenceOptimizationPipeline:
             "dataset_filename", "dpo_training_dataset.jsonl"
         )
         self.trainer_command = self.config.get("trainer_command")
+        self.trainer_env = dict(self.config.get("trainer_env", {}))
         self.auto_run_threshold = int(self.config.get("auto_run_threshold", 0) or 0)
         self.failure_queue: List[Dict[str, Any]] = []
         self.last_run_metadata: Dict[str, Any] = {}
@@ -120,12 +122,15 @@ class DirectPreferenceOptimizationPipeline:
                 command_parts = shlex.split(command)
             else:
                 command_parts = [str(part) for part in command]
-            command_parts.append(dataset_path)
+            command_parts = [part.replace("{dataset_path}", dataset_path) for part in command_parts]
+            if not any(dataset_path == part or "{dataset_path}" in str(self.trainer_command) for part in command_parts):
+                command_parts.append(dataset_path)
             completed = subprocess.run(
                 command_parts,
                 capture_output=True,
                 text=True,
                 check=False,
+                env={**os.environ, **self.trainer_env},
             )
             result.update(
                 {

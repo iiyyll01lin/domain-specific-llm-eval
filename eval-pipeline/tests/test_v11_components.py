@@ -7,6 +7,25 @@ from src.orchestration.meta_learning_agent import MetaLearningAgent
 from src.security.web3_leaderboard import Web3LeaderboardConsortia
 
 
+class _FakeWikiResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class _FakeWikiSession:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get(self, endpoint, params=None, timeout=0):
+        return _FakeWikiResponse(self.payload)
+
+
 class DummyModule:
     def synthesize(self):
         return "Old Synthesis"
@@ -56,6 +75,19 @@ def test_symbolic_evaluator():
 
 
 def test_wikidata_sync():
-    sync = WikiDataKnowledgeGraphSync()
+    sync = WikiDataKnowledgeGraphSync(
+        session=_FakeWikiSession(
+            {
+                "search": [
+                    {
+                        "id": "Q28865",
+                        "label": "Python",
+                        "description": "high-level programming language",
+                    }
+                ]
+            }
+        )
+    )
     data = sync.sync_node("Python v3.10")
-    assert "Guido van Rossum" in data.values()
+    assert data["wikidata_id"] == "Q28865"
+    assert data["source"] == "wikidata-live"

@@ -34,7 +34,7 @@ import math
 import re
 # Apply global tiktoken patch BEFORE any other imports
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 
@@ -394,6 +394,72 @@ class RagasEvaluator:
             }
         return result
 
+    def _evaluate_agentic_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        def _safe_mean(values: List[float]) -> float:
+            return sum(values) / len(values) if values else 0.0
+
+        tool_selection_scores: List[float] = []
+        tool_efficiency_scores: List[float] = []
+
+        for response in rag_responses:
+            tool_calls = response.get("tool_calls") or response.get("agent_trace") or []
+            expected_tools = response.get("expected_tools") or []
+
+            normalized_tools: List[str] = []
+            for tool_call in tool_calls:
+                if isinstance(tool_call, dict):
+                    tool_name = tool_call.get("tool") or tool_call.get("name") or tool_call.get("id")
+                else:
+                    tool_name = tool_call
+                if tool_name:
+                    normalized_tools.append(str(tool_name))
+
+            if expected_tools:
+                expected = {str(tool) for tool in expected_tools}
+                used = set(normalized_tools)
+                tool_selection_scores.append(len(expected & used) / len(expected))
+
+            if normalized_tools:
+                successful_calls = 0
+                for tool_call in tool_calls:
+                    if isinstance(tool_call, dict):
+                        status = str(tool_call.get("status", "success")).lower()
+                        if status not in {"error", "failed", "failure"}:
+                            successful_calls += 1
+                    else:
+                        successful_calls += 1
+
+                unique_tools = len(set(normalized_tools))
+                total_calls = len(normalized_tools)
+                tool_efficiency_scores.append(
+                    (successful_calls / total_calls) * (unique_tools / total_calls)
+                )
+
+        metrics: Dict[str, Dict[str, Any]] = {}
+        if tool_selection_scores:
+            metrics["tool_selection_accuracy"] = {
+                "mean": _safe_mean(tool_selection_scores),
+                "std": float(np.std(tool_selection_scores)) if len(tool_selection_scores) > 1 else 0.0,
+                "min": min(tool_selection_scores),
+                "max": max(tool_selection_scores),
+                "valid_count": len(tool_selection_scores),
+                "total_count": len(tool_selection_scores),
+                "scores": tool_selection_scores,
+            }
+        if tool_efficiency_scores:
+            metrics["tool_use_efficiency"] = {
+                "mean": _safe_mean(tool_efficiency_scores),
+                "std": float(np.std(tool_efficiency_scores)) if len(tool_efficiency_scores) > 1 else 0.0,
+                "min": min(tool_efficiency_scores),
+                "max": max(tool_efficiency_scores),
+                "valid_count": len(tool_efficiency_scores),
+                "total_count": len(tool_efficiency_scores),
+                "scores": tool_efficiency_scores,
+            }
+        return metrics
+
     def evaluate(
         self, testset: Dict[str, Any], rag_responses: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -518,10 +584,24 @@ class RagasEvaluator:
             )
             formatted_results = self._merge_metric_payloads(
                 formatted_results,
-                multimodal_results.get("metrics", {}),
+                cast(Dict[str, Dict[str, Any]], multimodal_results.get("metrics", {})),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_agentic_metrics(rag_responses),
             )
             formatted_results["multimodal"] = {
                 "modalities_present": multimodal_results.get("modalities_present", {})
+            }
+            formatted_results["agentic"] = {
+                "responses_with_tool_calls": sum(
+                    1
+                    for response in rag_responses
+                    if response.get("tool_calls") or response.get("agent_trace")
+                ),
+                "responses_with_expected_tools": sum(
+                    1 for response in rag_responses if response.get("expected_tools")
+                ),
             }
             formatted_results["alignment"] = self._collect_alignment_failures(
                 rag_responses
@@ -722,7 +802,7 @@ class RagasEvaluator:
     ) -> Dict[str, Any]:
         """Format RAGAS results for consistent output with robust NaN handling."""
 
-        def safe_mean(values):
+        def safe_mean(values: List[float]) -> float:
             """Calculate mean safely handling NaN values"""
             if not values:
                 return 0.0
@@ -733,7 +813,9 @@ class RagasEvaluator:
             ]
             return sum(valid_values) / len(valid_values) if valid_values else 0.0
 
-        def calculate_robust_summary_stats(scores, metric_name):
+        def calculate_robust_summary_stats(
+            scores: List[Any], metric_name: str
+        ) -> Dict[str, Any]:
             """Calculate robust summary statistics"""
             if not scores:
                 return {

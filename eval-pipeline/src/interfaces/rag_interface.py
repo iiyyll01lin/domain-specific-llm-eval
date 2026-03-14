@@ -301,6 +301,15 @@ EVALUATION CONTEXT:
         confidence = self._extract_field(
             response_data, self.response_fields.get("confidence", "confidence")
         )
+        tool_calls = self._extract_field(
+            response_data, self.response_fields.get("tool_calls", "tool_calls")
+        )
+        agent_trace = self._extract_field(
+            response_data, self.response_fields.get("agent_trace", "agent_trace")
+        )
+        expected_tools = self._extract_field(
+            response_data, self.response_fields.get("expected_tools", "expected_tools")
+        )
 
         # Debug logging for response parsing
         logger.debug(f"RAG response keys: {list(response_data.keys())}")
@@ -337,6 +346,9 @@ EVALUATION CONTEXT:
             "answer": str(answer) if answer is not None else "",
             "contexts": contexts,
             "confidence": confidence,
+            "tool_calls": tool_calls if isinstance(tool_calls, list) else [],
+            "agent_trace": agent_trace if isinstance(agent_trace, list) else [],
+            "expected_tools": expected_tools if isinstance(expected_tools, list) else [],
             "response_time": response_time,
             "success": True,
             "error": None,
