@@ -412,7 +412,7 @@ iteration line graph:
 | **G-Eval Score**   | Analyzes the response’s linguistic and logical quality using coherence, fluency, consistency, and relevance criteria. Provides an overall quality score independent of reference. | Directly measures Coherence, Consistency, Fluency, and Relevance.                                                                             |
 | **Human Feedback** | Aggregates human evaluative feedback, validating the response accuracy and quality. Initially binary (0 or 1) but adapted dynamically.                                            | Adds human verification of Coherence, Relevance, Fluency, and Consistency.                                                                    |
 
-# Limitations
+## Limitations
 
 Progress note:
 See [LIMITATIONS_PROGRESS_20260313.md](/data/yy/domain-specific-llm-eval/LIMITATIONS_PROGRESS_20260313.md) for the latest status of these limitations, the improvements now implemented in code, and the remaining gaps that still need engineering work.

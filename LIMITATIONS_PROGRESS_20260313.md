@@ -40,6 +40,26 @@ Current remaining limit:
 - The final orchestration layer still reports RAGAS metrics and contextual metrics separately in several legacy flows rather than enforcing a single universal ranking formula.
 - Some older diagnostic scripts outside maintained test paths still use legacy result schemas.
 
+## Still-Remaining Limits After The Latest Pass
+
+1. Threshold stabilization is still not fully automated.
+Current state:
+- Human-feedback threshold dynamics exist, but README-level improvement ideas such as adaptive variance smoothing and parameter self-tuning are still not universally wired into all evaluation flows.
+
+2. Semantic keyword relevance still depends on local model availability.
+Current state:
+- The fallback path is now far better than binary-only matching, but high-quality semantic matching still improves materially when embedding models are present.
+
+3. Legacy orchestration/reporting flows still diverge.
+Current state:
+- Newer maintained paths emit contextual, multimodal, alignment, and agentic metrics consistently.
+- Older historical scripts and one-off runners still use older result contracts.
+
+4. Future-roadmap capabilities beyond the current platform remain design-driven.
+Current state:
+- A formal requirements/design/implementation document now exists in [ROADMAP_FUTURE_REQUIREMENTS_DESIGN_PLAN.md](/data/yy/domain-specific-llm-eval/ROADMAP_FUTURE_REQUIREMENTS_DESIGN_PLAN.md).
+- This improves planning quality, but it does not by itself make V8-V14 speculative systems production-complete.
+
 ## Practical Impact
 
 What improved immediately:

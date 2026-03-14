@@ -26,6 +26,10 @@ Status values:
 | V4 / V5 | Object storage, webhook, and stage observability convergence | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/src/utils/pipeline_file_saver.py`, `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_pipeline_file_saver_storage.py`, `eval-pipeline/tests/test_webhook_daemon.py` |
 | README limitations | Contextual keyword scoring no longer degrades to simple binary-only fallback behavior | Implemented | `eval-pipeline/src/evaluation/contextual_keyword_evaluator.py`, `eval-pipeline/tests/test_contextual_keyword_evaluator.py`, `LIMITATIONS_PROGRESS_20260313.md` |
 | Legacy diagnostics | Formal pytest coverage added for report-generation and integration smoke checks previously covered only by standalone scripts | Implemented | `eval-pipeline/tests/test_report_generator_regression.py`, `eval-pipeline/tests/test_contextual_keyword_evaluator.py` |
+| V6 / V8 | Threat-intel driven jailbreak feed integration | Implemented | `eval-pipeline/src/security/threat_intel.py`, `eval-pipeline/tests/test_v8_components.py` |
+| V6 | Agent-RAG tool trace metrics | Implemented | `eval-pipeline/src/interfaces/rag_interface.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` |
+| V7 | Benchmark workflow artifact + PR comment automation | Implemented | `.github/workflows/benchmarking.yml`, `eval-pipeline/src/utils/benchmark_comment.py`, `eval-pipeline/tests/test_benchmark_comment.py` |
+| V11 / V12 | Live WikiData adapter and executable alignment backend hooks | Implemented | `eval-pipeline/src/loaders/wikidata_sync.py`, `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/tests/test_v11_components.py`, `eval-pipeline/tests/test_v12_components.py` |
 
 ## Validation Summary
 
@@ -33,9 +37,11 @@ Status values:
 | --- | --- | --- |
 | Focused regression / functional / e2e suite | Passed | `cd eval-pipeline && pytest -q tests/test_dashboard_actions.py tests/test_human_feedback_manager.py tests/test_neo4j_manager.py tests/test_run_pure_ragas_pipeline_e2e.py tests/test_v7_components.py tests/test_webhook_daemon.py` |
 | Contextual keyword / report regression suite | Passed | `cd eval-pipeline && pytest -q tests/test_contextual_keyword_evaluator.py tests/test_report_generator_regression.py tests/test_rag_evaluator_regression.py tests/test_ragas_evaluator_domain_metrics.py` -> `10 passed` |
+| Partial-item upgrade regression suite | Passed | `cd eval-pipeline && pytest -q tests/test_v11_components.py tests/test_v12_components.py tests/test_v8_components.py tests/test_benchmark_comment.py tests/test_pipeline_cli_regression.py tests/test_ragas_evaluator_domain_metrics.py` -> `22 passed` |
 | Service-layer smoke check | Passed | `python3 e2e_smoke.py` -> `E2E smoke test passed` |
 | Full eval-pipeline pytest suite | Passed | `cd eval-pipeline && pytest -q` -> `232 passed, 159 warnings` |
 | Targeted typing check on changed modules | Passed | `python3 -m mypy --config-file mypy.ini eval-pipeline/src/utils/pipeline_telemetry.py eval-pipeline/src/evaluation/ragas_evaluator.py eval-pipeline/src/evaluation/rag_evaluator.py eval-pipeline/src/evaluation/ragas_model_dump_fix.py eval-pipeline/src/interfaces/english_prompts.py eval-pipeline/src/interfaces/rag_interface.py services/common/config.py services/common/errors.py services/common/storage/object_store.py` |
+| Focused typing on newly-upgraded partial items | Passed | `python3 -m mypy --config-file mypy.ini eval-pipeline/src/security/threat_intel.py eval-pipeline/src/loaders/wikidata_sync.py eval-pipeline/src/optimization/dpo_alignment.py eval-pipeline/src/interfaces/rag_interface.py eval-pipeline/src/evaluation/ragas_evaluator.py eval-pipeline/src/utils/benchmark_comment.py` |
 
 ## Executive Summary
 
@@ -71,16 +77,16 @@ Status values:
 | V5 | Distributed tracing with LangSmith / Phoenix | Implemented | `eval-pipeline/src/utils/pipeline_telemetry.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_pipeline_telemetry_storage.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | Stage telemetry now emits persisted observability spans plus LangSmith/Phoenix-compatible export artifacts when those backends are configured |
 | V5 | Webhook / CI auto-evaluator | Implemented | `eval-pipeline/webhook_daemon.py`, `eval-pipeline/tests/test_webhook_daemon.py` | Webhook payload validation, filtering, queueing, command execution, and event logging are implemented and tested |
 | V6 | Adversarial jailbreak synthesizers | Partial | `eval-pipeline/src/security/threat_intel.py` | Threat intel component exists, but current implementation is still lightweight |
-| V6 | Dynamic Agent-RAG support | Partial | `eval-pipeline/src/interfaces/rag_interface.py` | Interface exists, but agent reasoning/tool-use metrics are not fully implemented |
+| V6 | Dynamic Agent-RAG support | Implemented | `eval-pipeline/src/interfaces/rag_interface.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Normalized responses now preserve tool/agent traces and the evaluator emits tool selection accuracy and tool use efficiency metrics in the main execution path |
 | V6 | Human feedback RLHF loop | Implemented | `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py`, `eval-pipeline/tests/test_rag_evaluator_regression.py` | Failed/low-confidence answers are persisted into a DPO queue, exported as training datasets, and can auto-trigger a configured alignment run |
 | V6 | Federated graph multi-tenant isolation | Stub | `eval-pipeline/src/distributed/federated_learning.py` | Placeholder structure only |
 | V7 | Ray / Dask distributed execution | Stub | `eval-pipeline/src/distributed/ray_runner.py` | Mock runner only |
 | V7 | Dynamic few-shot knowledge graphs / Neo4J | Implemented | `eval-pipeline/src/utils/neo4j_manager.py`, `eval-pipeline/run_pure_ragas_pipeline.py`, `eval-pipeline/tests/test_neo4j_manager.py`, `eval-pipeline/tests/test_run_pure_ragas_pipeline_e2e.py` | The main pipeline now syncs generated knowledge graphs into the Neo4j manager, records retrieval previews, and surfaces sync metadata in pipeline artifacts |
 | V7 | LLaMA-Factory / Unsloth automation | Partial | `eval-pipeline/src/optimization/dpo_alignment.py` | Alignment queue exists, but training job orchestration is missing |
-| V7 | Fully automate GitOps GitHub Actions | Partial | `.github/workflows/benchmarking.yml` | Workflow exists, but not full benchmark comment/report automation |
+| V7 | Fully automate GitOps GitHub Actions | Implemented | `.github/workflows/benchmarking.yml`, `eval-pipeline/src/utils/benchmark_comment.py`, `eval-pipeline/tests/test_benchmark_comment.py` | The benchmark workflow now runs maintained regression checks, emits summary artifacts, renders PR-facing markdown, uploads artifacts, and upserts a PR comment |
 | V8 | Federated learning edge tiers | Stub | `eval-pipeline/src/distributed/federated_learning.py` | Placeholder class, not full federated system |
 | V8 | Advanced multi-modal RAG | Implemented | `eval-pipeline/src/loaders/multimodal_loader.py`, `eval-pipeline/src/evaluation/multimodal_metrics.py`, `eval-pipeline/src/evaluation/ragas_evaluator.py`, `eval-pipeline/tests/test_multimodal_metrics.py`, `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py` | Multimodal contexts are now normalized and scored via modality-aware faithfulness, relevance, and coverage metrics during evaluation |
-| V8 | Real-time threat intelligence API | Stub | `eval-pipeline/src/security/threat_intel.py` | Not a real external intel integration |
+| V8 | Real-time threat intelligence API | Implemented | `eval-pipeline/src/security/threat_intel.py`, `eval-pipeline/tests/test_v8_components.py` | Threat intel now supports configurable HTTP feeds, parses structured payloads, ranks signals by severity, and falls back to curated prompts only when live retrieval fails |
 | V8 | Multi-agent swarm synthesis | Stub | `eval-pipeline/src/evaluation/swarm_agent.py` | Placeholder behavior only |
 | V9 | Automated hyperparameter search | Stub | `eval-pipeline/src/optimization/hyperparam_search.py` | Optimizer shape exists, but not real Optuna/RayTune orchestration |
 | V9 | Hardware acceleration patterns | Stub | `eval-pipeline/src/inference/vllm_client.py` | Client is still mock-like |
@@ -93,9 +99,9 @@ Status values:
 | V11 | Continual meta-learning loop | Stub | `eval-pipeline/src/orchestration/meta_learning_agent.py` | AST patch demo, not safe self-improving execution |
 | V11 | Web3 leaderboard consortia | Stub | `eval-pipeline/src/security/web3_leaderboard.py` | Ledger simulation only |
 | V11 | Neuro-symbolic RAG engine | Partial | `eval-pipeline/src/generation/neuro_symbolic_rag.py`, `eval-pipeline/src/evaluation/symbolic_evaluator.py` | Basic symbolic branch exists, but not a complete reasoning engine |
-| V11 | Global knowledge graph sync | Partial | `eval-pipeline/src/loaders/wikidata_sync.py` | Mock WikiData enrichment exists |
+| V11 | Global knowledge graph sync | Implemented | `eval-pipeline/src/loaders/wikidata_sync.py`, `eval-pipeline/tests/test_v11_components.py` | WikiData sync now uses a real HTTP search adapter with deterministic fallback enrichment when live lookup is unavailable |
 | V12 | Self-replicating cloud orchestrator | Stub | `eval-pipeline/src/orchestration/omni_cloud_provisioner.py` | Terraform text generation only |
-| V12 | Native LLM alignment pipeline | Partial | `eval-pipeline/src/optimization/dpo_alignment.py` | Local DPO queue exists, but not actual training backend execution |
+| V12 | Native LLM alignment pipeline | Implemented | `eval-pipeline/src/optimization/dpo_alignment.py`, `eval-pipeline/tests/test_v12_components.py`, `eval-pipeline/tests/test_rag_evaluator_regression.py` | The alignment pipeline now exports datasets and can execute a configured trainer backend command with dataset-path templating and environment injection |
 | V12 | Decentralized edge mining for RAG | Stub | `eval-pipeline/src/distributed/edge_wasm_miner.py` | WASM distribution is simulated |
 | V12 | Mixed-reality multimodal eval | Partial | `eval-pipeline/src/evaluation/spatial_rag_evaluator.py` | Spatial scoring exists, but only as a local heuristic |
 | V13 | DNA / bio-computing vectors | Stub | `eval-pipeline/src/data/dna_sequence_embedder.py` | Demonstration encoder only |
@@ -114,7 +120,7 @@ These items are still materially incomplete even though some code exists:
 | Priority | Item | Current Gap |
 | --- | --- | --- |
 | High | Repo-wide mypy strict rollout | Core validator / orchestration / KG modules remain the only areas under meaningful strict typing; the wider repository is still not under consistent strict mypy enforcement |
-| Low | Legacy pytest warning cleanup | Maintained pytest coverage now exists for some former standalone diagnostics, but many historical root / `eval-pipeline/test_*.py` scripts still need conversion into `eval-pipeline/tests/` |
+| Low | Legacy pytest warning cleanup | Maintained pytest coverage now exists for several former standalone diagnostics, including report generation, CLI/config smoke, and contextual keyword regressions, but many historical root / `eval-pipeline/test_*.py` scripts still need conversion into `eval-pipeline/tests/` |
 | Low | Most V8+ roadmap items | Current code is mostly demo/mock level rather than production logic |
 
 ## Evidence Notes
