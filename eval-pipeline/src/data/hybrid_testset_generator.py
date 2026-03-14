@@ -43,7 +43,7 @@ from generate_dataset_configurable import ConfigurableDatasetGenerator
 try:
     # Note: evolutions module no longer exists in current RAGAS version
     # Evolution types are now handled within the TestsetGenerator
-    from langchain.embeddings import HuggingFaceEmbeddings
+    from langchain_community.embeddings import HuggingFaceEmbeddings
     from ragas.testset import TestsetGenerator
     RAGAS_AVAILABLE = True
 except ImportError as e:

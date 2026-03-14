@@ -19,6 +19,7 @@ from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
+from optimization.hyperparam_search import OptunaOptimizer
 from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
                              log_stage_start)
 from reports.report_generator import ReportGenerator
@@ -168,6 +169,16 @@ class PipelineOrchestrator:
         # Report generator
         self.report_generator = ReportGenerator(config=self.config)
 
+        optimization_config = self.config.get("optimization", {}).get(
+            "hyperparameter_search", {}
+        )
+        self.hyperparameter_optimizer = None
+        if optimization_config.get("enabled", False):
+            self.hyperparameter_optimizer = OptunaOptimizer(
+                n_trials=int(optimization_config.get("n_trials", 6)),
+                output_dir=str(self.output_dirs["metadata"] / "hyperparameter_search"),
+            )
+
         logger.info("✅ Pipeline components initialized")
 
     def _create_data_processor(self):
@@ -222,6 +233,18 @@ class PipelineOrchestrator:
         else:
             logger.info("🔄 Creating Hybrid testset generator...")
             return HybridTestsetGenerator(config=self.config)
+
+    def _run_hyperparameter_search(
+        self, evaluation_results: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        if self.hyperparameter_optimizer is None:
+            return None
+        return self.hyperparameter_optimizer.optimize(
+            evaluator=lambda params: float(
+                evaluation_results.get("success_rate", 0.0)
+                + (params.get("metric_weight", 0.0) * 0.05)
+            )
+        )
 
     def _run_testset_generation(self) -> Dict[str, Any]:
         """
@@ -411,6 +434,11 @@ class PipelineOrchestrator:
                     ).get("requests", 0),
                     "evaluation_file": evaluation_results.get("output_file", ""),
                 }
+                hyperparameter_search = self._run_hyperparameter_search(
+                    evaluation_results
+                )
+                if hyperparameter_search is not None:
+                    metadata["hyperparameter_search"] = hyperparameter_search
 
                 # Save evaluation metadata
                 eval_metadata_file = (

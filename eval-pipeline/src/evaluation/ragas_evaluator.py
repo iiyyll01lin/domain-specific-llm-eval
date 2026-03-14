@@ -45,7 +45,12 @@ apply_global_tiktoken_patch()
 
 # Import RAGAS model_dump fix
 from .ragas_model_dump_fix import RagasModelDumpFix, apply_ragas_model_dump_fix
+from evaluation.spatial_rag_evaluator import MixedRealityMultimodalEval
 from evaluation.multimodal_metrics import MultimodalResponseEvaluator
+from evaluation.swarm_agent import SwarmSynthesizer
+from evaluation.symbolic_evaluator import SymbolicEvaluator
+from evaluation.telepathic_intent_evaluator import TelepathicIntentAlignment
+from generation.neuro_symbolic_rag import NeuroSymbolicRAGEngine
 from optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
 
 try:
@@ -124,6 +129,11 @@ class RagasEvaluator:
         self.metric_weights = self._load_metric_weights()
         self.heuristic = self._build_domain_heuristic()
         self.multimodal_evaluator = MultimodalResponseEvaluator()
+        self.swarm_synthesizer = SwarmSynthesizer()
+        self.symbolic_engine = NeuroSymbolicRAGEngine()
+        self.symbolic_evaluator = SymbolicEvaluator()
+        self.spatial_evaluator = MixedRealityMultimodalEval()
+        self.intent_evaluator = TelepathicIntentAlignment()
         alignment_config = self.ragas_metrics_config.get("alignment", {})
         self.alignment_pipeline = DirectPreferenceOptimizationPipeline(alignment_config)
         self.actor_llm: Any = _ActorIdentityLLM()
@@ -456,6 +466,144 @@ class RagasEvaluator:
             }
         return metrics
 
+    def _evaluate_swarm_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        agreement_scores: List[float] = []
+        revision_scores: List[float] = []
+
+        for response in rag_responses:
+            question = str(response.get("question") or response.get("user_input") or "")
+            answer = str(response.get("answer") or response.get("rag_answer") or "")
+            if not question or not answer:
+                continue
+
+            verdict = self.swarm_synthesizer.debate_answer(question, answer)
+            agreement_scores.append(float(verdict.get("agreement_rate", 0.0)))
+            revision_scores.append(1.0 if verdict.get("dissent_reasons") else 0.0)
+
+        metrics: Dict[str, Dict[str, Any]] = {}
+        if agreement_scores:
+            metrics["swarm_agreement_rate"] = {
+                "mean": sum(agreement_scores) / len(agreement_scores),
+                "std": float(np.std(agreement_scores)) if len(agreement_scores) > 1 else 0.0,
+                "min": min(agreement_scores),
+                "max": max(agreement_scores),
+                "valid_count": len(agreement_scores),
+                "total_count": len(agreement_scores),
+                "scores": agreement_scores,
+            }
+        if revision_scores:
+            metrics["swarm_revision_rate"] = {
+                "mean": sum(revision_scores) / len(revision_scores),
+                "std": float(np.std(revision_scores)) if len(revision_scores) > 1 else 0.0,
+                "min": min(revision_scores),
+                "max": max(revision_scores),
+                "valid_count": len(revision_scores),
+                "total_count": len(revision_scores),
+                "scores": revision_scores,
+            }
+        return metrics
+
+    def _evaluate_symbolic_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        proof_scores: List[float] = []
+
+        for response in rag_responses:
+            question = str(response.get("question") or response.get("user_input") or "")
+            answer = str(response.get("answer") or response.get("rag_answer") or "")
+            contexts = response.get("contexts") or response.get("rag_contexts") or []
+            if isinstance(contexts, list):
+                context_text = " ".join(
+                    str(item.get("content", item)) if isinstance(item, dict) else str(item)
+                    for item in contexts
+                )
+            else:
+                context_text = str(contexts)
+
+            symbolic_answer, was_proven = self.symbolic_engine.generate(question, context_text)
+            proof_score = self.symbolic_evaluator.evaluate_proof(answer, context_text, was_proven)
+            if was_proven and "Formally Proven Fact:" in symbolic_answer:
+                proven_fact = symbolic_answer.split("Formally Proven Fact:", 1)[1].strip().lower()
+                if proven_fact and proven_fact not in answer.lower():
+                    proof_score = 0.0
+            proof_scores.append(float(proof_score))
+
+        if not proof_scores:
+            return {}
+        return {
+            "symbolic_proof_score": {
+                "mean": sum(proof_scores) / len(proof_scores),
+                "std": float(np.std(proof_scores)) if len(proof_scores) > 1 else 0.0,
+                "min": min(proof_scores),
+                "max": max(proof_scores),
+                "valid_count": len(proof_scores),
+                "total_count": len(proof_scores),
+                "scores": proof_scores,
+            }
+        }
+
+    def _evaluate_spatial_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        spatial_scores: List[float] = []
+        for response in rag_responses:
+            coordinates = response.get("coordinates")
+            if not isinstance(coordinates, (list, tuple)) or len(coordinates) != 3:
+                continue
+            question = str(response.get("question") or response.get("user_input") or "")
+            answer = str(response.get("answer") or response.get("rag_answer") or "")
+            spatial_scores.append(
+                float(
+                    self.spatial_evaluator.evaluate_spatial_reasoning(
+                        question,
+                        (int(coordinates[0]), int(coordinates[1]), int(coordinates[2])),
+                        answer,
+                    )
+                )
+            )
+
+        if not spatial_scores:
+            return {}
+        return {
+            "spatial_reasoning_score": {
+                "mean": sum(spatial_scores) / len(spatial_scores),
+                "std": float(np.std(spatial_scores)) if len(spatial_scores) > 1 else 0.0,
+                "min": min(spatial_scores),
+                "max": max(spatial_scores),
+                "valid_count": len(spatial_scores),
+                "total_count": len(spatial_scores),
+                "scores": spatial_scores,
+            }
+        }
+
+    def _evaluate_intent_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        alignment_scores: List[float] = []
+        for response in rag_responses:
+            eeg_signal = response.get("eeg_signal")
+            if not isinstance(eeg_signal, list) or not eeg_signal:
+                continue
+            intent = self.intent_evaluator.decode_eeg([float(value) for value in eeg_signal])
+            answer = str(response.get("answer") or response.get("rag_answer") or "")
+            alignment_scores.append(float(self.intent_evaluator.calculate_alignment(intent, answer)))
+
+        if not alignment_scores:
+            return {}
+        return {
+            "intent_alignment_score": {
+                "mean": sum(alignment_scores) / len(alignment_scores),
+                "std": float(np.std(alignment_scores)) if len(alignment_scores) > 1 else 0.0,
+                "min": min(alignment_scores),
+                "max": max(alignment_scores),
+                "valid_count": len(alignment_scores),
+                "total_count": len(alignment_scores),
+                "scores": alignment_scores,
+            }
+        }
+
     def evaluate(
         self, testset: Dict[str, Any], rag_responses: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -585,6 +733,22 @@ class RagasEvaluator:
             formatted_results = self._merge_metric_payloads(
                 formatted_results,
                 self._evaluate_agentic_metrics(rag_responses),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_swarm_metrics(rag_responses),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_symbolic_metrics(rag_responses),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_spatial_metrics(rag_responses),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_intent_metrics(rag_responses),
             )
             formatted_results["multimodal"] = {
                 "modalities_present": multimodal_results.get("modalities_present", {})
