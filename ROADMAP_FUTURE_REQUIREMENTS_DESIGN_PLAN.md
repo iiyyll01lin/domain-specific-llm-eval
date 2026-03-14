@@ -170,13 +170,15 @@ Completed in recent passes:
 - Swarm synthesis structured verdicts
 - Main-path symbolic / spatial / intent metric wiring
 - Maintained regression migration for legacy RAGAS and pure-RAGAS smoke checks
+- File/HTTP-backed taxonomy, topology, app-store, and federated adapters with orchestrator hooks
+- Maintained regression migration for pipeline integration smoke helpers
 
 Next practical priority order:
 
 1. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
-2. Deepen taxonomy discovery beyond header/value heuristics
+2. Deepen taxonomy discovery beyond header/value heuristics and simple backend merge rules
 3. Add richer hardware capability and benchmark telemetry for accelerated inference
-4. Promote graph topology payloads into a real UI runtime
-5. Replace simulated tokenization/app-store flows with backend-backed implementations where appropriate
-6. Move federated, swarm, and symbolic paths from evaluator hooks to richer end-to-end runtimes
+4. Promote graph topology artifacts into a real UI runtime
+5. Move federated and app-store flows from file/HTTP adapters to richer end-to-end runtimes
+6. Replace remaining heuristic symbolic/spatial/intent adapters with backend-capable engines where justified
 7. Keep remaining design-only items gated behind concrete backend or simulator decisions
