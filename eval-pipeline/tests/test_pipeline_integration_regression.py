@@ -24,6 +24,24 @@ class _FederatedSession:
         return _FederatedResponse({"accepted": True, "endpoint": endpoint})
 
 
+class _HardwareResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class _HardwareSession:
+    def get(self, endpoint, timeout=0):
+        if endpoint.endswith("/models"):
+            return _HardwareResponse({"data": [{"id": "model-a"}]})
+        return _HardwareResponse({"gpu_utilization": 0.8, "memory_utilization": 0.5})
+
+
 def test_orchestrator_taxonomy_topology_appstore_and_federated_helpers(tmp_path: Path) -> None:
     manifest_dir = tmp_path / "manifests"
     manifest_dir.mkdir()
@@ -95,3 +113,25 @@ def test_orchestrator_taxonomy_topology_appstore_and_federated_helpers(tmp_path:
     assert Path(topology["payload_path"]).exists()
     assert federated is not None
     assert federated["submitted"] is True
+
+
+def test_orchestrator_collects_hardware_acceleration_telemetry() -> None:
+    orchestrator = object.__new__(PipelineOrchestrator)
+    orchestrator.config = {
+        "inference": {
+            "hardware_acceleration": {
+                "enabled": True,
+                "benchmark_prompts": ["benchmark prompt"],
+                "benchmark_repeats": 1,
+            }
+        }
+    }
+    orchestrator.hardware_acceleration_client = __import__(
+        "src.inference.vllm_client", fromlist=["vLLMInferenceClient"]
+    ).vLLMInferenceClient(session=_HardwareSession())
+
+    telemetry = orchestrator._collect_hardware_acceleration_telemetry()
+
+    assert telemetry is not None
+    assert telemetry["capabilities"]["connected"] is True
+    assert telemetry["benchmarks"][0]["median_latency_seconds"] >= 0.0

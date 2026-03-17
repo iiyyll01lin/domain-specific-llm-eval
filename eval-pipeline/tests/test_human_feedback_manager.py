@@ -102,3 +102,47 @@ def test_process_feedback_tracks_dynamic_uncertainty_policy(tmp_path: Path) -> N
     assert result["policy_state_path"].endswith("feedback_policy_state.json")
     assert Path(result["policy_state_path"]).exists()
     assert result["feedback_candidates"] >= 1
+
+
+def test_reviewer_result_ingestion_resolves_existing_feedback(tmp_path: Path) -> None:
+    manager = HumanFeedbackManager(
+        {
+            "evaluation": {
+                "human_feedback": {
+                    "enabled": True,
+                    "threshold": 0.8,
+                    "review_queue_dir": str(tmp_path),
+                }
+            }
+        }
+    )
+
+    ingestion = manager.ingest_reviewer_results(
+        [
+            {
+                "index": 0,
+                "question": "Question 1",
+                "approved": True,
+                "score": 1.0,
+                "notes": "Confirmed by reviewer.",
+                "reviewer": "qa-user",
+            }
+        ]
+    )
+    results = manager.process_testset(
+        {
+            "qa_pairs": [
+                {
+                    "user_input": "Question 1",
+                    "reference": "short",
+                    "ragas_score": 0.2,
+                    "keyword_score": 0.9,
+                }
+            ]
+        }
+    )
+
+    assert ingestion["ingested"] == 1
+    assert results[0]["feedback_required"] is False
+    assert results[0]["human_feedback_score"] == 1.0
+    assert results[0]["review_resolution"] == "resolved"

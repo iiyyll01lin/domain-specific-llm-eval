@@ -57,6 +57,12 @@ class HumanFeedbackManager:
         self.review_queue_dir.mkdir(parents=True, exist_ok=True)
         self.review_queue_file = self.review_queue_dir / "review_queue.jsonl"
         self.policy_state_file = self.review_queue_dir / "feedback_policy_state.json"
+        reviewer_results_file = self.feedback_config.get("reviewer_results_file")
+        self.reviewer_results_file = (
+            Path(reviewer_results_file)
+            if reviewer_results_file
+            else self.review_queue_dir / "reviewer_results.jsonl"
+        )
 
         logger.info(
             f"🤖 Human feedback manager initialized (enabled: {self.feedback_enabled})"
@@ -348,6 +354,7 @@ class HumanFeedbackManager:
                     "question": recommendation["question"],
                     "reason": recommendation["reason"],
                     "priority": recommendation["priority"],
+                    "status": "pending",
                     "suggested_action": recommendation["suggested_action"],
                     "answer": response.get("answer", ""),
                     "confidence": response.get("confidence"),
@@ -363,14 +370,126 @@ class HumanFeedbackManager:
         self, candidates: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Process any existing human feedback."""
-        # In a real implementation, this would check for existing feedback
-        # For now, return empty results
-        return {
-            "total_feedback": 0,
-            "positive_feedback": 0,
-            "negative_feedback": 0,
-            "feedback_items": [],
+        reviewer_results = self._load_reviewer_results()
+        if not reviewer_results:
+            return {
+                "total_feedback": 0,
+                "positive_feedback": 0,
+                "negative_feedback": 0,
+                "resolved_candidates": 0,
+                "feedback_items": [],
+            }
+
+        candidate_indexes = {candidate["index"] for candidate in candidates}
+        candidate_questions = {
+            str(candidate.get("question", "")).strip(): candidate["index"]
+            for candidate in candidates
         }
+        matched_feedback = []
+        for item in reviewer_results:
+            item_index = item.get("index")
+            item_question = str(item.get("question", "")).strip()
+            if item_index in candidate_indexes or item_question in candidate_questions:
+                matched_feedback.append(item)
+
+        positive_feedback = sum(
+            1 for item in matched_feedback if bool(item.get("approved", item.get("is_correct", False)))
+        )
+        negative_feedback = len(matched_feedback) - positive_feedback
+
+        return {
+            "total_feedback": len(matched_feedback),
+            "positive_feedback": positive_feedback,
+            "negative_feedback": negative_feedback,
+            "resolved_candidates": len({item.get("index") for item in matched_feedback}),
+            "feedback_items": matched_feedback,
+        }
+
+    def ingest_reviewer_results(self, reviewer_results: Any) -> Dict[str, Any]:
+        """Persist normalized reviewer labels so future runs can consume them."""
+        normalized_items = self._coerce_reviewer_results(reviewer_results)
+        if not normalized_items:
+            return {
+                "ingested": 0,
+                "results_file": str(self.reviewer_results_file),
+            }
+
+        self.reviewer_results_file.parent.mkdir(parents=True, exist_ok=True)
+        existing = self._load_reviewer_results()
+        dedupe_keys = {
+            self._reviewer_result_key(item) for item in existing
+        }
+        ingested = 0
+        with open(self.reviewer_results_file, "a", encoding="utf-8") as handle:
+            for item in normalized_items:
+                item_key = self._reviewer_result_key(item)
+                if item_key in dedupe_keys:
+                    continue
+                handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+                dedupe_keys.add(item_key)
+                ingested += 1
+
+        return {
+            "ingested": ingested,
+            "results_file": str(self.reviewer_results_file),
+        }
+
+    def _coerce_reviewer_results(self, reviewer_results: Any) -> List[Dict[str, Any]]:
+        if reviewer_results is None:
+            return []
+        if isinstance(reviewer_results, (str, Path)):
+            path = Path(reviewer_results)
+            if not path.exists():
+                return []
+            if path.suffix.lower() == ".json":
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                return self._coerce_reviewer_results(payload)
+            items: List[Dict[str, Any]] = []
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                items.append(self._normalize_reviewer_result(json.loads(line)))
+            return items
+        if isinstance(reviewer_results, dict):
+            return [self._normalize_reviewer_result(reviewer_results)]
+        if isinstance(reviewer_results, list):
+            return [self._normalize_reviewer_result(item) for item in reviewer_results if isinstance(item, dict)]
+        return []
+
+    def _normalize_reviewer_result(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        approved = bool(item.get("approved", item.get("is_correct", False)))
+        score = item.get("score")
+        if score is None:
+            score = 1.0 if approved else 0.0
+        return {
+            "index": item.get("index"),
+            "question": str(item.get("question", "")).strip(),
+            "approved": approved,
+            "score": self._safe_float(score, 0.0),
+            "notes": str(item.get("notes", "")).strip(),
+            "reviewer": str(item.get("reviewer", "unknown")).strip(),
+            "resolution": str(item.get("resolution", "resolved")).strip() or "resolved",
+        }
+
+    def _reviewer_result_key(self, item: Dict[str, Any]) -> tuple[Any, str, str]:
+        return (
+            item.get("index"),
+            str(item.get("question", "")).strip(),
+            str(item.get("reviewer", "unknown")).strip(),
+        )
+
+    def _load_reviewer_results(self) -> List[Dict[str, Any]]:
+        if not self.reviewer_results_file.exists():
+            return []
+        results: List[Dict[str, Any]] = []
+        for line in self.reviewer_results_file.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                results.append(self._normalize_reviewer_result(json.loads(line)))
+            except Exception:
+                continue
+        return results
 
     def _generate_feedback_recommendations(
         self, candidates: List[Dict[str, Any]]
@@ -501,14 +620,24 @@ class HumanFeedbackManager:
             recommendations = {
                 item["index"]: item for item in feedback_result.get("queued_reviews", [])
             }
+            reviewer_results = {
+                item.get("index"): item
+                for item in feedback_result.get("existing_feedback", {}).get("feedback_items", [])
+                if item.get("index") is not None
+            }
             for i, qa_pair in enumerate(qa_pairs):
                 review_item = recommendations.get(i)
+                reviewer_item = reviewer_results.get(i)
                 result_item = {
                     **qa_pair,
-                    "human_feedback_score": 0.0,
-                    "feedback_required": review_item is not None,
+                    "human_feedback_score": (
+                        reviewer_item.get("score", 0.0) if reviewer_item else 0.0
+                    ),
+                    "feedback_required": review_item is not None and reviewer_item is None,
                     "feedback_reason": review_item.get("reason") if review_item else None,
                     "feedback_priority": review_item.get("priority") if review_item else None,
+                    "review_resolution": reviewer_item.get("resolution") if reviewer_item else None,
+                    "reviewer_notes": reviewer_item.get("notes") if reviewer_item else None,
                     "human_feedback_data": feedback_result,
                 }
                 results.append(result_item)

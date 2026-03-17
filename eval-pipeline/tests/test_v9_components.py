@@ -22,6 +22,8 @@ class _FakeSession:
         self.payload = payload
 
     def get(self, url, timeout=0):
+        if url.endswith("/metrics"):
+            return _FakeResponse({"gpu_utilization": 0.72, "kv_cache_utilization": 0.33})
         return _FakeResponse(self.payload)
 
 
@@ -38,10 +40,14 @@ def test_vllm_client() -> None:
     client = vLLMInferenceClient(session=_FakeSession({"data": [{"id": "model-a"}]}))
     caps = client.get_capabilities()
     ans = client.generate("test")
+    telemetry = client.collect_hardware_telemetry(["test"], repeats=1)
     assert caps["connected"] is True
     assert caps["model_count"] == 1
+    assert caps["runtime_metrics"]["gpu_utilization"] == 0.72
     assert client.is_connected is True
     assert "Accelerated" in ans
+    assert telemetry["benchmarks"][0]["median_latency_seconds"] >= 0.0
+    assert telemetry["last_generation_telemetry"]["throughput_tokens_per_second"] > 0
 
 
 def test_force_graph() -> None:

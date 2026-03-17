@@ -294,6 +294,14 @@ class ConfigManager:
                 "formats": ["html", "excel"],
                 "visualizations": {"enabled": True},
             },
+            "inference": {
+                "hardware_acceleration": {
+                    "enabled": False,
+                    "endpoint_url": "http://localhost:8000/v1",
+                    "benchmark_prompts": ["Benchmark hardware acceleration path"],
+                    "benchmark_repeats": 2,
+                }
+            },
             "output": {"base_dir": "./outputs", "use_timestamps": True},
             "logging": {"level": "INFO", "destinations": ["console", "file"]},
         }

@@ -43,7 +43,7 @@ from generate_dataset_configurable import ConfigurableDatasetGenerator
 try:
     # Note: evolutions module no longer exists in current RAGAS version
     # Evolution types are now handled within the TestsetGenerator
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from langchain_huggingface import HuggingFaceEmbeddings
     from ragas.testset import TestsetGenerator
     RAGAS_AVAILABLE = True
 except ImportError as e:
@@ -106,26 +106,32 @@ class HybridTestsetGenerator:
         self.logger.info(f"   sys.path preview: {sys.path[:3]}...")
         
         # Initialize generators after configuration is complete
-        print("🔧 DEBUG: About to call initialize_generators() from constructor...")
+        self.logger.debug("About to call initialize_generators() from constructor")
         try:
             self.initialize_generators()
-            print("✅ DEBUG: initialize_generators() completed successfully")
-            print(f"✅ DEBUG: configurable_generator = {self.configurable_generator}")
+            self.logger.debug("initialize_generators() completed successfully")
+            self.logger.debug(
+                "configurable_generator = %s", self.configurable_generator
+            )
         except Exception as e:
-            print(f"❌ DEBUG: initialize_generators() failed in constructor: {e}")
+            self.logger.debug(
+                "initialize_generators() failed in constructor: %s", e
+            )
             import traceback
-            print(f"❌ DEBUG: Constructor traceback: {traceback.format_exc()}")
+            self.logger.debug("Constructor traceback: %s", traceback.format_exc())
             # Don't re-raise here, let the pipeline continue and fail later with better context
     
     def initialize_generators(self):
         """Initialize the specific generators based on configuration"""
-        print("🔧 DEBUG: initialize_generators() method called")
-        print(f"🔧 DEBUG: self.method = '{self.method}'")
-        print(f"🔧 DEBUG: Checking if method in ['configurable', 'hybrid']: {self.method in ['configurable', 'hybrid']}")
+        self.logger.debug("initialize_generators() method called")
+        self.logger.debug("self.method = '%s'", self.method)
+        self.logger.debug(
+            "method in ['configurable', 'hybrid'] = %s",
+            self.method in ["configurable", "hybrid"],
+        )
         try:
             # Initialize your existing configurable generator
             if self.method in ['configurable', 'hybrid']:
-                print("🔧 DEBUG: Initializing configurable dataset generator...")
                 self.logger.info("Initializing configurable dataset generator...")
                 
                 # Create a minimal config for ConfigurableDatasetGenerator (NO temp file needed)
@@ -159,16 +165,21 @@ class HybridTestsetGenerator:
                 }
                 
                 # Initialize ConfigurableDatasetGenerator with in-memory config
-                print("🔧 DEBUG: Creating ConfigurableDatasetGenerator object...")
+                self.logger.debug("Creating ConfigurableDatasetGenerator object")
                 self.configurable_generator = ConfigurableDatasetGenerator.__new__(ConfigurableDatasetGenerator)
                 self.configurable_generator.config = minimal_config
                 self.configurable_generator.mode = 'local'
                 self.configurable_generator.custom_documents = []
                 self.configurable_generator.custom_topics = []
-                print(f"🔧 DEBUG: ConfigurableDatasetGenerator created: {self.configurable_generator}")
+                self.logger.debug(
+                    "ConfigurableDatasetGenerator created: %s",
+                    self.configurable_generator,
+                )
                 
                 # Initialize the internal generator with proper path handling
-                print("🔧 DEBUG: About to start try block for LocalSyntheticDatasetGenerator import...")
+                self.logger.debug(
+                    "About to start LocalSyntheticDatasetGenerator import"
+                )
                 try:
                     # Add the correct path for import
                     import sys
@@ -226,20 +237,30 @@ class HybridTestsetGenerator:
                     self.logger.info("✅ Configurable generator initialized (NO temp config used)")
             
             # Initialize RAGAS generator if available and needed
-            print(f"🔧 DEBUG: method='{self.method}', RAGAS_AVAILABLE={RAGAS_AVAILABLE}")
-            print(f"🔧 DEBUG: method in ['ragas', 'hybrid']: {self.method in ['ragas', 'hybrid']}")
+            self.logger.debug(
+                "method='%s', RAGAS_AVAILABLE=%s", self.method, RAGAS_AVAILABLE
+            )
+            self.logger.debug(
+                "method in ['ragas', 'hybrid'] = %s",
+                self.method in ["ragas", "hybrid"],
+            )
             if self.method in ['ragas', 'hybrid'] and RAGAS_AVAILABLE:
-                print("🔧 DEBUG: Initializing RAGAS generator...")
                 self.logger.info("Initializing RAGAS testset generator...")
                 self._initialize_ragas_generator()
                 self.logger.info("✅ RAGAS generator initialized")
-                print(f"🔧 DEBUG: RAGAS generator initialized: {self.ragas_generator is not None}")
+                self.logger.debug(
+                    "RAGAS generator initialized: %s",
+                    self.ragas_generator is not None,
+                )
             elif self.method in ['ragas', 'hybrid'] and not RAGAS_AVAILABLE:
-                print("🔧 DEBUG: RAGAS not available, falling back...")
                 self.logger.warning("⚠️ RAGAS not available, falling back to configurable method")
                 self.method = 'configurable'
             else:
-                print(f"🔧 DEBUG: Skipping RAGAS initialization - method='{self.method}', RAGAS_AVAILABLE={RAGAS_AVAILABLE}")
+                self.logger.debug(
+                    "Skipping RAGAS initialization - method='%s', RAGAS_AVAILABLE=%s",
+                    self.method,
+                    RAGAS_AVAILABLE,
+                )
                 
         except Exception as e:
             self.logger.error(f"❌ Generator initialization failed: {e}")

@@ -20,6 +20,7 @@ from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
+from inference.vllm_client import vLLMInferenceClient
 from loaders.taxonomy_discovery import ZeroShotTaxonomyDiscoverer
 from optimization.hyperparam_search import OptunaOptimizer
 from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
@@ -209,8 +210,28 @@ class PipelineOrchestrator:
             spool_dir=self.output_dirs["metadata"] / "federated_spool",
             accepted_tenants=federated_config.get("accepted_tenants"),
         )
+        self.hardware_acceleration_client = None
+        hardware_config = self.config.get("inference", {}).get(
+            "hardware_acceleration", {}
+        )
+        if hardware_config.get("enabled", False):
+            self.hardware_acceleration_client = vLLMInferenceClient(
+                endpoint_url=str(hardware_config.get("endpoint_url", "http://localhost:8000/v1")),
+                timeout=int(hardware_config.get("timeout", 5)),
+            )
 
         logger.info("✅ Pipeline components initialized")
+
+    def _collect_hardware_acceleration_telemetry(self) -> Optional[Dict[str, Any]]:
+        if self.hardware_acceleration_client is None:
+            return None
+        hardware_config = self.config.get("inference", {}).get(
+            "hardware_acceleration", {}
+        )
+        return self.hardware_acceleration_client.collect_hardware_telemetry(
+            prompts=list(hardware_config.get("benchmark_prompts", [])),
+            repeats=int(hardware_config.get("benchmark_repeats", 2)),
+        )
 
     def _create_data_processor(self):
         """
@@ -536,6 +557,9 @@ class PipelineOrchestrator:
                 )
                 if federated_submission is not None:
                     metadata["federated_submission"] = federated_submission
+                hardware_telemetry = self._collect_hardware_acceleration_telemetry()
+                if hardware_telemetry is not None:
+                    metadata["hardware_acceleration_telemetry"] = hardware_telemetry
 
                 # Save evaluation metadata
                 eval_metadata_file = (
