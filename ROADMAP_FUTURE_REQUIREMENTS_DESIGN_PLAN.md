@@ -169,16 +169,21 @@ Completed in recent passes:
 - Hyperparameter search persistence and local trial history
 - Swarm synthesis structured verdicts
 - Main-path symbolic / spatial / intent metric wiring
+- Main-path temporal causality metric wiring
+- Dynamic uncertainty human-feedback policy state and threshold recommendation
 - Maintained regression migration for legacy RAGAS and pure-RAGAS smoke checks
+- Maintained regression migration for legacy `test_ragas_fix.py`, `test_pure_ragas_implementation.py`, and `test_pipeline_integration.py` intent
 - File/HTTP-backed taxonomy, topology, app-store, and federated adapters with orchestrator hooks
+- Tenant trust policy and audit-log support for federated aggregation
+- Richer topology payload analytics and app-store receipt digesting
 - Maintained regression migration for pipeline integration smoke helpers
 
 Next practical priority order:
 
 1. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
-2. Deepen taxonomy discovery beyond header/value heuristics and simple backend merge rules
-3. Add richer hardware capability and benchmark telemetry for accelerated inference
-4. Promote graph topology artifacts into a real UI runtime
-5. Move federated and app-store flows from file/HTTP adapters to richer end-to-end runtimes
-6. Replace remaining heuristic symbolic/spatial/intent adapters with backend-capable engines where justified
+2. Add richer hardware capability and benchmark telemetry for accelerated inference
+3. Promote graph topology artifacts into a real UI runtime
+4. Move federated and app-store flows from file/HTTP adapters to richer end-to-end runtimes
+5. Replace remaining heuristic symbolic/spatial/intent/temporal adapters with backend-capable engines where justified
+6. Add reviewer-result ingestion so the human-feedback queue becomes a real learning loop
 7. Keep remaining design-only items gated behind concrete backend or simulator decisions
