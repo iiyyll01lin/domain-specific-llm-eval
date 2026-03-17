@@ -194,6 +194,7 @@ class PipelineOrchestrator:
         self.app_store = UnifiedAppStore(
             manifest_dir=app_store_config.get("manifest_dir"),
             install_dir=self.output_dirs["metadata"] / "installed_runbooks",
+            registry_url=app_store_config.get("registry_url"),
         )
 
         federated_config = self.config.get("distributed", {}).get(
@@ -206,6 +207,7 @@ class PipelineOrchestrator:
                 )
             ),
             spool_dir=self.output_dirs["metadata"] / "federated_spool",
+            accepted_tenants=federated_config.get("accepted_tenants"),
         )
 
         logger.info("✅ Pipeline components initialized")

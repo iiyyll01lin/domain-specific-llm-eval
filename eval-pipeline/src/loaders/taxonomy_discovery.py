@@ -6,7 +6,7 @@ import json
 import logging
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import requests
 
@@ -34,6 +34,8 @@ class ZeroShotTaxonomyDiscoverer:
         entities: List[str] = []
         relations: List[str] = []
         confidence: Dict[str, float] = {}
+        hierarchy: List[Dict[str, str]] = []
+        inferred_relations: List[Dict[str, Any]] = []
 
         lowered_headers = [header.lower() for header in headers]
         if any(header in lowered_headers for header in ["patient", "patient_id", "mrn"]):
@@ -45,6 +47,9 @@ class ZeroShotTaxonomyDiscoverer:
         if any(header in lowered_headers for header in ["organization", "org", "company", "department"]):
             entities.append("Organization")
             confidence["Organization"] = 0.8
+        if any(header in lowered_headers for header in ["device", "error_code", "asset_id", "machine"]):
+            entities.append("Asset")
+            confidence["Asset"] = 0.7
 
         value_tokens: Counter[str] = Counter()
         for row in rows:
@@ -57,10 +62,17 @@ class ZeroShotTaxonomyDiscoverer:
             header in lowered_headers for header in ["organization", "org", "department"]
         ):
             relations.append("ISSUED_BY")
+            hierarchy.append({"parent": "Organization", "child": "Policy"})
         if any(header in lowered_headers for header in ["patient", "patient_id", "mrn"]) and any(
             header in lowered_headers for header in ["policy", "policy_id", "policy_name"]
         ):
             relations.append("AFFECTS")
+            hierarchy.append({"parent": "Patient", "child": "Policy"})
+        if any(header in lowered_headers for header in ["device", "error_code", "asset_id", "machine"]) and any(
+            header in lowered_headers for header in ["organization", "org", "department"]
+        ):
+            relations.append("OWNED_BY")
+            hierarchy.append({"parent": "Organization", "child": "Asset"})
 
         if not entities and rows:
             entities.append("Record")
@@ -71,13 +83,36 @@ class ZeroShotTaxonomyDiscoverer:
             for entity in entities
         ]
 
+        non_empty_headers = [header for header in headers if header]
+        for left in non_empty_headers:
+            for right in non_empty_headers:
+                if left == right:
+                    continue
+                overlap = self._header_token_overlap(left, right)
+                if overlap <= 0:
+                    continue
+                inferred_relations.append(
+                    {
+                        "from": left,
+                        "to": right,
+                        "confidence": round(min(0.95, 0.45 + (overlap * 0.25)), 2),
+                    }
+                )
+
         return {
-            "entities": entities,
-            "relations": relations,
+            "entities": sorted(set(entities)),
+            "relations": sorted(set(relations)),
             "proposals": proposals,
             "headers": headers,
+            "hierarchy": hierarchy,
+            "relation_candidates": inferred_relations[:10],
             "sample_value_counts": dict(value_tokens.most_common(5)),
         }
+
+    def _header_token_overlap(self, left: str, right: str) -> int:
+        left_tokens: Set[str] = {token for token in left.lower().replace("-", "_").split("_") if token}
+        right_tokens: Set[str] = {token for token in right.lower().replace("-", "_").split("_") if token}
+        return len(left_tokens & right_tokens)
 
     def extract_ontology_from_csv_file(
         self,
@@ -99,6 +134,14 @@ class ZeroShotTaxonomyDiscoverer:
             payload["relations"] = sorted(
                 set(payload["relations"]) | set(backend_enrichment.get("relations", []))
             )
+            payload["relation_candidates"] = list(payload.get("relation_candidates", [])) + [
+                {
+                    "from": "backend",
+                    "to": relation,
+                    "confidence": 0.9,
+                }
+                for relation in backend_enrichment.get("relations", [])
+            ]
 
         if persist_path is not None:
             resolved = Path(persist_path)

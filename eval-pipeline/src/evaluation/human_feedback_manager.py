@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import random
+import statistics
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,13 +22,41 @@ class HumanFeedbackManager:
 
         # Configuration settings
         self.feedback_enabled = self.feedback_config.get("enabled", False)
-        self.feedback_threshold = self.feedback_config.get("threshold", 0.7)
+        self.feedback_threshold = float(
+            self.feedback_config.get(
+                "threshold", self.feedback_config.get("initial_threshold", 0.7)
+            )
+        )
         self.sampling_rate = self.feedback_config.get("sampling_rate", 0.2)
+        self.dynamic_uncertainty_enabled = bool(
+            self.feedback_config.get("dynamic_uncertainty", True)
+        )
+        bounds = self.feedback_config.get("uncertainty_bounds", {})
+        self.uncertainty_min = float(bounds.get("min", 0.3))
+        self.uncertainty_max = float(bounds.get("max", 0.9))
+        self.uncertainty_buffer = float(bounds.get("buffer", 0.1))
+        self.diverse_sample_rate = float(
+            self.feedback_config.get("diverse_sample_rate", 0.1)
+        )
+        self.min_scores_for_uncertainty = int(
+            self.feedback_config.get("min_scores_for_uncertainty", 5)
+        )
+        self.min_window_size = int(self.feedback_config.get("min_window_size", 3))
+        self.max_window_size = int(self.feedback_config.get("max_window_size", 10))
+        self.feedback_consistency_threshold = float(
+            self.feedback_config.get("feedback_consistency_threshold", 0.2)
+        )
+        self.variance_smoothing_alpha = float(
+            self.feedback_config.get("variance_smoothing_alpha", 0.3)
+        )
+        self.random_seed = self.feedback_config.get("random_seed")
+        self._rng = random.Random(self.random_seed)
         self.review_queue_dir = Path(
             self.feedback_config.get("review_queue_dir", "outputs/human_feedback")
         )
         self.review_queue_dir.mkdir(parents=True, exist_ok=True)
         self.review_queue_file = self.review_queue_dir / "review_queue.jsonl"
+        self.policy_state_file = self.review_queue_dir / "feedback_policy_state.json"
 
         logger.info(
             f"🤖 Human feedback manager initialized (enabled: {self.feedback_enabled})"
@@ -81,6 +111,11 @@ class HumanFeedbackManager:
                 feedback_candidates
             )
             queued_items = self._persist_review_queue(recommendations, feedback_candidates)
+            policy_state = self._build_policy_state(rag_responses, feedback_results)
+            self.policy_state_file.write_text(
+                json.dumps(policy_state, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
             results = {
                 "enabled": True,
@@ -90,6 +125,8 @@ class HumanFeedbackManager:
                 "recommendations": recommendations,
                 "queued_reviews": queued_items,
                 "review_queue_path": str(self.review_queue_file),
+                "policy_state": policy_state,
+                "policy_state_path": str(self.policy_state_file),
                 "summary": self._generate_feedback_summary(
                     feedback_results, recommendations
                 ),
@@ -113,13 +150,15 @@ class HumanFeedbackManager:
     ) -> List[Dict[str, Any]]:
         """Identify samples that need human feedback based on uncertainty or other criteria."""
         candidates = []
+        score_history = self._collect_response_scores(rag_responses)
 
         questions = testset.get("questions", [])
         qa_pairs = testset.get("qa_pairs", [])
 
         for i, response in enumerate(rag_responses):
             # Check if this response needs human feedback
-            needs_feedback = self._needs_human_feedback(response, i)
+            reason = self._get_feedback_reason(response, i, score_history)
+            needs_feedback = reason is not None
 
             if needs_feedback:
                 candidate = {
@@ -132,48 +171,25 @@ class HumanFeedbackManager:
                         else f"Question {i+1}"
                     ),
                     "response": response,
-                    "reason": self._get_feedback_reason(response),
+                    "reason": reason,
                 }
                 candidates.append(candidate)
 
         # Apply sampling if too many candidates
         sample_limit = max(1, int(len(rag_responses) * self.sampling_rate))
         if len(candidates) > sample_limit:
-            import random
-
-            candidates = random.sample(candidates, sample_limit)
+            candidates = self._rng.sample(candidates, sample_limit)
 
         return candidates
 
-    def _needs_human_feedback(self, response: Dict[str, Any], index: int) -> bool:
-        """Determine if a response needs human feedback."""
-        # Check confidence/uncertainty scores
-        confidence = response.get("confidence", 1.0)
-        if confidence < self.feedback_threshold:
-            return True
-
-        answer = str(response.get("answer", "")).strip()
-        if len(answer) < 40:
-            return True
-
-        domain_score = float(response.get("domain_score", response.get("ragas_score", 1.0)))
-        if domain_score < self.feedback_threshold:
-            return True
-
-        # Check for conflicting metrics
-        if "ragas_score" in response and "keyword_score" in response:
-            ragas_score = response.get("ragas_score", 0.5)
-            keyword_score = response.get("keyword_score", 0.5)
-
-            # If scores differ significantly, request feedback
-            if abs(ragas_score - keyword_score) > 0.3:
-                return True
-
-        return False
-
-    def _get_feedback_reason(self, response: Dict[str, Any]) -> str:
+    def _get_feedback_reason(
+        self,
+        response: Dict[str, Any],
+        index: int,
+        score_history: Optional[List[float]] = None,
+    ) -> Optional[str]:
         """Get the reason why this response needs human feedback."""
-        confidence = response.get("confidence", 1.0)
+        confidence = self._safe_float(response.get("confidence", 1.0), 1.0)
         if confidence < self.feedback_threshold:
             return f"Low confidence score: {confidence:.2f}"
 
@@ -181,18 +197,136 @@ class HumanFeedbackManager:
         if len(answer) < 40:
             return f"Short answer length: {len(answer)}"
 
-        domain_score = float(response.get("domain_score", response.get("ragas_score", 1.0)))
+        domain_score = self._extract_response_score(response)
         if domain_score < self.feedback_threshold:
             return f"Low evaluation score: {domain_score:.2f}"
 
         if "ragas_score" in response and "keyword_score" in response:
-            ragas_score = response.get("ragas_score", 0.5)
-            keyword_score = response.get("keyword_score", 0.5)
+            ragas_score = self._safe_float(response.get("ragas_score", 0.5), 0.5)
+            keyword_score = self._safe_float(response.get("keyword_score", 0.5), 0.5)
 
             if abs(ragas_score - keyword_score) > 0.3:
                 return f"Conflicting metrics - RAGAS: {ragas_score:.2f}, Keyword: {keyword_score:.2f}"
 
-        return "Random sampling for quality assurance"
+        bounds = self._compute_dynamic_uncertainty_bounds(score_history or [])
+        if bounds is not None:
+            uncertainty_low, uncertainty_high = bounds
+            if uncertainty_low <= domain_score <= uncertainty_high:
+                return (
+                    "Dynamic uncertainty range match: "
+                    f"{domain_score:.2f} within {uncertainty_low:.2f}-{uncertainty_high:.2f}"
+                )
+            if domain_score > uncertainty_high and self.diverse_sample_rate > 0:
+                if self._rng.random() < self.diverse_sample_rate:
+                    return "Diverse confident-sample audit"
+
+        return None
+
+    def _collect_response_scores(self, rag_responses: List[Dict[str, Any]]) -> List[float]:
+        scores: List[float] = []
+        for response in rag_responses:
+            score = self._extract_response_score(response)
+            if 0.0 <= score <= 1.0:
+                scores.append(score)
+        return scores
+
+    def _extract_response_score(self, response: Dict[str, Any]) -> float:
+        return self._safe_float(
+            response.get("domain_score", response.get("ragas_score", 1.0)), 1.0
+        )
+
+    def _safe_float(self, value: Any, default: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _compute_dynamic_uncertainty_bounds(
+        self, score_history: List[float]
+    ) -> Optional[tuple[float, float]]:
+        if not self.dynamic_uncertainty_enabled or len(score_history) < self.min_scores_for_uncertainty:
+            return None
+
+        sorted_scores = sorted(score_history)
+        q1 = self._percentile(sorted_scores, 0.25)
+        q3 = self._percentile(sorted_scores, 0.75)
+        low = max(self.uncertainty_min, q1 - self.uncertainty_buffer)
+        high = min(self.uncertainty_max, q3 + self.uncertainty_buffer)
+        return (low, high)
+
+    def _percentile(self, sorted_scores: List[float], percentile: float) -> float:
+        if not sorted_scores:
+            return self.feedback_threshold
+        if len(sorted_scores) == 1:
+            return sorted_scores[0]
+        position = (len(sorted_scores) - 1) * percentile
+        lower_index = int(position)
+        upper_index = min(lower_index + 1, len(sorted_scores) - 1)
+        if upper_index == lower_index:
+            return sorted_scores[lower_index]
+        weight = position - lower_index
+        return (sorted_scores[lower_index] * (1.0 - weight)) + (sorted_scores[upper_index] * weight)
+
+    def _smoothed_feedback_variance(self, feedback_values: List[float]) -> float:
+        if len(feedback_values) < 2:
+            return 0.0
+        window = feedback_values[-self.max_window_size :]
+        smoothed: List[float] = []
+        last_value = window[0]
+        alpha = min(max(self.variance_smoothing_alpha, 0.01), 1.0)
+        for value in window:
+            last_value = (alpha * value) + ((1.0 - alpha) * last_value)
+            smoothed.append(last_value)
+        return statistics.pvariance(smoothed) if len(smoothed) > 1 else 0.0
+
+    def _adaptive_window_size(self, feedback_values: List[float]) -> int:
+        variance = self._smoothed_feedback_variance(feedback_values)
+        if variance <= self.feedback_consistency_threshold:
+            return self.min_window_size
+        normalized_variance = min(1.0, variance / max(self.feedback_consistency_threshold, 0.001))
+        return int(
+            round(
+                self.min_window_size
+                + normalized_variance * (self.max_window_size - self.min_window_size)
+            )
+        )
+
+    def _build_policy_state(
+        self,
+        rag_responses: List[Dict[str, Any]],
+        feedback_results: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        scores = self._collect_response_scores(rag_responses)
+        bounds = self._compute_dynamic_uncertainty_bounds(scores)
+        feedback_values = [
+            1.0 for _ in range(int(feedback_results.get("positive_feedback", 0)))
+        ] + [0.0 for _ in range(int(feedback_results.get("negative_feedback", 0)))]
+        adaptive_window = self._adaptive_window_size(feedback_values or [1.0])
+        recent_scores = scores[-adaptive_window:] if scores else []
+        recommended_threshold = self.feedback_threshold
+        if recent_scores:
+            recommended_threshold = min(max(statistics.median(recent_scores), 0.0), 1.0)
+
+        return {
+            "current_threshold": self.feedback_threshold,
+            "recommended_threshold": round(recommended_threshold, 4),
+            "dynamic_uncertainty_enabled": self.dynamic_uncertainty_enabled,
+            "uncertainty_range": {
+                "low": round(bounds[0], 4) if bounds else None,
+                "high": round(bounds[1], 4) if bounds else None,
+            },
+            "score_count": len(scores),
+            "score_summary": {
+                "min": round(min(scores), 4) if scores else None,
+                "max": round(max(scores), 4) if scores else None,
+                "median": round(statistics.median(scores), 4) if scores else None,
+            },
+            "diverse_sample_rate": self.diverse_sample_rate,
+            "adaptive_window_size": adaptive_window,
+            "smoothed_feedback_variance": round(
+                self._smoothed_feedback_variance(feedback_values), 6
+            ),
+        }
 
     def _persist_review_queue(
         self,
@@ -242,12 +376,21 @@ class HumanFeedbackManager:
         self, candidates: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Generate recommendations for human feedback collection."""
+        recommended_threshold = None
+        if candidates:
+            scores = [
+                self._extract_response_score(candidate.get("response", {}))
+                for candidate in candidates
+            ]
+            if scores:
+                recommended_threshold = round(statistics.median(scores), 4)
         if not candidates:
             return {
                 "total_recommendations": 0,
                 "high_priority": 0,
                 "medium_priority": 0,
                 "low_priority": 0,
+                "recommended_threshold": recommended_threshold,
                 "recommendations": [],
             }
 
@@ -281,6 +424,7 @@ class HumanFeedbackManager:
             "high_priority": high_priority,
             "medium_priority": medium_priority,
             "low_priority": low_priority,
+            "recommended_threshold": recommended_threshold,
             "recommendations": recommendations,
         }
 
@@ -313,6 +457,7 @@ class HumanFeedbackManager:
             "new_recommendations": recommendations.get("total_recommendations", 0),
             "high_priority_items": recommendations.get("high_priority", 0),
             "feedback_coverage": f"{feedback_results.get('total_feedback', 0)} existing + {recommendations.get('total_recommendations', 0)} recommended",
+            "recommended_threshold": recommendations.get("recommended_threshold"),
         }
 
     def evaluate_testset(self, testset_data: Dict[str, Any]) -> List[Dict[str, Any]]:

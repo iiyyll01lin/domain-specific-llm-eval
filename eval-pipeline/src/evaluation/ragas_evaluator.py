@@ -49,6 +49,7 @@ from evaluation.spatial_rag_evaluator import MixedRealityMultimodalEval
 from evaluation.multimodal_metrics import MultimodalResponseEvaluator
 from evaluation.swarm_agent import SwarmSynthesizer
 from evaluation.symbolic_evaluator import SymbolicEvaluator
+from evaluation.temporal_causality_evaluator import TemporalCausalityEvaluator
 from evaluation.telepathic_intent_evaluator import TelepathicIntentAlignment
 from generation.neuro_symbolic_rag import NeuroSymbolicRAGEngine
 from optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
@@ -133,6 +134,7 @@ class RagasEvaluator:
         self.symbolic_engine = NeuroSymbolicRAGEngine()
         self.symbolic_evaluator = SymbolicEvaluator()
         self.spatial_evaluator = MixedRealityMultimodalEval()
+        self.temporal_evaluator = TemporalCausalityEvaluator()
         self.intent_evaluator = TelepathicIntentAlignment()
         alignment_config = self.ragas_metrics_config.get("alignment", {})
         self.alignment_pipeline = DirectPreferenceOptimizationPipeline(alignment_config)
@@ -604,6 +606,50 @@ class RagasEvaluator:
             }
         }
 
+    def _evaluate_temporal_metrics(
+        self, rag_responses: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        temporal_scores: List[float] = []
+        for response in rag_responses:
+            timeline = response.get("timeline") or response.get("current_events")
+            if not isinstance(timeline, list) or not timeline:
+                continue
+            anomaly = response.get("temporal_anomaly") or response.get("anomaly")
+            prediction = str(
+                response.get("prediction")
+                or response.get("answer")
+                or response.get("rag_answer")
+                or ""
+            )
+            if not prediction:
+                continue
+            normalized_timeline = [str(item) for item in timeline]
+            if anomaly:
+                normalized_timeline = self.temporal_evaluator.inject_temporal_perturbation(
+                    normalized_timeline, str(anomaly)
+                )
+            temporal_scores.append(
+                float(
+                    self.temporal_evaluator.score_prediction(
+                        normalized_timeline, prediction
+                    )
+                )
+            )
+
+        if not temporal_scores:
+            return {}
+        return {
+            "temporal_causality_score": {
+                "mean": sum(temporal_scores) / len(temporal_scores),
+                "std": float(np.std(temporal_scores)) if len(temporal_scores) > 1 else 0.0,
+                "min": min(temporal_scores),
+                "max": max(temporal_scores),
+                "valid_count": len(temporal_scores),
+                "total_count": len(temporal_scores),
+                "scores": temporal_scores,
+            }
+        }
+
     def evaluate(
         self, testset: Dict[str, Any], rag_responses: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -749,6 +795,10 @@ class RagasEvaluator:
             formatted_results = self._merge_metric_payloads(
                 formatted_results,
                 self._evaluate_intent_metrics(rag_responses),
+            )
+            formatted_results = self._merge_metric_payloads(
+                formatted_results,
+                self._evaluate_temporal_metrics(rag_responses),
             )
             formatted_results["multimodal"] = {
                 "modalities_present": multimodal_results.get("modalities_present", {})

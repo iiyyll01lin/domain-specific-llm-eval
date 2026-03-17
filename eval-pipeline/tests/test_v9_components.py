@@ -49,6 +49,7 @@ def test_force_graph() -> None:
     html = vis.generate_html_payload({"nodes": [{"id": "A"}, {"id": "B"}], "links": [{"source": "A", "target": "B"}]})
     assert "WebGL" in html
     assert '"link_count": 1' in html
+    assert "high_centrality_nodes" in html
 
 
 def test_force_graph_export_from_kg_artifact(tmp_path) -> None:
@@ -64,6 +65,7 @@ def test_force_graph_export_from_kg_artifact(tmp_path) -> None:
     assert (tmp_path / "topology" / "topology_payload.json").exists()
     assert (tmp_path / "topology" / "topology.html").exists()
     assert exported["html_path"].endswith("topology.html")
+    assert exported["payload_path"].endswith("topology_payload.json")
 
 
 def test_dspy_corrector() -> None:

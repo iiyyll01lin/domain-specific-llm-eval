@@ -62,7 +62,11 @@ def test_federated_client() -> None:
 
 def test_federated_client_submit_aggregation_success() -> None:
     session = _FakeSession({"accepted": True})
-    client = FederatedLearningClient(signing_secret="secret", session=session)
+    client = FederatedLearningClient(
+        signing_secret="secret",
+        session=session,
+        accepted_tenants=["tenant-a"],
+    )
 
     res = client.submit_aggregation(
         [{"node_id": "edge-1", "score": 0.8, "sample_count": 2, "tenant": "tenant-a"}]
@@ -70,6 +74,22 @@ def test_federated_client_submit_aggregation_success() -> None:
 
     assert res["submitted"] is True
     assert res["server_response"]["accepted"] is True
+    assert "tenant-a" in res["trust_policy"]
+
+
+def test_federated_client_rejects_untrusted_tenants(tmp_path) -> None:
+    client = FederatedLearningClient(
+        signing_secret="secret",
+        accepted_tenants=["tenant-a"],
+        spool_dir=tmp_path,
+    )
+
+    res = client.aggregate_gradients(
+        [{"node_id": "edge-2", "score": 0.8, "sample_count": 2, "tenant": "tenant-b"}]
+    )
+
+    assert res["aggregated_count"] == 0
+    assert res["rejected_count"] == 1
 
 
 def test_multimodal_loader() -> None:

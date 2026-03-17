@@ -26,6 +26,9 @@ class _BackendSession:
     def post(self, endpoint, json=None, timeout=0):
         return _BackendResponse(self.payload)
 
+    def get(self, endpoint, timeout=0):
+        return _BackendResponse(self.payload)
+
 
 def test_multi_agent_router() -> None:
     orchestrator = LangGraphEvalOrchestrator()
@@ -72,6 +75,8 @@ def test_app_store_file_backed_registry_and_receipt(tmp_path) -> None:
     assert store.get_runbook_manifest("custom-suite") is not None
     assert store.install_runbook("custom-suite") is True
     assert (tmp_path / "installed" / "custom-suite.json").exists()
+    receipt = json.loads((tmp_path / "installed" / "custom-suite.json").read_text(encoding="utf-8"))
+    assert "manifest_digest" in receipt
 
 
 def test_taxonomy_discovery() -> None:
@@ -103,6 +108,29 @@ def test_taxonomy_discovery_file_and_backend_enrichment(tmp_path) -> None:
 
     assert result["backend_used"] is True
     assert "Case" in result["entities"]
+    assert result["relation_candidates"]
     assert (tmp_path / "proposal.json").exists()
     assert Path(approved_path).exists()
+
+
+def test_app_store_remote_registry_sync() -> None:
+    store = UnifiedAppStore(
+        registry_url="http://registry.example/runbooks",
+        session=_BackendSession(
+            [
+                {
+                    "id": "remote-suite",
+                    "name": "Remote Suite",
+                    "author": "Remote",
+                    "version": "1.0.0",
+                    "trust": "signed",
+                    "dependencies": "base-eval",
+                }
+            ]
+        ),
+    )
+
+    manifest = store.get_runbook_manifest("remote-suite")
+    assert manifest is not None
+    assert manifest["trust"] == "signed"
 

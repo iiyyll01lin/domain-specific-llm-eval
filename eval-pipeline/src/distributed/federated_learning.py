@@ -4,8 +4,9 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
@@ -32,6 +33,7 @@ class FederatedLearningClient:
         session: Optional[requests.Session] = None,
         timeout: int = 5,
         spool_dir: str | Path = "outputs/federated_spool",
+        accepted_tenants: Optional[Sequence[str]] = None,
     ):
         self.server_url = server_url
         self.signing_secret = signing_secret
@@ -39,6 +41,8 @@ class FederatedLearningClient:
         self.timeout = timeout
         self.spool_dir = Path(spool_dir)
         self.spool_dir.mkdir(parents=True, exist_ok=True)
+        self.audit_log_path = self.spool_dir / "federated_audit.jsonl"
+        self.accepted_tenants = {str(item) for item in (accepted_tenants or [])}
         self.is_connected = False
 
     def connect(self) -> None:
@@ -71,6 +75,8 @@ class FederatedLearningClient:
         )
 
     def validate_envelope(self, envelope: EdgeResultEnvelope) -> bool:
+        if self.accepted_tenants and envelope.tenant not in self.accepted_tenants:
+            return False
         payload = {
             "node_id": envelope.node_id,
             "score": round(float(envelope.score), 6),
@@ -78,6 +84,12 @@ class FederatedLearningClient:
             "tenant": envelope.tenant,
         }
         return envelope.signature == self._sign_payload(payload)
+
+    def _append_audit_event(self, payload: Dict[str, Any]) -> None:
+        event = dict(payload)
+        event["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        with open(self.audit_log_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
     def _sign_payload(self, payload: Dict[str, Any]) -> str:
         material = json.dumps(payload, sort_keys=True, ensure_ascii=False)
@@ -121,6 +133,7 @@ class FederatedLearningClient:
             "weighted_score": round(weighted_score, 6),
             "total_samples": total_samples,
             "tenants": tenants,
+            "trust_policy": sorted(self.accepted_tenants),
             "envelopes": [asdict(envelope) for envelope in valid_envelopes],
         }
 
@@ -138,10 +151,52 @@ class FederatedLearningClient:
             payload = response.json() if hasattr(response, "json") else {}
             aggregated["submitted"] = True
             aggregated["server_response"] = payload if isinstance(payload, dict) else {}
+            self._append_audit_event(
+                {
+                    "event": "submitted",
+                    "server_url": self.server_url,
+                    "submitted": True,
+                    "aggregated_count": aggregated.get("aggregated_count", 0),
+                    "tenants": aggregated.get("tenants", []),
+                }
+            )
             return aggregated
         except Exception:
             spool_path = self.spool_dir / "pending_federated_submission.json"
             spool_path.write_text(json.dumps(aggregated, indent=2), encoding="utf-8")
             aggregated["submitted"] = False
             aggregated["spool_path"] = str(spool_path)
+            self._append_audit_event(
+                {
+                    "event": "spooled",
+                    "server_url": self.server_url,
+                    "submitted": False,
+                    "spool_path": str(spool_path),
+                    "aggregated_count": aggregated.get("aggregated_count", 0),
+                    "tenants": aggregated.get("tenants", []),
+                }
+            )
             return aggregated
+
+    def replay_spooled_submission(self) -> Optional[Dict[str, Any]]:
+        spool_path = self.spool_dir / "pending_federated_submission.json"
+        if not spool_path.exists():
+            return None
+        payload = json.loads(spool_path.read_text(encoding="utf-8"))
+        response = self.session.post(
+            f"{self.server_url.rstrip('/')}/aggregate",
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        spool_path.unlink(missing_ok=True)
+        self._append_audit_event(
+            {
+                "event": "replayed",
+                "server_url": self.server_url,
+                "submitted": True,
+                "aggregated_count": payload.get("aggregated_count", 0),
+                "tenants": payload.get("tenants", []),
+            }
+        )
+        return payload

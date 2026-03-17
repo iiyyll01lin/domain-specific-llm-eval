@@ -143,12 +143,17 @@ def test_extended_partial_metrics_wire_into_main_evaluator_helpers() -> None:
     evaluator.intent_evaluator = __import__(
         "src.evaluation.telepathic_intent_evaluator", fromlist=["TelepathicIntentAlignment"]
     ).TelepathicIntentAlignment()
+    evaluator.temporal_evaluator = __import__(
+        "src.evaluation.temporal_causality_evaluator", fromlist=["TemporalCausalityEvaluator"]
+    ).TemporalCausalityEvaluator()
 
     rag_responses = [
         {
             "question": "What is the capital of France?",
             "answer": "Paris is the capital of France.",
             "contexts": ["Paris is the capital of France."],
+            "timeline": ["market crash"],
+            "prediction": "Inflation drops after the market crash.",
         },
         {
             "question": "What is near the assembly cell?",
@@ -162,9 +167,11 @@ def test_extended_partial_metrics_wire_into_main_evaluator_helpers() -> None:
     symbolic_metrics = evaluator._evaluate_symbolic_metrics(rag_responses)
     spatial_metrics = evaluator._evaluate_spatial_metrics(rag_responses)
     intent_metrics = evaluator._evaluate_intent_metrics(rag_responses)
+    temporal_metrics = evaluator._evaluate_temporal_metrics(rag_responses)
 
     assert "swarm_agreement_rate" in swarm_metrics
     assert "symbolic_proof_score" in symbolic_metrics
     assert symbolic_metrics["symbolic_proof_score"]["mean"] > 0
     assert spatial_metrics["spatial_reasoning_score"]["mean"] == 1.0
     assert intent_metrics["intent_alignment_score"]["mean"] == 1.0
+    assert temporal_metrics["temporal_causality_score"]["mean"] > 0.5
