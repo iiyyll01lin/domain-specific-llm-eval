@@ -171,19 +171,22 @@ Completed in recent passes:
 - Main-path symbolic / spatial / intent metric wiring
 - Main-path temporal causality metric wiring
 - Dynamic uncertainty human-feedback policy state and threshold recommendation
+- Reviewer-result ingestion for human-feedback resolution
 - Maintained regression migration for legacy RAGAS and pure-RAGAS smoke checks
 - Maintained regression migration for legacy `test_ragas_fix.py`, `test_pure_ragas_implementation.py`, and `test_pipeline_integration.py` intent
+- Maintained regression migration for legacy `test_report_fixes.py`, `test_tiktoken_patch.py`, and `test_full_ragas_implementation.py` intent
 - File/HTTP-backed taxonomy, topology, app-store, and federated adapters with orchestrator hooks
 - Tenant trust policy and audit-log support for federated aggregation
 - Richer topology payload analytics and app-store receipt digesting
+- Hardware capability, runtime-metrics, and benchmark telemetry for accelerated inference
 - Maintained regression migration for pipeline integration smoke helpers
 
 Next practical priority order:
 
 1. Continue legacy `eval-pipeline/test_*.py` migration into maintained pytest
-2. Add richer hardware capability and benchmark telemetry for accelerated inference
-3. Promote graph topology artifacts into a real UI runtime
-4. Move federated and app-store flows from file/HTTP adapters to richer end-to-end runtimes
-5. Replace remaining heuristic symbolic/spatial/intent/temporal adapters with backend-capable engines where justified
-6. Add reviewer-result ingestion so the human-feedback queue becomes a real learning loop
+2. Promote graph topology artifacts into a real UI runtime
+3. Move federated and app-store flows from file/HTTP adapters to richer end-to-end runtimes
+4. Replace remaining heuristic symbolic/spatial/intent/temporal adapters with backend-capable engines where justified
+5. Add a maintained reviewer UI/backend so the human-feedback ingestion path becomes a real workflow
+6. Deepen accelerated inference telemetry into richer runtime observability and failure analysis
 7. Keep remaining design-only items gated behind concrete backend or simulator decisions
