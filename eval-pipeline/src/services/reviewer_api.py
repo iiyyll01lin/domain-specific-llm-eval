@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import json
 from pathlib import Path
 from time import time
 from typing import Any, Dict, Optional
@@ -77,7 +78,31 @@ def _build_token_issuer(resolved_base_dir: Path) -> ReviewerTokenIssuerService:
 def create_reviewer_service_app(base_dir: Optional[Path] = None) -> FastAPI:
     resolved_base_dir = Path(base_dir or Path(__file__).resolve().parents[2])
     app = FastAPI(title="Reviewer Service API")
-    rate_limit_state: Dict[str, list[float]] = {}
+    rate_limit_state_file = Path(
+        os.environ.get(
+            "REVIEWER_RATE_LIMIT_STATE_FILE",
+            resolved_base_dir / "outputs" / "reviewer_service" / "rate_limit_state.json",
+        )
+    )
+    rate_limit_state_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def _load_rate_limit_state() -> Dict[str, list[float]]:
+        if not rate_limit_state_file.exists():
+            return {}
+        try:
+            payload = json.loads(rate_limit_state_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Failed to load reviewer rate limit state %s: %s", rate_limit_state_file, exc)
+            return {}
+        normalized: Dict[str, list[float]] = {}
+        for identity, timestamps in payload.items():
+            if not isinstance(identity, str) or not isinstance(timestamps, list):
+                continue
+            normalized[identity] = [float(value) for value in timestamps if isinstance(value, (int, float))]
+        return normalized
+
+    def _save_rate_limit_state(state: Dict[str, list[float]]) -> None:
+        rate_limit_state_file.write_text(json.dumps(state), encoding="utf-8")
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
@@ -98,11 +123,13 @@ def create_reviewer_service_app(base_dir: Optional[Path] = None) -> FastAPI:
         limit = int(service.config.get("rate_limit_rpm", 60) or 60)
         now = time()
         window_start = now - 60.0
+        rate_limit_state = _load_rate_limit_state()
         timestamps = [ts for ts in rate_limit_state.get(identity, []) if ts >= window_start]
         if len(timestamps) >= limit:
             raise HTTPException(status_code=429, detail="Reviewer service rate limit exceeded")
         timestamps.append(now)
         rate_limit_state[identity] = timestamps
+        _save_rate_limit_state(rate_limit_state)
 
     def _auth_context(
         reviewer_token: Optional[str],

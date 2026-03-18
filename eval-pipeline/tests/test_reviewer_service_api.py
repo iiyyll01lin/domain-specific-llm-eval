@@ -98,6 +98,35 @@ def test_reviewer_service_api_rate_limits_when_configured(tmp_path: Path, monkey
     assert client.get("/reviews", headers=headers).status_code == 429
 
 
+def test_reviewer_service_rate_limit_state_survives_app_restart(tmp_path: Path, monkeypatch) -> None:
+    principal_file = tmp_path / "reviewer_principals.json"
+    principal_file.write_text(
+        '{"tokens": {"persisted-rate-token": {"reviewer_id": "persisted-reviewer", "tenant_ids": ["default"], "roles": ["reviewer"]}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("REVIEWER_AUTH_SOURCE_TYPE", "principal-file")
+    monkeypatch.setenv("REVIEWER_PRINCIPAL_FILE", str(principal_file))
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "pipeline_config.yaml").write_text(
+        "evaluation:\n  human_feedback:\n    service_boundary:\n      rate_limit_rpm: 1\n",
+        encoding="utf-8",
+    )
+
+    headers = {
+        "X-Reviewer-Token": "persisted-rate-token",
+        "X-Reviewer-Id": "persisted-reviewer",
+        "X-Tenant-Id": "default",
+    }
+
+    first_client = TestClient(create_reviewer_service_app(tmp_path))
+    assert first_client.get("/reviews", headers=headers).status_code == 200
+
+    second_client = TestClient(create_reviewer_service_app(tmp_path))
+    assert second_client.get("/reviews", headers=headers).status_code == 429
+
+
 def test_reviewer_service_api_supports_issuer_lifecycle_and_forensics_workflow(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("REVIEWER_AUTH_SOURCE_TYPE", "static-token")
     app = create_reviewer_service_app(tmp_path)
