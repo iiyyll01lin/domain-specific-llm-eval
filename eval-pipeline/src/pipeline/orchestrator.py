@@ -233,6 +233,25 @@ class PipelineOrchestrator:
             repeats=int(hardware_config.get("benchmark_repeats", 2)),
         )
 
+    def _testset_has_rows(self, testset_data: Any) -> bool:
+        if testset_data is None:
+            return False
+        if hasattr(testset_data, "empty"):
+            return not bool(testset_data.empty)
+        if isinstance(testset_data, (list, tuple, dict, set)):
+            return len(testset_data) > 0
+        return True
+
+    def _testset_size(self, testset_data: Any) -> int:
+        if testset_data is None:
+            return 0
+        if hasattr(testset_data, "__len__"):
+            try:
+                return int(len(testset_data))
+            except Exception:
+                return 0
+        return 0
+
     def _create_data_processor(self):
         """
         Create appropriate data processor based on input type.
@@ -429,13 +448,9 @@ class PipelineOrchestrator:
                     "timestamp": datetime.now().isoformat(),
                     "documents_processed": len(processed_documents),
                     "testsets_generated": (
-                        1
-                        if (testset_data is not None and not testset_data.empty)
-                        else 0
+                        1 if self._testset_has_rows(testset_data) else 0
                     ),
-                    "total_qa_pairs": (
-                        len(testset_data) if testset_data is not None else 0
-                    ),
+                    "total_qa_pairs": self._testset_size(testset_data),
                     "document_sources": [
                         doc["source_file"] for doc in processed_documents
                     ],
@@ -560,6 +575,15 @@ class PipelineOrchestrator:
                 hardware_telemetry = self._collect_hardware_acceleration_telemetry()
                 if hardware_telemetry is not None:
                     metadata["hardware_acceleration_telemetry"] = hardware_telemetry
+                    observability_artifact = (
+                        self.output_dirs["metadata"]
+                        / f"hardware_observability_{self.run_id}.json"
+                    )
+                    with open(observability_artifact, "w") as observability_handle:
+                        json.dump(hardware_telemetry, observability_handle, indent=2)
+                    metadata["hardware_observability_artifact"] = str(
+                        observability_artifact
+                    )
 
                 # Save evaluation metadata
                 eval_metadata_file = (

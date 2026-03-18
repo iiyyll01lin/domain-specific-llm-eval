@@ -34,6 +34,22 @@ def test_report_generator_maps_required_columns_without_crashing(tmp_path: Path)
     assert "ragas_composite_score" in results_df.columns
 
 
+def test_generate_reports_uses_workspace_relative_output_dir(tmp_path: Path, monkeypatch) -> None:
+    generator = ReportGenerator({"reporting": {"enabled": True}})
+    eval_file = tmp_path / "evaluation.json"
+    eval_file.write_text(
+        '{"rag_results": [{"question": "Q", "answer": "A", "context_precision": 0.8, "faithfulness": 0.9, "answer_relevancy": 0.85}] }',
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    reports = generator.generate_reports([eval_file], "path-check")
+
+    expected_dir = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/outputs/reports/run_path-check")
+
+    assert Path(reports["detailed_results"]).parent == expected_dir
+
+
 def test_configurable_builder_and_config_manager_smoke() -> None:
     builder = ConfigurableTestsetBuilder(
         config_path="/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"

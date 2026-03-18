@@ -135,3 +135,6 @@ def test_orchestrator_collects_hardware_acceleration_telemetry() -> None:
     assert telemetry is not None
     assert telemetry["capabilities"]["connected"] is True
     assert telemetry["benchmarks"][0]["median_latency_seconds"] >= 0.0
+    assert telemetry["observability"]["gpu_saturation"]["saturation_level"] == "moderate"
+    assert telemetry["request_distribution"]["total_requests"] >= 1
+    assert telemetry["benchmarks"][0]["latency_samples_seconds"]

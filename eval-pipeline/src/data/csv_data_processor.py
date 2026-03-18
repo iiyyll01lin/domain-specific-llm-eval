@@ -159,6 +159,12 @@ class CSVDataProcessor:
             # Extract content field (usually contains JSON)
             content_field = column_mapping.get('content', 'content')
             raw_content = row.get(content_field, '')
+
+            if pd.isna(raw_content) or not isinstance(raw_content, str):
+                logger.debug(
+                    f"Skipping row {idx}: content is {type(raw_content).__name__}, not string"
+                )
+                return None
             
             if pd.isna(raw_content) or not raw_content:
                 logger.debug(f"Skipping row {idx}: empty content")

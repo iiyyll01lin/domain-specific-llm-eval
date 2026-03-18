@@ -300,7 +300,7 @@ class ReportGenerator:
             )
 
             # Generate output directory
-            output_dir = Path(f"outputs/reports/run_{run_id}")
+            output_dir = Path(__file__).resolve().parents[2] / "outputs" / "reports" / f"run_{run_id}"
 
             # Generate comprehensive report
             return self.generate_comprehensive_report(

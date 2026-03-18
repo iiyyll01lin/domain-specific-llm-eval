@@ -48,6 +48,10 @@ def test_vllm_client() -> None:
     assert "Accelerated" in ans
     assert telemetry["benchmarks"][0]["median_latency_seconds"] >= 0.0
     assert telemetry["last_generation_telemetry"]["throughput_tokens_per_second"] > 0
+    assert telemetry["gpu_saturation"]["saturation_level"] == "moderate"
+    assert telemetry["request_distribution"]["total_requests"] >= 1
+    assert telemetry["fallback_paths"]["direct_vllm"] >= 1
+    assert telemetry["benchmarks"][0]["latency_samples_seconds"]
 
 
 def test_force_graph() -> None:

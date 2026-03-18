@@ -130,7 +130,7 @@ class DashboardJobRunner:
 
     def _build_progress(self, stage_events: Any) -> Dict[str, Any]:
         completed = [event for event in stage_events if event.get("status") == "completed"]
-        latest_stage = stage_events[-1]["stage"] if stage_events else None
+        latest_stage = stage_events[-1].get("stage") if stage_events else None
         total_stages = max(6, len(stage_events))
         percentage = round((len(completed) / total_stages) * 100, 1) if total_stages else 0.0
         return {
@@ -153,5 +153,5 @@ class DashboardJobRunner:
     def _tail_text(self, path: Path, max_chars: int = 4000) -> str:
         if not path.exists():
             return ""
-        content = path.read_text(encoding="utf-8", errors="ignore")
+        content = path.read_text(encoding="utf-8", errors="replace")
         return content[-max_chars:]

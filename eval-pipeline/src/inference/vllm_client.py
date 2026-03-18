@@ -24,6 +24,8 @@ class vLLMInferenceClient:
         self.timeout = timeout
         self.is_connected = False
         self.last_generation_telemetry: Dict[str, Any] = {}
+        self.request_history: List[Dict[str, Any]] = []
+        self.max_request_history = 100
 
     def _estimate_tokens(self, text: str) -> int:
         return max(1, len(re.findall(r"\w+|[^\w\s]", text)))
@@ -64,6 +66,69 @@ class vLLMInferenceClient:
                 "runtime_metrics": {},
             }
 
+    def _record_request(self, request_payload: Dict[str, Any]) -> None:
+        self.request_history.append(request_payload)
+        if len(self.request_history) > self.max_request_history:
+            self.request_history = self.request_history[-self.max_request_history :]
+
+    def _summarize_request_distribution(self) -> Dict[str, Any]:
+        history = self.request_history[-self.max_request_history :]
+        if not history:
+            return {
+                "total_requests": 0,
+                "status_counts": {},
+                "prompt_size_bands": {},
+            }
+
+        status_counts: Dict[str, int] = {}
+        prompt_size_bands = {"short": 0, "medium": 0, "long": 0}
+        for item in history:
+            status = str(item.get("request_status", "unknown"))
+            status_counts[status] = status_counts.get(status, 0) + 1
+            prompt_tokens = int(item.get("prompt_tokens_estimate", 0) or 0)
+            if prompt_tokens < 16:
+                prompt_size_bands["short"] += 1
+            elif prompt_tokens < 64:
+                prompt_size_bands["medium"] += 1
+            else:
+                prompt_size_bands["long"] += 1
+
+        return {
+            "total_requests": len(history),
+            "status_counts": status_counts,
+            "prompt_size_bands": prompt_size_bands,
+        }
+
+    def _summarize_error_modes(self) -> Dict[str, int]:
+        error_modes: Dict[str, int] = {}
+        for item in self.request_history:
+            mode = str(item.get("error_mode", "none"))
+            error_modes[mode] = error_modes.get(mode, 0) + 1
+        return error_modes
+
+    def _summarize_fallback_paths(self) -> Dict[str, int]:
+        fallback_paths: Dict[str, int] = {}
+        for item in self.request_history:
+            fallback = str(item.get("fallback_path", "none"))
+            fallback_paths[fallback] = fallback_paths.get(fallback, 0) + 1
+        return fallback_paths
+
+    def _summarize_gpu_saturation(self, runtime_metrics: Dict[str, Any]) -> Dict[str, Any]:
+        gpu_utilization = float(runtime_metrics.get("gpu_utilization", runtime_metrics.get("sm_utilization", 0.0)) or 0.0)
+        kv_cache_utilization = float(runtime_metrics.get("kv_cache_utilization", 0.0) or 0.0)
+        if gpu_utilization >= 0.85 or kv_cache_utilization >= 0.85:
+            saturation_level = "high"
+        elif gpu_utilization >= 0.6 or kv_cache_utilization >= 0.5:
+            saturation_level = "moderate"
+        else:
+            saturation_level = "low"
+        return {
+            "current_utilization": gpu_utilization,
+            "kv_cache_utilization": kv_cache_utilization,
+            "saturation_level": saturation_level,
+            "is_saturated": saturation_level == "high",
+        }
+
     def generate(self, prompt: str) -> str:
         started_at = time.perf_counter()
         capabilities = self.get_capabilities()
@@ -72,6 +137,8 @@ class vLLMInferenceClient:
         response = f"Hardware Accelerated Response for: {prompt}"
         duration = max(time.perf_counter() - started_at, 1e-6)
         generated_tokens = self._estimate_tokens(response)
+        error_mode = "none" if self.is_connected else "backend_unreachable"
+        fallback_path = "direct_vllm" if self.is_connected else "simulated_response"
         self.last_generation_telemetry = {
             "prompt_chars": len(prompt),
             "prompt_tokens_estimate": self._estimate_tokens(prompt),
@@ -81,7 +148,12 @@ class vLLMInferenceClient:
             "connected": self.is_connected,
             "endpoint": self.endpoint_url,
             "backend": capabilities.get("backend", "vllm"),
+            "runtime_metrics": capabilities.get("runtime_metrics", {}),
+            "request_status": "success",
+            "error_mode": error_mode,
+            "fallback_path": fallback_path,
         }
+        self._record_request(dict(self.last_generation_telemetry))
         return response
 
     def benchmark_generation(self, prompt: str, repeats: int = 3) -> Dict[str, Any]:
@@ -100,6 +172,8 @@ class vLLMInferenceClient:
             "max_latency_seconds": round(max(latencies), 6) if latencies else 0.0,
             "min_latency_seconds": round(min(latencies), 6) if latencies else 0.0,
             "median_throughput_tokens_per_second": round(statistics.median(throughputs), 2) if throughputs else 0.0,
+            "latency_samples_seconds": [round(value, 6) for value in latencies],
+            "throughput_samples_tokens_per_second": [round(value, 2) for value in throughputs],
             "response_preview": last_response[:80],
         }
 
@@ -109,8 +183,21 @@ class vLLMInferenceClient:
         selected_prompts = prompts or ["Benchmark hardware acceleration path"]
         capabilities = self.get_capabilities()
         benchmarks = [self.benchmark_generation(prompt, repeats=repeats) for prompt in selected_prompts]
+        runtime_metrics = capabilities.get("runtime_metrics", {}) if isinstance(capabilities, dict) else {}
+        observability = {
+            "gpu_saturation": self._summarize_gpu_saturation(runtime_metrics),
+            "request_distribution": self._summarize_request_distribution(),
+            "error_modes": self._summarize_error_modes(),
+            "fallback_paths": self._summarize_fallback_paths(),
+            "recent_requests": self.request_history[-10:],
+        }
         return {
             "capabilities": capabilities,
             "benchmarks": benchmarks,
             "last_generation_telemetry": self.last_generation_telemetry,
+            "observability": observability,
+            "gpu_saturation": observability["gpu_saturation"],
+            "request_distribution": observability["request_distribution"],
+            "error_modes": observability["error_modes"],
+            "fallback_paths": observability["fallback_paths"],
         }
