@@ -46,6 +46,33 @@ def test_load_telemetry_data_reads_pipeline_run_artifacts_and_metadata(tmp_path:
     assert telemetry_payloads[0]["evaluation_metadata"]["hardware_acceleration_telemetry"]["gpu_saturation"]["saturation_level"] == "moderate"
 
 
+def test_load_telemetry_data_skips_invalid_json_with_warning(tmp_path: Path, caplog) -> None:
+    valid_run_dir = tmp_path / "outputs" / "run_valid"
+    invalid_run_dir = tmp_path / "outputs" / "run_invalid"
+    (valid_run_dir / "telemetry").mkdir(parents=True, exist_ok=True)
+    (valid_run_dir / "metadata").mkdir(parents=True, exist_ok=True)
+    (invalid_run_dir / "telemetry").mkdir(parents=True, exist_ok=True)
+
+    (valid_run_dir / "telemetry" / "pipeline_run_valid.json").write_text(
+        json.dumps({"status": "completed"}),
+        encoding="utf-8",
+    )
+    (valid_run_dir / "metadata" / "evaluation_metadata_valid.json").write_text(
+        json.dumps({"hardware_acceleration_telemetry": {}}),
+        encoding="utf-8",
+    )
+    (invalid_run_dir / "telemetry" / "pipeline_run_invalid.json").write_text(
+        "{not-json}",
+        encoding="utf-8",
+    )
+
+    telemetry_payloads = load_telemetry_data(tmp_path)
+
+    assert len(telemetry_payloads) == 1
+    assert telemetry_payloads[0]["run_id"] == "run_valid"
+    assert "Failed to load telemetry artifact" in caplog.text
+
+
 def test_build_observability_views_summarizes_latency_fallback_and_error_modes() -> None:
     views = build_observability_views(
         [
@@ -76,6 +103,36 @@ def test_build_observability_views_summarizes_latency_fallback_and_error_modes()
     assert views["fallback_trends"][0]["fallback_ratio"] == 0.25
     assert views["saturation_trends"][0]["saturation_level"] == "moderate"
     assert {row["error_mode"] for row in views["error_mode_trends"]} == {"none", "backend_unreachable"}
+
+
+def test_build_observability_views_ignores_non_numeric_latency_samples(caplog) -> None:
+    views = build_observability_views(
+        [
+            {
+                "run_id": "run-bad-latency",
+                "evaluation_metadata": {
+                    "hardware_acceleration_telemetry": {
+                        "benchmarks": [
+                            {
+                                "latency_samples_seconds": [0.1, "bad", 0.3],
+                            }
+                        ],
+                        "request_distribution": {"total_requests": 2},
+                        "fallback_paths": {"direct_vllm": 2},
+                        "gpu_saturation": {
+                            "current_utilization": 0.5,
+                            "kv_cache_utilization": 0.2,
+                            "saturation_level": "low",
+                        },
+                        "error_modes": {},
+                    }
+                },
+            }
+        ]
+    )
+
+    assert views["latency_trends"][0]["mean_latency_seconds"] == 0.2
+    assert "Ignoring non-numeric latency sample" in caplog.text
 
 
 def test_build_observability_retention_index_persists_windowed_summary(tmp_path: Path) -> None:

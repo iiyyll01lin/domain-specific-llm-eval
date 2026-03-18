@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+logger = logging.getLogger(__name__)
+
+
 def _cluster_key(severity: str, labels: List[str]) -> str:
     label_part = "+".join(sorted(labels)) if labels else "stable"
     return f"{severity}:{label_part}"
+
+
+def _safe_float(value: Any, *, default: Optional[float] = None) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def load_telemetry_data(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
@@ -21,7 +32,8 @@ def load_telemetry_data(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]
     for telemetry_file in sorted(outputs_dir.glob("*/telemetry/pipeline_run_*.json")):
         try:
             payload = json.loads(telemetry_file.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to load telemetry artifact %s: %s", telemetry_file, exc)
             continue
 
         run_dir = telemetry_file.parents[1]
@@ -35,7 +47,12 @@ def load_telemetry_data(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]
                 payload["evaluation_metadata"] = json.loads(
                     metadata_files[-1].read_text(encoding="utf-8")
                 )
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Failed to load evaluation metadata %s: %s",
+                    metadata_files[-1],
+                    exc,
+                )
                 payload["evaluation_metadata"] = {}
 
         results.append(payload)
@@ -73,7 +90,16 @@ def build_observability_views(runs: List[Dict[str, Any]]) -> Dict[str, List[Dict
         for benchmark in benchmarks:
             samples = benchmark.get("latency_samples_seconds")
             if isinstance(samples, list) and samples:
-                latencies.extend(float(value) for value in samples)
+                for value in samples:
+                    normalized = _safe_float(value)
+                    if normalized is None:
+                        logger.warning(
+                            "Ignoring non-numeric latency sample for run %s: %r",
+                            run.get("run_id", "unknown"),
+                            value,
+                        )
+                        continue
+                    latencies.append(normalized)
             else:
                 for key in (
                     "min_latency_seconds",
@@ -82,7 +108,16 @@ def build_observability_views(runs: List[Dict[str, Any]]) -> Dict[str, List[Dict
                 ):
                     value = benchmark.get(key)
                     if value is not None:
-                        latencies.append(float(value))
+                        normalized = _safe_float(value)
+                        if normalized is None:
+                            logger.warning(
+                                "Ignoring non-numeric %s for run %s: %r",
+                                key,
+                                run.get("run_id", "unknown"),
+                                value,
+                            )
+                            continue
+                        latencies.append(normalized)
 
         request_distribution = hardware.get("request_distribution", {}) if isinstance(hardware, dict) else {}
         fallback_paths = hardware.get("fallback_paths", {}) if isinstance(hardware, dict) else {}
