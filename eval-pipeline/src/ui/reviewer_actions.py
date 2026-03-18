@@ -91,6 +91,10 @@ def _build_service(base_dir: Optional[Path] = None) -> ReviewerWorkflowService:
         auth_source_config["issuer"] = os.environ["REVIEWER_TOKEN_ISSUER"]
     if os.environ.get("REVIEWER_TOKEN_SHARED_SECRET"):
         auth_source_config["shared_secret"] = os.environ["REVIEWER_TOKEN_SHARED_SECRET"]
+    if os.environ.get("REVIEWER_TOKEN_KEYRING_FILE"):
+        auth_source_config["keyring_file"] = os.environ["REVIEWER_TOKEN_KEYRING_FILE"]
+    if os.environ.get("REVIEWER_TOKEN_REVOCATION_FILE"):
+        auth_source_config["revocation_file"] = os.environ["REVIEWER_TOKEN_REVOCATION_FILE"]
     service_config["auth_source"] = auth_source_config
     return ReviewerWorkflowService(manager, service_config)
 

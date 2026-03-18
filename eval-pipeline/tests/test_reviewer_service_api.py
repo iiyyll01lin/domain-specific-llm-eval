@@ -15,6 +15,8 @@ AUTH_HEADERS = {
     "X-Reviewer-Roles": "reviewer",
 }
 
+ISSUER_HEADERS = {"X-Issuer-Admin-Token": "local-dev-issuer-admin-token"}
+
 
 def test_reviewer_service_api_health_and_queue_flow(tmp_path: Path) -> None:
     manager = HumanFeedbackManager(
@@ -94,3 +96,45 @@ def test_reviewer_service_api_rate_limits_when_configured(tmp_path: Path, monkey
 
     assert client.get("/reviews", headers=headers).status_code == 200
     assert client.get("/reviews", headers=headers).status_code == 429
+
+
+def test_reviewer_service_api_supports_issuer_lifecycle_and_forensics_workflow(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("REVIEWER_AUTH_SOURCE_TYPE", "static-token")
+    app = create_reviewer_service_app(tmp_path)
+    client = TestClient(app)
+
+    issued = client.post(
+        "/issuer/tokens",
+        headers=ISSUER_HEADERS,
+        json={
+            "reviewer_id": "issuer-reviewer",
+            "tenant_ids": ["default"],
+            "roles": ["reviewer"],
+        },
+    )
+    assert issued.status_code == 200
+    token = issued.json()["token"]
+
+    rotate = client.post("/issuer/tokens/rotate", headers=ISSUER_HEADERS)
+    assert rotate.status_code == 200
+
+    revoke = client.post(
+        "/issuer/tokens/revoke",
+        headers=ISSUER_HEADERS,
+        json={"token": token},
+    )
+    assert revoke.status_code == 200
+
+    outputs_dir = tmp_path / "outputs" / "run_1"
+    (outputs_dir / "telemetry").mkdir(parents=True, exist_ok=True)
+    (outputs_dir / "metadata").mkdir(parents=True, exist_ok=True)
+    (outputs_dir / "telemetry" / "pipeline_run_1.json").write_text('{"status":"completed"}', encoding="utf-8")
+    (outputs_dir / "metadata" / "evaluation_metadata_1.json").write_text(
+        '{"hardware_acceleration_telemetry":{"benchmarks":[{"latency_samples_seconds":[0.9,1.0]}],"request_distribution":{"total_requests":2},"fallback_paths":{"simulated_response":1,"direct_vllm":1},"gpu_saturation":{"current_utilization":0.9,"kv_cache_utilization":0.2,"saturation_level":"high"},"error_modes":{"backend_unreachable":1}},"hardware_observability_artifact":"artifact.json"}',
+        encoding="utf-8",
+    )
+
+    search_response = client.get("/forensics/search?severity=critical", headers=AUTH_HEADERS)
+    triage_response = client.get("/forensics/triage", headers=AUTH_HEADERS)
+    assert search_response.status_code == 200
+    assert triage_response.status_code == 200

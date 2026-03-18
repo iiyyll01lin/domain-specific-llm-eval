@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
+from .reviewer_token_issuer import _b64url_decode
+
 
 @dataclass(frozen=True)
 class ReviewerPrincipal:
@@ -129,9 +131,55 @@ class FileBackedReviewerAuthSource:
 
 
 class InternalTokenIssuerAuthSource:
-    def __init__(self, issuer: str, secret: str) -> None:
+    def __init__(
+        self,
+        issuer: str,
+        secret: Optional[str] = None,
+        *,
+        keyring_file: Optional[Path] = None,
+        revocation_file: Optional[Path] = None,
+    ) -> None:
         self.issuer = issuer
-        self.secret = secret.encode("utf-8")
+        self.secret = secret.encode("utf-8") if secret else None
+        self.keyring_file = Path(keyring_file) if keyring_file else None
+        self.revocation_file = Path(revocation_file) if revocation_file else None
+
+    def _load_keyring(self) -> Dict[str, Any]:
+        if not self.keyring_file or not self.keyring_file.exists():
+            return {"keys": []}
+        payload = json.loads(self.keyring_file.read_text(encoding="utf-8"))
+        payload.setdefault("keys", [])
+        return payload
+
+    def _load_revocations(self) -> List[Dict[str, Any]]:
+        if not self.revocation_file or not self.revocation_file.exists():
+            return []
+        payload = json.loads(self.revocation_file.read_text(encoding="utf-8"))
+        return list(payload.get("revoked_tokens", []))
+
+    def _resolve_secret(self, payload: Dict[str, Any]) -> bytes:
+        kid = str(payload.get("kid", "")).strip()
+        if kid and self.keyring_file:
+            now = int(time.time())
+            for item in self._load_keyring().get("keys", []):
+                if item.get("kid") != kid:
+                    continue
+                status = str(item.get("status", "active"))
+                grace_until = item.get("grace_until")
+                if status == "active":
+                    return str(item.get("secret", "")).encode("utf-8")
+                if status == "grace" and (grace_until is None or int(grace_until) >= now):
+                    return str(item.get("secret", "")).encode("utf-8")
+            raise PermissionError("Unknown reviewer token signing key")
+        if self.secret is None:
+            raise PermissionError("No reviewer token signing key configured")
+        return self.secret
+
+    def _is_revoked(self, payload: Dict[str, Any]) -> bool:
+        token_id = str(payload.get("jti", "")).strip()
+        if not token_id:
+            return False
+        return any(entry.get("jti") == token_id for entry in self._load_revocations())
 
     def _decode_token(self, token: str) -> Dict[str, Any]:
         parts = token.split(".")
@@ -139,18 +187,19 @@ class InternalTokenIssuerAuthSource:
             raise PermissionError("Invalid internal reviewer token format")
 
         payload_segment = parts[1].encode("utf-8")
+        payload = json.loads(_b64url_decode(parts[1]).decode("utf-8"))
         signature = parts[2]
-        expected_signature = hmac.new(self.secret, payload_segment, hashlib.sha256).hexdigest()
+        signing_secret = self._resolve_secret(payload)
+        expected_signature = hmac.new(signing_secret, payload_segment, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(signature, expected_signature):
             raise PermissionError("Invalid internal reviewer token signature")
-
-        padded_segment = payload_segment + b"=" * ((4 - len(payload_segment) % 4) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded_segment).decode("utf-8"))
         expires_at = int(payload.get("exp", 0) or 0)
         if expires_at and expires_at < int(time.time()):
             raise PermissionError("Internal reviewer token has expired")
         if str(payload.get("iss", "")) != self.issuer:
             raise PermissionError("Unexpected reviewer token issuer")
+        if self._is_revoked(payload):
+            raise PermissionError("Internal reviewer token has been revoked")
         return payload
 
     def authenticate(
@@ -177,7 +226,17 @@ class InternalTokenIssuerAuthSource:
         )
 
     def health(self) -> Dict[str, Any]:
-        return {"status": "ok", "auth_source": "internal-token", "issuer": self.issuer}
+        key_count = len(self._load_keyring().get("keys", [])) if self.keyring_file else 0
+        revoked_count = len(self._load_revocations()) if self.revocation_file else 0
+        return {
+            "status": "ok",
+            "auth_source": "internal-token",
+            "issuer": self.issuer,
+            "keyring_file": str(self.keyring_file) if self.keyring_file else None,
+            "revocation_file": str(self.revocation_file) if self.revocation_file else None,
+            "key_count": key_count,
+            "revoked_token_count": revoked_count,
+        }
 
 
 def build_reviewer_auth_source(config: Dict[str, Any]) -> ReviewerAuthSource:
@@ -189,7 +248,18 @@ def build_reviewer_auth_source(config: Dict[str, Any]) -> ReviewerAuthSource:
     if source_type == "internal-token":
         issuer = str(auth_source_config.get("issuer", "reviewer-service")).strip()
         secret = str(auth_source_config.get("shared_secret", "")).strip()
-        if not secret:
-            raise ValueError("internal-token auth source requires shared_secret")
-        return InternalTokenIssuerAuthSource(issuer=issuer, secret=secret)
+        keyring_file_value = str(auth_source_config.get("keyring_file", "")).strip()
+        revocation_file_value = str(auth_source_config.get("revocation_file", "")).strip()
+        keyring_file = Path(keyring_file_value).expanduser() if keyring_file_value else None
+        revocation_file = (
+            Path(revocation_file_value).expanduser() if revocation_file_value else None
+        )
+        if not secret and not keyring_file:
+            raise ValueError("internal-token auth source requires shared_secret or keyring_file")
+        return InternalTokenIssuerAuthSource(
+            issuer=issuer,
+            secret=secret or None,
+            keyring_file=keyring_file,
+            revocation_file=revocation_file,
+        )
     return StaticReviewerAuthSource(config)

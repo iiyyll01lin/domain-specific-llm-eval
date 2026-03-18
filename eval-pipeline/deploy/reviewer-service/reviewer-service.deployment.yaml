@@ -12,10 +12,20 @@ spec:
       labels:
         app: reviewer-service
     spec:
+      serviceAccountName: reviewer-service
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: reviewer-service
           image: reviewer-service:latest
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8010
           env:
@@ -30,28 +40,54 @@ spec:
               value: internal-token
             - name: REVIEWER_TOKEN_ISSUER
               value: reviewer-service
+            - name: REVIEWER_ISSUER_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: reviewer-service-secret
+                  key: issuer-admin-token
             - name: REVIEWER_TOKEN_SHARED_SECRET
               valueFrom:
                 secretKeyRef:
                   name: reviewer-service-secret
                   key: shared-secret
+            - name: REVIEWER_TOKEN_KEYRING_FILE
+              value: /app/state/reviewer_token_keyring.json
+            - name: REVIEWER_TOKEN_REVOCATION_FILE
+              value: /app/state/reviewer_token_revocations.json
           readinessProbe:
             httpGet:
               path: /readyz
               port: 8010
             initialDelaySeconds: 5
             periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 8010
+            failureThreshold: 18
+            periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8010
             initialDelaySeconds: 10
             periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
           volumeMounts:
             - name: reviewer-principals
               mountPath: /app/config/reviewer_principals.json
               subPath: reviewer_principals.json
+            - name: reviewer-state
+              mountPath: /app/state
       volumes:
         - name: reviewer-principals
           configMap:
             name: reviewer-service-principals
+        - name: reviewer-state
+          emptyDir: {}

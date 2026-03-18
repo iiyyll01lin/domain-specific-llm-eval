@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from src.evaluation.reviewer_auth import build_reviewer_auth_source
+from src.evaluation.reviewer_token_issuer import ReviewerTokenIssuerService
 
 
 def _make_internal_token(payload: dict, secret: str) -> str:
@@ -85,3 +86,54 @@ def test_internal_token_auth_source_validates_signed_membership() -> None:
     assert principal.reviewer_id == "signed-reviewer"
     assert principal.tenant_ids == ["tenant-a", "tenant-b"]
     assert principal.auth_source == "internal-token"
+
+
+def test_internal_token_auth_source_honors_rotation_and_revocation(tmp_path: Path) -> None:
+    issuer = ReviewerTokenIssuerService(
+        issuer="reviewer-service",
+        keyring_path=tmp_path / "keyring.json",
+        revocation_path=tmp_path / "revocations.json",
+        admin_token="issuer-admin",
+        default_ttl_seconds=300,
+    )
+    issued = issuer.issue_token(
+        admin_token="issuer-admin",
+        reviewer_id="rotating-reviewer",
+        tenant_ids=["tenant-a"],
+        roles=["reviewer"],
+    )
+
+    source = build_reviewer_auth_source(
+        {
+            "auth_source": {
+                "type": "internal-token",
+                "issuer": "reviewer-service",
+                "keyring_file": str(tmp_path / "keyring.json"),
+                "revocation_file": str(tmp_path / "revocations.json"),
+            }
+        }
+    )
+
+    principal = source.authenticate(
+        token=issued["token"],
+        reviewer_id=None,
+        tenant_id="tenant-a",
+        roles=None,
+    )
+    assert principal.reviewer_id == "rotating-reviewer"
+
+    rotation = issuer.rotate_signing_key(admin_token="issuer-admin")
+    assert rotation["active_kid"]
+
+    issuer.revoke_token(admin_token="issuer-admin", token=issued["token"])
+    try:
+        source.authenticate(
+            token=issued["token"],
+            reviewer_id=None,
+            tenant_id="tenant-a",
+            roles=None,
+        )
+    except PermissionError as exc:
+        assert "revoked" in str(exc)
+    else:
+        raise AssertionError("Expected revoked token authentication failure")

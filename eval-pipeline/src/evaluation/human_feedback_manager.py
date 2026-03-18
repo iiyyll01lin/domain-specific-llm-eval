@@ -82,6 +82,7 @@ class HumanFeedbackManager:
             review_queue_snapshot_path=self.review_queue_file,
             reviewer_results_snapshot_path=self.reviewer_results_file,
             state_store_dsn=self.state_store_dsn,
+            state_store_options=self.feedback_config.get("state_store_options", {}),
         )
 
         logger.info(
