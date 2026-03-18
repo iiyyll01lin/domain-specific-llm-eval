@@ -210,3 +210,16 @@ def test_ragas_evaluator_fallback_marks_result_source(monkeypatch) -> None:
     assert result["mock_data"] is True
     assert result["result_source"] == "ragas_model_dump_fix_mock"
     assert result["error_stage"] == "ragas_safe_evaluate"
+    assert result["contract_version"]
+
+
+def test_ragas_evaluator_unavailable_path_exposes_normalized_contract() -> None:
+    evaluator = object.__new__(RagasEvaluator)
+    evaluator.ragas_available = False
+
+    result = evaluator.evaluate({"questions": ["Q1"]}, [{"answer": "A1"}])
+
+    assert result["success"] is False
+    assert result["result_source"] == "ragas_unavailable"
+    assert result["error_stage"] == "ragas_import"
+    assert result["mock_data"] is False

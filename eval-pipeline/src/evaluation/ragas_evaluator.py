@@ -53,6 +53,7 @@ from evaluation.temporal_causality_evaluator import TemporalCausalityEvaluator
 from evaluation.telepathic_intent_evaluator import TelepathicIntentAlignment
 from generation.neuro_symbolic_rag import NeuroSymbolicRAGEngine
 from optimization.dpo_alignment import DirectPreferenceOptimizationPipeline
+from .evaluation_result_contract import attach_result_contract, evaluation_error_result
 
 try:
     import pandas as pd
@@ -665,11 +666,11 @@ class RagasEvaluator:
         """
         if not self.ragas_available:
             logger.warning("⚠️ RAGAS evaluation skipped - RAGAS not available")
-            return {
+            return attach_result_contract({
                 "error": "RAGAS not available",
                 "available": False,
                 "message": "RAGAS evaluation requires ragas library installation",
-            }
+            }, result_source="ragas_unavailable", success=False, error_stage="ragas_import", mock_data=False)
 
         logger.info("🔍 Starting RAGAS evaluation...")
 
@@ -678,11 +679,11 @@ class RagasEvaluator:
             evaluation_data = self._prepare_evaluation_data(testset, rag_responses)
 
             if not evaluation_data:
-                return {
+                return attach_result_contract({
                     "error": "No valid data for evaluation",
                     "available": True,
                     "message": "Could not prepare data for RAGAS evaluation",
-                }
+                }, result_source="ragas_input_validation", success=False, error_stage="prepare_evaluation_data", mock_data=False)
 
             # Create proper RAGAS dataset
             try:
@@ -696,11 +697,11 @@ class RagasEvaluator:
 
             except Exception as e:
                 logger.error(f"❌ Failed to create RAGAS dataset: {e}")
-                return {
+                return attach_result_contract({
                     "error": f"Dataset creation failed: {e}",
                     "available": True,
                     "message": "Could not create RAGAS dataset",
-                }
+                }, result_source="ragas_dataset_creation_error", success=False, error_stage="create_safe_ragas_dataset", mock_data=False)
 
             # Try RAGAS evaluation with proper error handling and fallback
             try:
@@ -720,7 +721,7 @@ class RagasEvaluator:
                         fixed_data, self.metrics
                     )
 
-                    return {
+                    return attach_result_contract({
                         "available": True,
                         "summary": {
                             "average_score": (
@@ -732,10 +733,7 @@ class RagasEvaluator:
                         },
                         "metrics": mock_scores,
                         "message": "RAGAS evaluation failed - using enhanced mock results with model_dump fix",
-                        "mock_data": True,
-                        "result_source": "ragas_model_dump_fix_mock",
-                        "error_stage": "ragas_safe_evaluate",
-                    }
+                    }, result_source="ragas_model_dump_fix_mock", success=True, error_stage="ragas_safe_evaluate", mock_data=True)
 
                 logger.info("✅ RAGAS evaluation completed successfully")
 
@@ -749,7 +747,7 @@ class RagasEvaluator:
                     0.5 + (i * 0.1) % 0.5 for i in range(num_samples)
                 ]  # Generate varied mock scores
 
-                return {
+                return attach_result_contract({
                     "available": True,
                     "summary": {
                         "average_score": (
@@ -763,10 +761,7 @@ class RagasEvaluator:
                         "faithfulness": mock_score_list,
                     },
                     "message": "RAGAS evaluation failed - using fallback mock results",
-                    "mock_data": True,
-                    "result_source": "ragas_fallback_mock",
-                    "error_stage": "ragas_exception_fallback",
-                }
+                }, result_source="ragas_fallback_mock", success=True, error_stage="ragas_exception_fallback", mock_data=True)
 
             domain_regex_scores = self._score_domain_regex(evaluation_data["answer"])
 
@@ -822,15 +817,26 @@ class RagasEvaluator:
             )
 
             logger.info("✅ RAGAS evaluation completed successfully")
-            return formatted_results
+            return attach_result_contract(
+                formatted_results,
+                result_source="ragas_evaluator",
+                success=True,
+                error_stage=None,
+                mock_data=False,
+            )
 
         except Exception as e:
             logger.error(f"❌ RAGAS evaluation failed: {e}")
-            return {
-                "error": str(e),
-                "available": True,
-                "message": "RAGAS evaluation encountered an error",
-            }
+            return evaluation_error_result(
+                result_source="ragas_evaluator_error",
+                error_stage="evaluate",
+                error=str(e),
+                mock_data=False,
+                extra={
+                    "available": True,
+                    "message": "RAGAS evaluation encountered an error",
+                },
+            )
 
     def _prepare_evaluation_data(
         self, testset: Dict[str, Any], rag_responses: List[Dict[str, Any]]

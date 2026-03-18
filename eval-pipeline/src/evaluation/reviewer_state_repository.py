@@ -45,6 +45,14 @@ class ReviewerStateRepository(Protocol):
     def list_audit_events(self, limit: int = 100) -> List[Dict[str, Any]]:
         ...
 
+    def replay_audit_events(
+        self,
+        events: List[Dict[str, Any]],
+        *,
+        reset_state: bool = False,
+    ) -> Dict[str, Any]:
+        ...
+
 
 class SQLiteReviewerStateRepository:
     def __init__(
@@ -225,8 +233,8 @@ class SQLiteReviewerStateRepository:
                     INSERT INTO review_queue (
                         review_id, item_index, question, reason, priority, status,
                         suggested_action, answer, confidence, ragas_score, keyword_score,
-                        reviewer, reviewer_notes, resolution, created_at, updated_at, resolved_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        reviewer, tenant_id, reviewer_notes, resolution, created_at, updated_at, resolved_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(review_id) DO UPDATE SET
                         item_index=excluded.item_index,
                         question=excluded.question,
@@ -239,6 +247,7 @@ class SQLiteReviewerStateRepository:
                         ragas_score=excluded.ragas_score,
                         keyword_score=excluded.keyword_score,
                         reviewer=excluded.reviewer,
+                        tenant_id=excluded.tenant_id,
                         reviewer_notes=excluded.reviewer_notes,
                         resolution=excluded.resolution,
                         created_at=excluded.created_at,
@@ -258,6 +267,7 @@ class SQLiteReviewerStateRepository:
                         normalized["ragas_score"],
                         normalized["keyword_score"],
                         normalized["reviewer"],
+                        normalized["tenant_id"],
                         normalized["reviewer_notes"],
                         normalized["resolution"],
                         normalized["created_at"],
@@ -304,8 +314,8 @@ class SQLiteReviewerStateRepository:
                     """
                     INSERT OR IGNORE INTO reviewer_results (
                         review_id, item_index, question, approved, score, notes,
-                        reviewer, resolution
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        reviewer, tenant_id, resolution, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         normalized.get("review_id"),
@@ -315,7 +325,9 @@ class SQLiteReviewerStateRepository:
                         normalized["score"],
                         normalized["notes"],
                         normalized["reviewer"],
+                        normalized["tenant_id"],
                         normalized["resolution"],
+                        normalized.get("created_at") or None,
                     ),
                 )
                 if cursor.rowcount > 0:
@@ -389,13 +401,82 @@ class SQLiteReviewerStateRepository:
 
     def restore_backup(self, backup_path: Path) -> Dict[str, Any]:
         payload = json.loads(Path(backup_path).read_text(encoding="utf-8"))
-        self.replace_queue(list(payload.get("queue", [])))
-        self.ingest_reviewer_results(list(payload.get("reviewer_results", [])))
+        queue_items = list(payload.get("queue", []))
+        reviewer_results = list(payload.get("reviewer_results", []))
+        audit_log = list(payload.get("audit_log", []))
+
+        with self._connect() as connection:
+            connection.execute("DELETE FROM review_queue")
+            connection.execute("DELETE FROM reviewer_results")
+            connection.execute("DELETE FROM reviewer_audit_log")
+
+        if queue_items:
+            self.upsert_queue_items(queue_items)
+        if reviewer_results:
+            self.ingest_reviewer_results(reviewer_results)
+        if audit_log:
+            self._restore_audit_log(audit_log)
+        self._export_snapshots()
         return {
             "restored": True,
-            "queue_items": len(payload.get("queue", [])),
-            "reviewer_results": len(payload.get("reviewer_results", [])),
+            "queue_items": len(queue_items),
+            "reviewer_results": len(reviewer_results),
+            "audit_events": len(audit_log),
         }
+
+    def replay_audit_events(
+        self,
+        events: List[Dict[str, Any]],
+        *,
+        reset_state: bool = False,
+    ) -> Dict[str, Any]:
+        if reset_state:
+            with self._connect() as connection:
+                connection.execute("DELETE FROM review_queue")
+                connection.execute("DELETE FROM reviewer_results")
+
+        replayed = 0
+        ordered_events = sorted(
+            list(events),
+            key=lambda item: (
+                str(item.get("created_at", "")),
+                int(item.get("id", 0) or 0),
+            ),
+        )
+        for event in ordered_events:
+            event_type = str(event.get("event_type", "")).strip()
+            payload = event.get("payload") or {}
+            if event_type == "queue_replace":
+                self.replace_queue([])
+                replayed += 1
+            elif event_type == "queue_upsert" and payload:
+                self.upsert_queue_items([payload])
+                replayed += 1
+            elif event_type == "review_result_ingest" and payload:
+                self.ingest_reviewer_results([payload])
+                replayed += 1
+        return {"replayed": replayed, "reset_state": reset_state}
+
+    def _restore_audit_log(self, events: List[Dict[str, Any]]) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM reviewer_audit_log")
+            for event in events:
+                connection.execute(
+                    """
+                    INSERT INTO reviewer_audit_log (
+                        id, event_type, review_id, reviewer, tenant_id, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event.get("id"),
+                        event.get("event_type"),
+                        event.get("review_id"),
+                        event.get("reviewer"),
+                        event.get("tenant_id"),
+                        json.dumps(event.get("payload") or {}, ensure_ascii=False),
+                        event.get("created_at"),
+                    ),
+                )
 
     def _export_snapshots(self) -> None:
         queue_items = self.list_queue(status=None, include_resolved=True)
@@ -427,6 +508,7 @@ class SQLiteReviewerStateRepository:
             "ragas_score": row["ragas_score"],
             "keyword_score": row["keyword_score"],
             "reviewer": row["reviewer"] or "",
+                "tenant_id": row["tenant_id"] or "",
             "reviewer_notes": row["reviewer_notes"] or "",
             "resolution": row["resolution"] or "",
             "created_at": row["created_at"],
@@ -443,7 +525,9 @@ class SQLiteReviewerStateRepository:
             "score": row["score"],
             "notes": row["notes"] or "",
             "reviewer": row["reviewer"],
+            "tenant_id": row["tenant_id"] or "",
             "resolution": row["resolution"] or "resolved",
+            "created_at": row["created_at"],
         }
 
     def _normalize_queue_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
@@ -479,6 +563,7 @@ class SQLiteReviewerStateRepository:
             "reviewer": str(item.get("reviewer", "unknown")).strip(),
             "tenant_id": str(item.get("tenant_id", "")).strip(),
             "resolution": str(item.get("resolution", "resolved")).strip() or "resolved",
+            "created_at": str(item.get("created_at", "")).strip(),
         }
 
 
@@ -519,7 +604,6 @@ class PostgresReviewerStateRepository:
             return self._pool
         try:
             from psycopg_pool import ConnectionPool
-
             self._pool = ConnectionPool(
                 conninfo=self._normalized_dsn(),
                 min_size=self.min_pool_size,
@@ -681,8 +765,8 @@ class PostgresReviewerStateRepository:
                             INSERT INTO review_queue (
                                 review_id, item_index, question, reason, priority, status,
                                 suggested_action, answer, confidence, ragas_score, keyword_score,
-                                reviewer, reviewer_notes, resolution, created_at, updated_at, resolved_at
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                reviewer, tenant_id, reviewer_notes, resolution, created_at, updated_at, resolved_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (review_id) DO UPDATE SET
                                 item_index=EXCLUDED.item_index,
                                 question=EXCLUDED.question,
@@ -695,6 +779,7 @@ class PostgresReviewerStateRepository:
                                 ragas_score=EXCLUDED.ragas_score,
                                 keyword_score=EXCLUDED.keyword_score,
                                 reviewer=EXCLUDED.reviewer,
+                                tenant_id=EXCLUDED.tenant_id,
                                 reviewer_notes=EXCLUDED.reviewer_notes,
                                 resolution=EXCLUDED.resolution,
                                 created_at=EXCLUDED.created_at,
@@ -714,6 +799,7 @@ class PostgresReviewerStateRepository:
                                 normalized["ragas_score"],
                                 normalized["keyword_score"],
                                 normalized["reviewer"],
+                                normalized["tenant_id"],
                                 normalized["reviewer_notes"],
                                 normalized["resolution"],
                                 normalized["created_at"],
@@ -775,8 +861,8 @@ class PostgresReviewerStateRepository:
                         cursor.execute(
                             """
                             INSERT INTO reviewer_results (
-                                review_id, item_index, question, approved, score, notes, reviewer, resolution
-                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                review_id, item_index, question, approved, score, notes, reviewer, tenant_id, resolution, created_at
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (item_index, question, reviewer) DO NOTHING
                             """,
                             (
@@ -787,7 +873,9 @@ class PostgresReviewerStateRepository:
                                 normalized["score"],
                                 normalized["notes"],
                                 normalized["reviewer"],
+                                normalized["tenant_id"],
                                 normalized["resolution"],
+                                normalized.get("created_at") or None,
                             ),
                         )
                         if cursor.rowcount > 0:
@@ -889,13 +977,87 @@ class PostgresReviewerStateRepository:
 
     def restore_backup(self, backup_path: Path) -> Dict[str, Any]:
         payload = json.loads(Path(backup_path).read_text(encoding="utf-8"))
-        self.replace_queue(list(payload.get("queue", [])))
-        self.ingest_reviewer_results(list(payload.get("reviewer_results", [])))
+        queue_items = list(payload.get("queue", []))
+        reviewer_results = list(payload.get("reviewer_results", []))
+        audit_log = list(payload.get("audit_log", []))
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM review_queue")
+                cursor.execute("DELETE FROM reviewer_results")
+                cursor.execute("DELETE FROM reviewer_audit_log")
+            connection.commit()
+
+        if queue_items:
+            self.upsert_queue_items(queue_items)
+        if reviewer_results:
+            self.ingest_reviewer_results(reviewer_results)
+        if audit_log:
+            self._restore_audit_log(audit_log)
+        self._export_snapshots()
         return {
             "restored": True,
-            "queue_items": len(payload.get("queue", [])),
-            "reviewer_results": len(payload.get("reviewer_results", [])),
+            "queue_items": len(queue_items),
+            "reviewer_results": len(reviewer_results),
+            "audit_events": len(audit_log),
         }
+
+    def replay_audit_events(
+        self,
+        events: List[Dict[str, Any]],
+        *,
+        reset_state: bool = False,
+    ) -> Dict[str, Any]:
+        if reset_state:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute("DELETE FROM review_queue")
+                    cursor.execute("DELETE FROM reviewer_results")
+                connection.commit()
+
+        replayed = 0
+        ordered_events = sorted(
+            list(events),
+            key=lambda item: (
+                str(item.get("created_at", "")),
+                int(item.get("id", 0) or 0),
+            ),
+        )
+        for event in ordered_events:
+            event_type = str(event.get("event_type", "")).strip()
+            payload = event.get("payload") or {}
+            if event_type == "queue_replace":
+                self.replace_queue([])
+                replayed += 1
+            elif event_type == "queue_upsert" and payload:
+                self.upsert_queue_items([payload])
+                replayed += 1
+            elif event_type == "review_result_ingest" and payload:
+                self.ingest_reviewer_results([payload])
+                replayed += 1
+        return {"replayed": replayed, "reset_state": reset_state}
+
+    def _restore_audit_log(self, events: List[Dict[str, Any]]) -> None:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM reviewer_audit_log")
+                for event in events:
+                    cursor.execute(
+                        """
+                        INSERT INTO reviewer_audit_log (
+                            id, event_type, review_id, reviewer, tenant_id, payload_json, created_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            event.get("id"),
+                            event.get("event_type"),
+                            event.get("review_id"),
+                            event.get("reviewer"),
+                            event.get("tenant_id"),
+                            json.dumps(event.get("payload") or {}, ensure_ascii=False),
+                            event.get("created_at"),
+                        ),
+                    )
+            connection.commit()
 
     def _queue_row_to_dict(self, row: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(row, dict):
@@ -934,6 +1096,7 @@ class PostgresReviewerStateRepository:
             "reviewer": row["reviewer"],
             "tenant_id": row.get("tenant_id") or "",
             "resolution": row.get("resolution") or "resolved",
+            "created_at": row.get("created_at"),
         }
 
     def _normalize_queue_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
@@ -969,6 +1132,7 @@ class PostgresReviewerStateRepository:
             "reviewer": str(item.get("reviewer", "unknown")).strip(),
             "tenant_id": str(item.get("tenant_id", "")).strip(),
             "resolution": str(item.get("resolution", "resolved")).strip() or "resolved",
+            "created_at": str(item.get("created_at", "")).strip(),
         }
 
 
