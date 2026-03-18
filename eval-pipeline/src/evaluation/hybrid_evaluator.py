@@ -47,6 +47,8 @@ from ragas.metrics import (answer_correctness, answer_relevancy,
                            answer_similarity, context_precision,
                            context_recall, faithfulness)
 
+from .evaluation_result_contract import attach_result_contract
+
 
 class HybridEvaluator:
     """
@@ -170,7 +172,13 @@ class HybridEvaluator:
         self.evaluation_results.append(comprehensive_results)
         self.metadata["total_evaluations"] += 1
 
-        return comprehensive_results
+        return attach_result_contract(
+            comprehensive_results,
+            result_source="hybrid_evaluator",
+            success=True,
+            error_stage=None,
+            mock_data=False,
+        )
 
     def _evaluate_contextual_keywords(
         self, rag_answer: str, auto_keywords: List[str]
@@ -273,9 +281,8 @@ class HybridEvaluator:
             }
 
             # Calculate composite RAGAS score
-            composite_score = safe_mean(
-                [score for score in ragas_scores.values() if score > 0]
-            )
+            valid_scores = [float(score) for score in ragas_scores.values() if float(score) > 0]
+            composite_score = float(np.mean(valid_scores)) if valid_scores else 0.0
             self.all_ragas_scores.append(composite_score)
 
             ragas_scores.update(

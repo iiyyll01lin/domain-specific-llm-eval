@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .evaluation_result_contract import EVALUATION_RESULT_CONTRACT_VERSION
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +43,25 @@ class GatesResult:
     overall_pass: bool
     weighted_score: float
     metadata: Dict[str, Any]
+    result_source: str = "gates_system"
+    error_stage: Optional[str] = None
+    mock_data: bool = False
+    contract_version: str = EVALUATION_RESULT_CONTRACT_VERSION
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "gate_results": self.gate_results,
+            "combined_pass_rate": self.combined_pass_rate,
+            "individual_pass_rates": self.individual_pass_rates,
+            "overall_pass": self.overall_pass,
+            "weighted_score": self.weighted_score,
+            "metadata": self.metadata,
+            "result_source": self.result_source,
+            "error_stage": self.error_stage,
+            "mock_data": self.mock_data,
+            "contract_version": self.contract_version,
+            "success": True,
+        }
 
 
 class GatesSystem:

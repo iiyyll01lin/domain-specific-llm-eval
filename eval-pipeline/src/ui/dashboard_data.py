@@ -348,3 +348,163 @@ def build_observability_retention_index(
     )
     retention_index["retention_index_path"] = str(retention_index_path)
     return retention_index
+
+
+def load_observability_retention_index(base_dir: Optional[Path] = None) -> Dict[str, Any]:
+    resolved_base_dir = Path(base_dir or Path(__file__).resolve().parents[2])
+    retention_index_path = (
+        resolved_base_dir / "outputs" / "observability" / "retention_index.json"
+    )
+    if retention_index_path.exists():
+        return json.loads(retention_index_path.read_text(encoding="utf-8"))
+    return build_observability_retention_index(resolved_base_dir)
+
+
+def search_observability_artifacts(
+    base_dir: Optional[Path] = None,
+    *,
+    query: str = "",
+    severity: Optional[str] = None,
+    regression_label: Optional[str] = None,
+    run_id: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    retention = load_observability_retention_index(base_dir)
+    query_lower = query.lower().strip()
+    matched: List[Dict[str, Any]] = []
+    for artifact in retention.get("searchable_artifacts", []):
+        if severity and str(artifact.get("severity", "")).lower() != severity.lower():
+            continue
+        labels = [str(label) for label in artifact.get("regression_labels", [])]
+        if regression_label and regression_label not in labels:
+            continue
+        if run_id and str(artifact.get("run_id")) != str(run_id):
+            continue
+        haystack = " ".join(
+            [
+                str(artifact.get("run_id", "")),
+                str(artifact.get("severity", "")),
+                str(artifact.get("artifact_search_key", "")),
+                " ".join(labels),
+            ]
+        ).lower()
+        if query_lower and query_lower not in haystack:
+            continue
+        matched.append(artifact)
+    return {
+        "total": len(matched),
+        "results": matched[: max(1, int(limit))],
+        "query": query,
+        "filters": {
+            "severity": severity,
+            "regression_label": regression_label,
+            "run_id": run_id,
+        },
+    }
+
+
+def build_observability_triage_queue(
+    base_dir: Optional[Path] = None,
+    *,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    retention = load_observability_retention_index(base_dir)
+    severity_rank = {"critical": 0, "warning": 1, "info": 2}
+    searchable = list(retention.get("searchable_artifacts", []))
+    searchable.sort(
+        key=lambda item: (
+            severity_rank.get(str(item.get("severity", "info")), 99),
+            str(item.get("run_id", "")),
+        )
+    )
+    queue = [
+        {
+            "run_id": item.get("run_id"),
+            "severity": item.get("severity"),
+            "regression_labels": item.get("regression_labels", []),
+            "artifact_search_key": item.get("artifact_search_key"),
+            "telemetry_artifact": item.get("telemetry_artifact"),
+            "hardware_observability_artifact": item.get("hardware_observability_artifact"),
+        }
+        for item in searchable[: max(1, int(limit))]
+    ]
+    return {"queue_size": len(queue), "queue": queue}
+
+
+def build_artifact_diff_view(
+    base_dir: Optional[Path] = None,
+    *,
+    run_id: str,
+    compare_to_run_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    retention = load_observability_retention_index(base_dir)
+    artifacts = retention.get("artifacts", [])
+    artifact_by_run = {str(item.get("run_id")): item for item in artifacts}
+    current = artifact_by_run.get(str(run_id))
+    if current is None:
+        raise KeyError(f"Unknown run_id: {run_id}")
+
+    if compare_to_run_id:
+        baseline = artifact_by_run.get(str(compare_to_run_id))
+        if baseline is None:
+            raise KeyError(f"Unknown compare_to_run_id: {compare_to_run_id}")
+    else:
+        ordered = [item for item in artifacts if str(item.get("run_id")) != str(run_id)]
+        baseline = ordered[-1] if ordered else None
+
+    current_anomaly = next(
+        (row for row in retention.get("anomaly_flags", []) if row.get("run_id") == str(run_id)),
+        {},
+    )
+    baseline_anomaly = (
+        next(
+            (
+                row
+                for row in retention.get("anomaly_flags", [])
+                if baseline and row.get("run_id") == baseline.get("run_id")
+            ),
+            {},
+        )
+        if baseline
+        else {}
+    )
+    diff = {
+        "run_id": str(run_id),
+        "compare_to_run_id": baseline.get("run_id") if baseline else None,
+        "changed_fields": {
+            "severity": {
+                "current": current_anomaly.get("severity", "info"),
+                "baseline": baseline_anomaly.get("severity", "info") if baseline else None,
+            },
+            "flags": {
+                "current": current_anomaly.get("flags", []),
+                "baseline": baseline_anomaly.get("flags", []) if baseline else [],
+            },
+            "telemetry_artifact": {
+                "current": current.get("telemetry_artifact", ""),
+                "baseline": baseline.get("telemetry_artifact", "") if baseline else None,
+            },
+            "hardware_observability_artifact": {
+                "current": current.get("hardware_observability_artifact", ""),
+                "baseline": baseline.get("hardware_observability_artifact", "") if baseline else None,
+            },
+        },
+    }
+    return diff
+
+
+def get_issue_cluster_drilldown(
+    base_dir: Optional[Path] = None,
+    *,
+    cluster_id: str,
+) -> Dict[str, Any]:
+    retention = load_observability_retention_index(base_dir)
+    cluster = retention.get("issue_clusters", {}).get(cluster_id)
+    if cluster is None:
+        raise KeyError(f"Unknown cluster_id: {cluster_id}")
+    artifacts = [
+        item
+        for item in retention.get("searchable_artifacts", [])
+        if item.get("run_id") in set(cluster.get("run_ids", []))
+    ]
+    return {"cluster_id": cluster_id, "cluster": cluster, "artifacts": artifacts}

@@ -1,9 +1,13 @@
 import json
 from pathlib import Path
 
-from src.ui.dashboard_data import (build_observability_retention_index,
+from src.ui.dashboard_data import (build_artifact_diff_view,
+                                   build_observability_retention_index,
+                                   build_observability_triage_queue,
                                    build_observability_views,
-                                   load_telemetry_data)
+                                   get_issue_cluster_drilldown,
+                                   load_telemetry_data,
+                                   search_observability_artifacts)
 
 
 def test_load_telemetry_data_reads_pipeline_run_artifacts_and_metadata(tmp_path: Path) -> None:
@@ -149,3 +153,43 @@ def test_build_observability_retention_index_flags_anomalies(tmp_path: Path) -> 
     regression_row = next(item for item in retention["regression_labels"] if item["run_id"] == "run_3")
     assert "latency_regression" in regression_row["labels"]
     assert retention["issue_clusters"]
+
+
+def test_observability_operator_workflow_supports_search_triage_diff_and_cluster_drilldown(tmp_path: Path) -> None:
+    for idx, latency in enumerate(([0.1, 0.2], [0.8, 0.9]), start=1):
+        run_dir = tmp_path / "outputs" / f"run_{idx}"
+        telemetry_dir = run_dir / "telemetry"
+        metadata_dir = run_dir / "metadata"
+        telemetry_dir.mkdir(parents=True, exist_ok=True)
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        (telemetry_dir / f"pipeline_run_{idx}.json").write_text(
+            json.dumps({"status": "completed"}), encoding="utf-8"
+        )
+        (metadata_dir / f"evaluation_metadata_{idx}.json").write_text(
+            json.dumps(
+                {
+                    "hardware_acceleration_telemetry": {
+                        "benchmarks": [{"latency_samples_seconds": list(latency)}],
+                        "request_distribution": {"total_requests": 2},
+                        "fallback_paths": {"simulated_response": 1 if idx == 2 else 0, "direct_vllm": 1},
+                        "gpu_saturation": {"current_utilization": 0.8, "kv_cache_utilization": 0.3, "saturation_level": "high"},
+                        "error_modes": {"backend_unreachable": 1 if idx == 2 else 0},
+                    },
+                    "hardware_observability_artifact": f"artifact_{idx}.json",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    retention = build_observability_retention_index(tmp_path, retention_limit=10, comparison_windows=[2])
+    cluster_id = next(iter(retention["issue_clusters"].keys()))
+
+    search_payload = search_observability_artifacts(tmp_path, query="run_2")
+    triage_payload = build_observability_triage_queue(tmp_path, limit=10)
+    diff_payload = build_artifact_diff_view(tmp_path, run_id="run_2", compare_to_run_id="run_1")
+    cluster_payload = get_issue_cluster_drilldown(tmp_path, cluster_id=cluster_id)
+
+    assert search_payload["total"] >= 1
+    assert triage_payload["queue"]
+    assert diff_payload["run_id"] == "run_2"
+    assert cluster_payload["cluster_id"] == cluster_id

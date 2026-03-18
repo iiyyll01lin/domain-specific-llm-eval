@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 
+from .evaluation_result_contract import attach_result_contract, evaluation_error_result
+
 logger = logging.getLogger(__name__)
 
 # RAGAS imports with comprehensive fallback support
@@ -1081,7 +1083,17 @@ class RAGASEvaluatorWithFallbacks:
             )
             logger.info(f"💾 Results saved: {results_file}")
 
-            return {
+            fallback_source = "ragas_llm_metrics"
+            fallback_error_stage = None
+            fallback_mock_data = False
+            if "data_completeness" in overall_scores:
+                fallback_source = "ragas_basic_fallback"
+                fallback_error_stage = "ragas_metrics"
+            elif all_results.get("non_llm_fallback"):
+                fallback_source = "ragas_nonllm_fallback"
+                fallback_error_stage = "llm_metrics"
+
+            return attach_result_contract({
                 "success": True,
                 "evaluation_type": "ragas_with_comprehensive_fallbacks",
                 "overall_scores": overall_scores,
@@ -1093,14 +1105,21 @@ class RAGASEvaluatorWithFallbacks:
                 "results_file": str(results_file),
                 "timestamp": timestamp,
                 "fallback_summary": comprehensive_results["fallback_summary"],
-            }
+            },
+                result_source=fallback_source,
+                success=True,
+                error_stage=fallback_error_stage,
+                mock_data=fallback_mock_data,
+            )
 
         except Exception as e:
             logger.error(f"❌ Enhanced RAGAS evaluation failed: {e}")
             import traceback
 
-            return {
-                "success": False,
-                "error": str(e),
-                "traceback": traceback.format_exc(),
-            }
+            return evaluation_error_result(
+                result_source="ragas_with_fallbacks_error",
+                error_stage="evaluate_testset_with_rag_responses",
+                error=str(e),
+                mock_data=False,
+                extra={"traceback": traceback.format_exc()},
+            )
