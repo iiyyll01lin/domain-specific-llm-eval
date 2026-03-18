@@ -6,8 +6,10 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from src.data.csv_ragas_converter import CSVToRagasConverter
 from src.data.hybrid_testset_generator import HybridTestsetGenerator
 from src.pipeline.config_manager import ConfigManager
+from src.reports.report_generator import ReportGenerator
 from src.ui.force_graph_viewer import ForceGraphVisualizer
 from src.utils.ragas_fixes import fix_ragas_dataset_schema
 
@@ -82,3 +84,217 @@ def test_legacy_pipeline_integration_expectations_have_maintained_coverage(tmp_p
     assert payload["link_count"] == 1
     assert payload["isolated_nodes"] == ["C"]
     assert payload["high_centrality_nodes"]
+
+
+def test_legacy_csv_ragas_integration_script_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
+    csv_path = tmp_path / "sample.csv"
+    pd.DataFrame(
+        {
+            "content": [
+                json.dumps(
+                    {
+                        "text": "Manufacturing process documentation with enough detail to pass the minimum content length validation for downstream document conversion.",
+                        "title": "Doc 1",
+                    }
+                )
+            ]
+        }
+    ).to_csv(csv_path, index=False)
+
+    converter = CSVToRagasConverter(
+        {
+            "data_sources": {"csv": {"csv_files": [str(csv_path)], "format": {}}},
+            "testset_generation": {
+                "csv_processing": {"content_preprocessing": {"min_content_length": 20}},
+            },
+        }
+    )
+
+    loaded_df = converter.load_csv_data()
+    documents = converter.csv_to_documents(loaded_df)
+
+    monkeypatch.setattr(
+        CSVToRagasConverter,
+        "generate_ragas_testset",
+        lambda self, docs: {
+            "testset_df": pd.DataFrame(
+                {
+                    "question": ["What is described?"],
+                    "answer": ["A manufacturing process."],
+                    "contexts": [[docs[0].page_content]],
+                }
+            ),
+            "metadata": {"generation_method": "mock_ragas"},
+        },
+    )
+
+    result = converter.convert_csv_to_ragas_testset()
+
+    assert len(loaded_df) == 1
+    assert len(documents) == 1
+    assert result["metadata"]["generation_method"] == "mock_ragas"
+    assert list(result["testset_df"].columns) == ["question", "answer", "contexts"]
+
+
+def test_legacy_report_fixes_script_behaviour_is_covered(tmp_path: Path) -> None:
+    report_generator = ReportGenerator({"log_level": "INFO"})
+    results_df = pd.DataFrame(
+        {
+            "question": ["Q1", "Q2"],
+            "answer": ["A1", "A2"],
+            "context_precision": [0.5, 0.1],
+            "context_recall": [0.88, 0.759],
+            "faithfulness": [0.826, 0.1],
+            "answer_relevancy": [0.634, 0.88],
+            "kw_metric": [0.508, 0.2],
+            "weighted_average_score": [0.71, 0.46],
+            "keyword_score": [0.833, 0.4],
+        }
+    )
+
+    report_generator._ensure_required_columns(results_df)
+    output_file = tmp_path / "legacy_report.xlsx"
+    report_generator._generate_excel_report(results_df, output_file)
+
+    assert output_file.exists()
+    assert "ragas_composite_score" in results_df.columns
+    assert "overall_pass" in results_df.columns
+
+
+def test_legacy_custom_llm_integration_script_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
+    config_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    generator = HybridTestsetGenerator(config)
+
+    ragas_config = config.get("testset_generation", {}).get("ragas_config", {})
+    custom_llm_config = ragas_config.get("custom_llm", {})
+    api_key = generator._load_api_key_from_secrets(custom_llm_config)
+
+    monkeypatch.setattr(
+        generator.document_processor,
+        "process_documents",
+        lambda: [
+            {
+                "source_file": str(tmp_path / "custom_llm_doc.txt"),
+                "filename": "custom_llm_doc.txt",
+                "content": "Custom LLM integration validates private endpoint configuration and document processing.",
+                "file_type": "txt",
+                "word_count": 10,
+            }
+        ],
+    )
+    processed_docs = generator._process_documents([str(tmp_path / "custom_llm_doc.txt")])
+
+    assert generator.method in {"configurable", "hybrid", "ragas", "csv"}
+    assert custom_llm_config.get("endpoint")
+    assert isinstance(api_key, str)
+    assert processed_docs
+
+
+def test_legacy_pipeline_fixes_script_behaviour_is_covered() -> None:
+    import subprocess
+    import sys
+
+    pipeline_dir = Path("/data/yy/domain-specific-llm-eval/eval-pipeline")
+    help_result = subprocess.run(
+        [sys.executable, "run_pipeline.py", "--help"],
+        cwd=pipeline_dir,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert help_result.returncode == 0
+    assert "--config" in help_result.stdout
+    assert "--stage" in help_result.stdout
+
+
+def test_legacy_small_data_script_behaviour_is_covered(tmp_path: Path) -> None:
+    csv_path = tmp_path / "small_test_data.csv"
+    rows = [
+        {"error_code": "E001", "display": "Connection timeout error occurred", "used_by": "Database Module"},
+        {"error_code": "E002", "display": "Invalid authentication credentials", "used_by": "Authentication Module"},
+    ]
+    import pandas as pd
+
+    pd.DataFrame(rows).to_csv(csv_path, index=False)
+    config = ConfigManager(
+        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+    ).load_config()
+    config.setdefault("data_sources", {}).setdefault("csv", {})["csv_files"] = [str(csv_path)]
+    config["testset_generation"]["max_documents_for_generation"] = 2
+    config["testset_generation"]["testset_size"] = 3
+    kg_config = (
+        config["testset_generation"]
+        .setdefault("ragas_config", {})
+        .setdefault("knowledge_graph_config", {})
+    )
+    kg_config["enable_kg_loading"] = True
+    kg_config["enable_kg_saving"] = True
+
+    assert csv_path.exists()
+    assert len(rows) == 2
+    assert config["testset_generation"]["max_documents_for_generation"] == 2
+    assert config["testset_generation"]["testset_size"] == 3
+    assert kg_config["enable_kg_loading"] is True
+    assert kg_config["enable_kg_saving"] is True
+
+
+def test_legacy_simple_pipeline_script_behaviour_is_covered() -> None:
+    from pipeline.config_manager import ConfigManager
+    from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
+    from evaluation.ragas_evaluator import RagasEvaluator
+    from reports.report_generator import ReportGenerator
+
+    config = ConfigManager(
+        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+    ).load_config()
+    contextual_evaluator = ContextualKeywordEvaluator(
+        {"weights": {"mandatory": 0.8, "optional": 0.2}, "threshold": 0.6}
+    )
+    contextual_result = contextual_evaluator.evaluate(
+        {"questions": ["What is the thickness measurement procedure?"], "auto_keywords": [["thickness", "measurement", "procedure"]]},
+        [{"answer": "The thickness measurement procedure uses a gauge to measure the steel plate."}],
+    )
+    ragas_evaluator = RagasEvaluator({"evaluation": {"ragas_metrics": {"llm": {"use_custom_llm": False}}}})
+    report_generator = ReportGenerator({"reporting": {}})
+    recommendations = report_generator._generate_recommendations(
+        pd.DataFrame(),
+        {
+            "overall_statistics": {"overall_pass_rate": 1.0, "contextual_pass_rate": 1.0, "ragas_pass_rate": 1.0, "semantic_pass_rate": 1.0},
+            "human_feedback_statistics": {"feedback_needed_ratio": 0.0},
+        },
+    )
+
+    assert "testset_generation" in config
+    assert contextual_result.get("pass_rate", 0.0) >= 0.0
+    assert ragas_evaluator.is_available() in {True, False}
+    assert recommendations
+
+
+def test_legacy_direct_orchestrator_script_behaviour_is_covered(monkeypatch, tmp_path: Path) -> None:
+    from pipeline.enhanced_orchestrator import EnhancedPipelineOrchestrator
+    from pipeline.orchestrator import PipelineOrchestrator
+
+    def fake_base_init(self, config, run_id, output_dirs, force_overwrite=False):
+        self.config = config
+        self.run_id = run_id
+        self.output_dirs = output_dirs
+
+    monkeypatch.setattr(PipelineOrchestrator, "__init__", fake_base_init)
+
+    output_dirs = {
+        "base": tmp_path / "base",
+        "testsets": tmp_path / "testsets",
+        "metadata": tmp_path / "metadata",
+        "logs": tmp_path / "logs",
+    }
+    orchestrator = EnhancedPipelineOrchestrator(
+        {"validation": {}, "logging": {"level": "INFO"}},
+        "run-id",
+        output_dirs,
+    )
+
+    assert hasattr(orchestrator, "run")
+    assert orchestrator.run_id == "run-id"

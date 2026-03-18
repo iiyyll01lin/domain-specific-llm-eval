@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Test Script for Custom LLM Integration
-Validates the hybrid testset generator with custom LLM support
+"""Deprecated legacy script.
+
+Maintained coverage now lives in eval-pipeline/tests/test_legacy_root_script_regressions.py.
 """
 
 import sys

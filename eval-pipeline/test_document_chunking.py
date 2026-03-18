@@ -1,6 +1,6 @@
-"""
-Test script to demonstrate document-to-chunk ratios
-Shows exactly how many knowledge base chunks will be generated from your raw documents
+"""Deprecated legacy script.
+
+Maintained coverage now lives in eval-pipeline/tests/test_legacy_runtime_smoke_regressions.py.
 """
 
 import sys

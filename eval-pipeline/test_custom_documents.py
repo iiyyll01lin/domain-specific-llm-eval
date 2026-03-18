@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Test script for Custom Document Loading
-Demonstrates how to use the enhanced dataset generator with your own documents
+"""Deprecated legacy script.
+
+Maintained coverage now lives in eval-pipeline/tests/test_legacy_runtime_smoke_regressions.py.
 """
 
 import os

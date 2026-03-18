@@ -16,6 +16,10 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from tiktoken_fallback import patch_tiktoken_with_fallback
 
+import test_comprehensive_fixes
+import test_custom_documents
+import test_document_chunking
+
 
 def test_legacy_report_fixes_behaviour_is_covered(tmp_path: Path) -> None:
     sample_evaluation_data = {
@@ -75,3 +79,38 @@ def test_legacy_full_ragas_implementation_config_smoke_is_covered() -> None:
     assert config_file.exists()
     assert ragas_config.get("custom_llm", {}).get("endpoint")
     assert not df.empty
+
+
+def test_legacy_document_chunking_behaviour_is_covered() -> None:
+    chunks = test_document_chunking.simple_chunk_text(
+        "Sentence one. Sentence two. Sentence three. " * 60,
+        chunk_size=120,
+        chunk_overlap=20,
+        min_chunk_size=30,
+    )
+
+    assert len(chunks) >= 2
+    assert all(len(chunk) >= 30 for chunk in chunks)
+
+
+def test_legacy_custom_documents_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    docs_dir = test_custom_documents.create_sample_documents()
+    config_file = test_custom_documents.create_test_config(docs_dir)
+
+    assert docs_dir.exists()
+    assert len(list(docs_dir.glob("*.txt"))) == 3
+    assert Path(config_file).exists()
+    assert "custom_data" in Path(config_file).read_text(encoding="utf-8")
+
+
+def test_legacy_comprehensive_fixes_behaviour_is_covered() -> None:
+    config_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config = ConfigManager(str(config_path)).load_config()
+    ragas_config = config.get("testset_generation", {}).get("ragas_config", {})
+    service_boundary = config.get("evaluation", {}).get("human_feedback", {}).get("service_boundary", {})
+
+    assert config_path.exists()
+    assert ragas_config is not None
+    assert service_boundary.get("auth", {}).get("api_token") == "local-dev-reviewer-token"
