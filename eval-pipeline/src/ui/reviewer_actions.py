@@ -14,6 +14,10 @@ from ui.reviewer_service_client import ReviewerServiceClient
 DEFAULT_REVIEWER_SERVICE_CONFIG: Dict[str, Any] = {
     "allowed_tenants": ["default"],
     "required_roles": ["reviewer"],
+    "rate_limit_rpm": 60,
+    "auth_source": {
+        "type": "static-token",
+    },
     "moderation_policy": {
         "blocked_terms": ["password", "ssn", "credit card"],
         "max_notes_length": 2000,
@@ -48,6 +52,14 @@ def _build_manager(base_dir: Optional[Path] = None) -> HumanFeedbackManager:
     )
     merged_config = {
         "enabled": True,
+        "state_store_backend": os.environ.get(
+            "REVIEWER_STATE_BACKEND",
+            str(human_feedback_config.get("state_store_backend", "sqlite")),
+        ),
+        "state_store_dsn": os.environ.get(
+            "REVIEWER_DATABASE_DSN",
+            human_feedback_config.get("state_store_dsn"),
+        ),
         "review_queue_dir": str(review_queue_dir),
         **human_feedback_config,
         "review_queue_dir": str(review_queue_dir),
@@ -67,6 +79,19 @@ def _build_service(base_dir: Optional[Path] = None) -> ReviewerWorkflowService:
         **DEFAULT_REVIEWER_SERVICE_CONFIG,
         **human_feedback_config.get("service_boundary", {}),
     }
+    auth_source_config = {
+        **DEFAULT_REVIEWER_SERVICE_CONFIG.get("auth_source", {}),
+        **service_config.get("auth_source", {}),
+    }
+    if os.environ.get("REVIEWER_AUTH_SOURCE_TYPE"):
+        auth_source_config["type"] = os.environ["REVIEWER_AUTH_SOURCE_TYPE"]
+    if os.environ.get("REVIEWER_PRINCIPAL_FILE"):
+        auth_source_config["principal_file"] = os.environ["REVIEWER_PRINCIPAL_FILE"]
+    if os.environ.get("REVIEWER_TOKEN_ISSUER"):
+        auth_source_config["issuer"] = os.environ["REVIEWER_TOKEN_ISSUER"]
+    if os.environ.get("REVIEWER_TOKEN_SHARED_SECRET"):
+        auth_source_config["shared_secret"] = os.environ["REVIEWER_TOKEN_SHARED_SECRET"]
+    service_config["auth_source"] = auth_source_config
     return ReviewerWorkflowService(manager, service_config)
 
 

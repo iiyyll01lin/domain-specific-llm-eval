@@ -281,10 +281,17 @@ class ConfigManager:
                     "threshold": 0.7,
                     "state_store_backend": "sqlite",
                     "state_store_path": "outputs/human_feedback/reviewer_state.db",
+                    "state_store_dsn": None,
                     "service_boundary": {
                         "service_url": None,
                         "allowed_tenants": ["default"],
                         "required_roles": ["reviewer"],
+                        "auth_source": {
+                            "type": "static-token",
+                            "principal_file": None,
+                            "issuer": "reviewer-service",
+                            "shared_secret": None,
+                        },
                         "auth": {
                             "api_token": "local-dev-reviewer-token",
                             "default_reviewer_id": "local-reviewer",

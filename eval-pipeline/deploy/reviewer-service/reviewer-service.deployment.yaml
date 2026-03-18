@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reviewer-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reviewer-service
+  template:
+    metadata:
+      labels:
+        app: reviewer-service
+    spec:
+      containers:
+        - name: reviewer-service
+          image: reviewer-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8010
+          env:
+            - name: REVIEWER_STATE_BACKEND
+              value: postgres
+            - name: REVIEWER_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: reviewer-service-secret
+                  key: database-dsn
+            - name: REVIEWER_AUTH_SOURCE_TYPE
+              value: internal-token
+            - name: REVIEWER_TOKEN_ISSUER
+              value: reviewer-service
+            - name: REVIEWER_TOKEN_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: reviewer-service-secret
+                  key: shared-secret
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8010
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8010
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - name: reviewer-principals
+              mountPath: /app/config/reviewer_principals.json
+              subPath: reviewer_principals.json
+      volumes:
+        - name: reviewer-principals
+          configMap:
+            name: reviewer-service-principals

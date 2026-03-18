@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import time
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Header, HTTPException
@@ -23,6 +24,18 @@ class ReviewerDecisionPayload(BaseModel):
 def create_reviewer_service_app(base_dir: Optional[Path] = None) -> FastAPI:
     resolved_base_dir = Path(base_dir or Path(__file__).resolve().parents[2])
     app = FastAPI(title="Reviewer Service API")
+    rate_limit_state: Dict[str, list[float]] = {}
+
+    def _enforce_rate_limit(identity: str) -> None:
+        service = _build_service(resolved_base_dir)
+        limit = int(service.config.get("rate_limit_rpm", 60) or 60)
+        now = time()
+        window_start = now - 60.0
+        timestamps = [ts for ts in rate_limit_state.get(identity, []) if ts >= window_start]
+        if len(timestamps) >= limit:
+            raise HTTPException(status_code=429, detail="Reviewer service rate limit exceeded")
+        timestamps.append(now)
+        rate_limit_state[identity] = timestamps
 
     def _auth_context(
         reviewer_token: Optional[str],
@@ -40,11 +53,20 @@ def create_reviewer_service_app(base_dir: Optional[Path] = None) -> FastAPI:
             )
         except PermissionError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
+        _enforce_rate_limit(f"{auth.reviewer_id}:{auth.tenant_id}")
         return service, auth
 
     @app.get("/healthz")
     async def healthz() -> Dict[str, Any]:
         return {"status": "ok", "service": "reviewer-service"}
+
+    @app.get("/readyz")
+    async def readyz() -> Dict[str, Any]:
+        service = _build_service(resolved_base_dir)
+        health = service.health()
+        if health.get("status") not in {"ok", "ready"}:
+            raise HTTPException(status_code=503, detail=health)
+        return {**health, "status": "ready"}
 
     @app.get("/reviews")
     async def list_reviews(

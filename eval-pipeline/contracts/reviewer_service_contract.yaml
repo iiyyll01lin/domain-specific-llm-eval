@@ -3,6 +3,10 @@ service:
   version: v1
   basePath: /
 auth:
+  sources:
+    - static-token
+    - principal-file
+    - internal-token
   headers:
     - name: X-Reviewer-Token
       type: string
@@ -43,6 +47,10 @@ moderationDecisionSchema:
     type: array
     items: string
 persistenceSchema:
+  backend:
+    supported:
+      - sqlite
+      - postgres
   review_queue:
     review_id: string
     item_index: integer
@@ -63,6 +71,8 @@ persistenceSchema:
 endpoints:
   - method: GET
     path: /healthz
+  - method: GET
+    path: /readyz
   - method: GET
     path: /reviews
   - method: GET

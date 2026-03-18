@@ -3,7 +3,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 COPY eval-pipeline/requirements.minimal.txt /app/requirements.minimal.txt
-RUN pip install --no-cache-dir -r /app/requirements.minimal.txt fastapi uvicorn requests pyyaml
+RUN pip install --no-cache-dir -r /app/requirements.minimal.txt fastapi uvicorn requests pyyaml "psycopg[binary]>=3.1,<4"
 
 COPY eval-pipeline /app
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .human_feedback_manager import HumanFeedbackManager
+from .reviewer_auth import build_reviewer_auth_source
 
 
 @dataclass(frozen=True)
@@ -18,11 +19,10 @@ class ReviewerWorkflowService:
     def __init__(self, manager: HumanFeedbackManager, config: Dict[str, Any]):
         self.manager = manager
         self.config = config
-        self.auth_config = config.get("auth", {})
         self.moderation_policy = config.get("moderation_policy", {})
         self.allowed_tenants = set(config.get("allowed_tenants", ["default"]))
         self.required_roles = set(config.get("required_roles", ["reviewer"]))
-        self.reviewer_tokens = config.get("reviewer_tokens", {})
+        self.auth_source = build_reviewer_auth_source(config)
 
     def authenticate(
         self,
@@ -32,37 +32,43 @@ class ReviewerWorkflowService:
         tenant_id: Optional[str],
         roles: Optional[List[str]] = None,
     ) -> ReviewerAuthContext:
-        expected_token = str(self.auth_config.get("api_token", "")).strip()
-        if expected_token and token != expected_token and token not in self.reviewer_tokens:
-            raise PermissionError("Invalid reviewer token")
-
-        resolved_reviewer = str(reviewer_id or self.auth_config.get("default_reviewer_id", "reviewer")).strip()
-        resolved_tenant = str(tenant_id or self.auth_config.get("default_tenant_id", "default")).strip()
-        resolved_roles = list(roles or self.auth_config.get("default_roles", ["reviewer"]))
-
+        principal = self.auth_source.authenticate(
+            token=token,
+            reviewer_id=reviewer_id,
+            tenant_id=tenant_id,
+            roles=roles,
+        )
+        resolved_tenant = str(tenant_id or (principal.tenant_ids[0] if principal.tenant_ids else "default")).strip()
         if resolved_tenant not in self.allowed_tenants:
             raise PermissionError(f"Tenant '{resolved_tenant}' is not allowed")
-        if self.required_roles and not (self.required_roles & set(resolved_roles)):
-            raise PermissionError("Reviewer role requirements not satisfied")
-
-        token_binding = self.reviewer_tokens.get(token)
-        if isinstance(token_binding, dict):
-            bound_reviewer = str(token_binding.get("reviewer_id", resolved_reviewer)).strip()
-            bound_tenant = str(token_binding.get("tenant_id", resolved_tenant)).strip()
-            bound_roles = list(token_binding.get("roles", resolved_roles))
-            return ReviewerAuthContext(
-                token=token,
-                reviewer_id=bound_reviewer,
-                tenant_id=bound_tenant,
-                roles=bound_roles,
+        if principal.tenant_ids and resolved_tenant not in principal.tenant_ids:
+            raise PermissionError(
+                f"Reviewer '{principal.reviewer_id}' is not a member of tenant '{resolved_tenant}'"
             )
+        if self.required_roles and not (self.required_roles & set(principal.roles)):
+            raise PermissionError("Reviewer role requirements not satisfied")
 
         return ReviewerAuthContext(
             token=token,
-            reviewer_id=resolved_reviewer,
+            reviewer_id=principal.reviewer_id,
             tenant_id=resolved_tenant,
-            roles=resolved_roles,
+            roles=principal.roles,
         )
+
+    def health(self) -> Dict[str, Any]:
+        auth_health = self.auth_source.health()
+        repository = getattr(self.manager, "repository", None)
+        repository_health = (
+            repository.health() if repository and hasattr(repository, "health") else {"status": "unknown"}
+        )
+        overall_status = "ok"
+        if auth_health.get("status") not in {"ok", "ready"} or repository_health.get("status") not in {"ok", "ready"}:
+            overall_status = "degraded"
+        return {
+            "status": overall_status,
+            "auth": auth_health,
+            "repository": repository_health,
+        }
 
     def list_reviews(
         self,

@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .reviewer_state_repository import SQLiteReviewerStateRepository
+from .reviewer_state_repository import build_reviewer_state_repository
 
 logger = logging.getLogger(__name__)
 
@@ -69,16 +69,19 @@ class HumanFeedbackManager:
                 "state_store_path", self.review_queue_dir / "reviewer_state.db"
             )
         )
+        self.state_store_dsn = self.feedback_config.get("state_store_dsn")
         reviewer_results_file = self.feedback_config.get("reviewer_results_file")
         self.reviewer_results_file = (
             Path(reviewer_results_file)
             if reviewer_results_file
             else self.review_queue_dir / "reviewer_results.jsonl"
         )
-        self.repository = SQLiteReviewerStateRepository(
-            db_path=self.state_store_path,
+        self.repository = build_reviewer_state_repository(
+            backend=self.state_store_backend,
+            state_store_path=self.state_store_path,
             review_queue_snapshot_path=self.review_queue_file,
             reviewer_results_snapshot_path=self.reviewer_results_file,
+            state_store_dsn=self.state_store_dsn,
         )
 
         logger.info(
@@ -594,6 +597,7 @@ class HumanFeedbackManager:
             "reviewer_results_path": str(self.reviewer_results_file),
             "state_store_backend": self.state_store_backend,
             "state_store_path": str(self.state_store_path),
+            "state_store_dsn_configured": bool(self.state_store_dsn),
         }
 
     def submit_reviewer_decision(self, review_payload: Dict[str, Any]) -> Dict[str, Any]:
