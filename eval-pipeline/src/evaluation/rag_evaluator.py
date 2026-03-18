@@ -345,7 +345,11 @@ class RAGEvaluator:
 
             # Step 4: Calculate keyword evaluation metrics
             keyword_metrics = {}
-            if self.keyword_evaluator and rag_responses:
+            if (
+                self.keyword_evaluator
+                and hasattr(self.keyword_evaluator, "evaluate_responses")
+                and rag_responses
+            ):
                 logger.info("� Calculating keyword evaluation metrics...")
                 try:
                     keyword_metrics = self.keyword_evaluator.evaluate_responses(
@@ -354,10 +358,21 @@ class RAGEvaluator:
                 except Exception as e:
                     logger.error(f"Keyword evaluation failed: {e}")
                     keyword_metrics = {"error": str(e)}
+            if "error" in keyword_metrics:
+                return {
+                    "testset_path": testset_path,
+                    "error": keyword_metrics["error"],
+                    "keyword_metrics": keyword_metrics,
+                    "evaluation_timestamp": datetime.now().isoformat(),
+                }
 
             # Step 5: Calculate RAGAS metrics on RAG responses
             ragas_metrics = {}
-            if self.ragas_evaluator and rag_responses:
+            if (
+                self.ragas_evaluator
+                and hasattr(self.ragas_evaluator, "evaluate_responses")
+                and rag_responses
+            ):
                 logger.info("📊 Calculating RAGAS metrics on RAG responses...")
                 try:
                     ragas_metrics = self.ragas_evaluator.evaluate_responses(
@@ -366,6 +381,14 @@ class RAGEvaluator:
                 except Exception as e:
                     logger.error(f"RAGAS evaluation failed: {e}")
                     ragas_metrics = {"error": str(e)}
+            if "error" in ragas_metrics:
+                return {
+                    "testset_path": testset_path,
+                    "error": ragas_metrics["error"],
+                    "keyword_metrics": keyword_metrics,
+                    "ragas_metrics": ragas_metrics,
+                    "evaluation_timestamp": datetime.now().isoformat(),
+                }
 
             # Step 6: Compile results
             results = {
@@ -403,6 +426,7 @@ class RAGEvaluator:
         logger.info(f"🔄 Evaluating RAG system with {len(testset_files)} testsets...")
 
         all_results = []
+        failed_results = []
         total_queries = 0
         total_successful = 0
 
@@ -411,6 +435,9 @@ class RAGEvaluator:
 
             result = self.evaluate_single_testset(str(testset_file))
             all_results.append(result)
+            if "error" in result:
+                failed_results.append(result)
+                continue
 
             total_queries += result.get("total_questions", 0)
             total_successful += result.get("successful_queries", 0)
@@ -424,6 +451,8 @@ class RAGEvaluator:
                 total_successful / total_queries if total_queries > 0 else 0
             ),
             "individual_results": all_results,
+            "failed_results": failed_results,
+            "failed_testsets": len(failed_results),
             "evaluation_timestamp": datetime.now().isoformat(),
         }
 

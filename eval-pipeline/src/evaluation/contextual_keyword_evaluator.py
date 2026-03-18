@@ -842,7 +842,7 @@ Configuration:
                     return bool(value)
                 else:
                     return value
-            except:
+            except (AttributeError, TypeError, ValueError):
                 return default
 
         return {

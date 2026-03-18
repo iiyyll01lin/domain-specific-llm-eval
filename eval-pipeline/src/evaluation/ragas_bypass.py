@@ -52,6 +52,7 @@ class RAGASBypass:
     def generate_mock_ragas_result(dataset=None, metrics=None, **kwargs):
         """Generate mock RAGAS results that look like real ones"""
         try:
+            fallback_reason = kwargs.get("fallback_reason", "ragas_bypass_enabled")
             # Determine number of samples
             if dataset is not None:
                 if hasattr(dataset, "__len__"):
@@ -140,17 +141,32 @@ class RAGASBypass:
                 def __init__(self, data):
                     self.data = data
                     self._df = None
+                    self.is_mock_result = True
+                    self.result_source = "ragas_bypass"
+                    self.fallback_reason = fallback_reason
 
                 def to_pandas(self):
                     if self._df is None:
                         self._df = pd.DataFrame(self.data)
+                        self._df["is_mock_result"] = True
+                        self._df["result_source"] = self.result_source
                     return self._df
 
                 def to_dict(self):
-                    return self.data
+                    return {
+                        **self.data,
+                        "is_mock_result": True,
+                        "result_source": self.result_source,
+                        "fallback_reason": self.fallback_reason,
+                    }
 
                 def __getitem__(self, key):
-                    return self.data.get(key, [])
+                    if key not in self.data:
+                        raise KeyError(key)
+                    return self.data[key]
+
+                def get(self, key, default=None):
+                    return self.data.get(key, default)
 
                 def __contains__(self, key):
                     return key in self.data
@@ -178,8 +194,11 @@ class RAGASBypass:
                 "MockResult",
                 (),
                 {
-                    "to_pandas": lambda: pd.DataFrame({"mock_score": [0.75]}),
-                    "to_dict": lambda: {"mock_score": [0.75]},
+                    "is_mock_result": True,
+                    "result_source": "ragas_bypass",
+                    "fallback_reason": "minimal_mock_result",
+                    "to_pandas": lambda: pd.DataFrame({"mock_score": [0.75], "is_mock_result": [True], "result_source": ["ragas_bypass"]}),
+                    "to_dict": lambda: {"mock_score": [0.75], "is_mock_result": True, "result_source": "ragas_bypass", "fallback_reason": "minimal_mock_result"},
                 },
             )()
 

@@ -104,6 +104,14 @@ class EnhancedContextualKeywordEvaluator:
     5. Adaptive thresholds based on language/domain
     """
 
+    def _error_result(self, *, method: str, stage: str, error: str) -> Dict[str, Any]:
+        return {
+            "error": error,
+            "method": method,
+            "stage": stage,
+            "success": False,
+        }
+
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize enhanced evaluator.
@@ -181,7 +189,11 @@ class EnhancedContextualKeywordEvaluator:
                         )
                     else:
                         raise Exception("Offline manager failed")
-                except:
+                except Exception as exc:
+                    logger.debug(
+                        "Offline English spaCy manager unavailable, falling back to direct loading: %s",
+                        exc,
+                    )
                     # Fallback to direct loading
                     self.nlp_en = spacy.load(self.spacy_model_en)
                     logger.info(
@@ -203,7 +215,11 @@ class EnhancedContextualKeywordEvaluator:
                         )
                     else:
                         raise Exception("Offline manager failed")
-                except:
+                except Exception as exc:
+                    logger.debug(
+                        "Offline Chinese spaCy manager unavailable, falling back to direct loading: %s",
+                        exc,
+                    )
                     # Fallback to direct loading
                     self.nlp_zh = spacy.load(self.spacy_model_zh)
                     logger.info(
@@ -546,7 +562,11 @@ class EnhancedContextualKeywordEvaluator:
         """
         try:
             if not self.sentence_model:
-                return {"error": "Sentence transformer not available", "success": False}
+                return self._error_result(
+                    method="enhanced_semantic",
+                    stage="semantic_model_init",
+                    error="Sentence transformer not available",
+                )
 
             # Get enhanced segments
             segments = self._get_contextual_segments_enhanced(rag_answer, language)
@@ -597,7 +617,11 @@ class EnhancedContextualKeywordEvaluator:
 
         except Exception as e:
             logger.error(f"Enhanced semantic evaluation failed: {e}")
-            return {"error": str(e), "method": "enhanced_semantic", "success": False}
+            return self._error_result(
+                method="enhanced_semantic",
+                stage="semantic_similarity",
+                error=str(e),
+            )
 
     def _evaluate_with_fuzzy_matching(
         self, expected_keywords: List[str], rag_answer: str
@@ -614,7 +638,11 @@ class EnhancedContextualKeywordEvaluator:
         """
         try:
             if not FUZZYWUZZY_AVAILABLE:
-                return {"error": "FuzzyWuzzy not available", "success": False}
+                return self._error_result(
+                    method="fuzzy_matching",
+                    stage="fuzzy_match_init",
+                    error="FuzzyWuzzy not available",
+                )
 
             # Extract potential keywords from answer
             # Simple approach: split by common delimiters
@@ -673,7 +701,11 @@ class EnhancedContextualKeywordEvaluator:
 
         except Exception as e:
             logger.error(f"Fuzzy matching evaluation failed: {e}")
-            return {"error": str(e), "method": "fuzzy_matching", "success": False}
+            return self._error_result(
+                method="fuzzy_matching",
+                stage="fuzzy_match_execution",
+                error=str(e),
+            )
 
     def _evaluate_with_keyword_extraction(
         self, expected_keywords: List[str], rag_answer: str, language: str
@@ -691,7 +723,11 @@ class EnhancedContextualKeywordEvaluator:
         """
         try:
             if not self.keybert_model:
-                return {"error": "KeyBERT not available", "success": False}
+                return self._error_result(
+                    method="keyword_extraction",
+                    stage="keyword_extractor_init",
+                    error="KeyBERT not available",
+                )
 
             # Extract keywords from response
             extracted_keywords = self.keybert_model.extract_keywords(
@@ -763,7 +799,11 @@ class EnhancedContextualKeywordEvaluator:
 
         except Exception as e:
             logger.error(f"Keyword extraction evaluation failed: {e}")
-            return {"error": str(e), "method": "keyword_extraction", "success": False}
+            return self._error_result(
+                method="keyword_extraction",
+                stage="keyword_extraction_execution",
+                error=str(e),
+            )
 
     def _combine_evaluation_methods(
         self, method_results: Dict[str, Any], adaptive_threshold: float
