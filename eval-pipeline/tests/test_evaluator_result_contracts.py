@@ -1,6 +1,7 @@
 import sys
 import types
 
+from src.evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
 from src.evaluation.gates_system import GatesSystem
 
 
@@ -82,5 +83,36 @@ def test_hybrid_evaluator_result_includes_contract_fields(monkeypatch) -> None:
     )
 
     assert result["result_source"] == "hybrid_evaluator"
+    assert result["mock_data"] is False
+    assert result["contract_version"]
+
+
+def test_contextual_keyword_evaluator_aggregate_result_includes_contract_fields(monkeypatch) -> None:
+    evaluator = object.__new__(ContextualKeywordEvaluator)
+    evaluator.evaluate_batch = lambda evaluations: {
+        "aggregate_stats": {
+            "passed_evaluations": 1,
+            "failed_evaluations": 0,
+            "total_evaluations": 1,
+            "mean_total_score": 0.8,
+            "pass_rate": 1.0,
+        },
+        "individual_results": [
+            {"total_score": 0.8, "keyword_relevance_score": 0.75}
+        ],
+        "evaluation_config": {"threshold": 0.6},
+    }
+
+    result = evaluator.evaluate_responses(
+        [
+            {
+                "answer": "A robotic assembly arm is visible.",
+                "expected_keywords": ["robotic", "assembly"],
+            }
+        ]
+    )
+
+    assert result["success"] is True
+    assert result["result_source"] == "contextual_keyword_evaluator"
     assert result["mock_data"] is False
     assert result["contract_version"]

@@ -70,6 +70,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent / "utils"))
 from nan_handling import is_valid_score, safe_mean, safe_min_max, safe_std
 
+from .evaluation_result_contract import attach_result_contract, evaluation_error_result
+
 logger = logging.getLogger(__name__)
 
 
@@ -511,74 +513,89 @@ class ContextualKeywordEvaluator:
 
     def evaluate_responses(self, rag_responses: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Evaluate normalized RAG responses and aggregate contextual keyword metrics."""
-        evaluations: List[Dict[str, Any]] = []
+        try:
+            evaluations: List[Dict[str, Any]] = []
 
-        for item in rag_responses:
-            keywords = item.get("expected_keywords") or item.get("mandatory_keywords") or item.get(
-                "extracted_keywords"
-            ) or []
-            optional_keywords = item.get("optional_keywords") or []
-            answer = str(item.get("rag_answer") or item.get("answer") or "")
+            for item in rag_responses:
+                keywords = item.get("expected_keywords") or item.get("mandatory_keywords") or item.get(
+                    "extracted_keywords"
+                ) or []
+                optional_keywords = item.get("optional_keywords") or []
+                answer = str(item.get("rag_answer") or item.get("answer") or "")
 
-            if isinstance(keywords, str):
-                keywords = [token.strip() for token in re.split(r"[,，、]", keywords) if token.strip()]
-            if isinstance(optional_keywords, str):
-                optional_keywords = [
-                    token.strip()
-                    for token in re.split(r"[,，、]", optional_keywords)
-                    if token.strip()
-                ]
+                if isinstance(keywords, str):
+                    keywords = [token.strip() for token in re.split(r"[,，、]", keywords) if token.strip()]
+                if isinstance(optional_keywords, str):
+                    optional_keywords = [
+                        token.strip()
+                        for token in re.split(r"[,，、]", optional_keywords)
+                        if token.strip()
+                    ]
 
-            if not keywords:
-                continue
+                if not keywords:
+                    continue
 
-            evaluations.append(
+                evaluations.append(
+                    {
+                        "response": answer,
+                        "mandatory_keywords": list(keywords),
+                        "optional_keywords": list(optional_keywords),
+                    }
+                )
+
+            batch_results = self.evaluate_batch(evaluations)
+            stats = batch_results.get("aggregate_stats", {})
+
+            return attach_result_contract(
                 {
-                    "response": answer,
-                    "mandatory_keywords": list(keywords),
-                    "optional_keywords": list(optional_keywords),
-                }
-            )
-
-        batch_results = self.evaluate_batch(evaluations)
-        stats = batch_results.get("aggregate_stats", {})
-
-        return {
-            "available": True,
-            "pass_count": int(stats.get("passed_evaluations", 0)),
-            "fail_count": int(stats.get("failed_evaluations", 0)),
-            "total_evaluations": int(stats.get("total_evaluations", 0)),
-            "average_score": float(stats.get("mean_total_score", 0.0)),
-            "pass_rate": float(stats.get("pass_rate", 0.0)),
-            "metrics": {
-                "contextual_keyword_score": {
-                    "mean": float(stats.get("mean_total_score", 0.0)),
-                    "scores": [
-                        float(result.get("total_score", 0.0))
-                        for result in batch_results.get("individual_results", [])
-                    ],
-                },
-                "keyword_relevance_score": {
-                    "mean": float(
-                        safe_mean(
-                            [
+                    "available": True,
+                    "pass_count": int(stats.get("passed_evaluations", 0)),
+                    "fail_count": int(stats.get("failed_evaluations", 0)),
+                    "total_evaluations": int(stats.get("total_evaluations", 0)),
+                    "average_score": float(stats.get("mean_total_score", 0.0)),
+                    "pass_rate": float(stats.get("pass_rate", 0.0)),
+                    "metrics": {
+                        "contextual_keyword_score": {
+                            "mean": float(stats.get("mean_total_score", 0.0)),
+                            "scores": [
+                                float(result.get("total_score", 0.0))
+                                for result in batch_results.get("individual_results", [])
+                            ],
+                        },
+                        "keyword_relevance_score": {
+                            "mean": float(
+                                safe_mean(
+                                    [
+                                        float(result.get("keyword_relevance_score", 0.0))
+                                        for result in batch_results.get("individual_results", [])
+                                    ]
+                                )
+                            )
+                            if batch_results.get("individual_results")
+                            else 0.0,
+                            "scores": [
                                 float(result.get("keyword_relevance_score", 0.0))
                                 for result in batch_results.get("individual_results", [])
-                            ]
-                        )
-                    )
-                    if batch_results.get("individual_results")
-                    else 0.0,
-                    "scores": [
-                        float(result.get("keyword_relevance_score", 0.0))
-                        for result in batch_results.get("individual_results", [])
-                    ],
+                            ],
+                        },
+                    },
+                    "individual_results": batch_results.get("individual_results", []),
+                    "evaluation_config": batch_results.get("evaluation_config", {}),
+                    "method": "contextual_keyword_matching",
                 },
-            },
-            "individual_results": batch_results.get("individual_results", []),
-            "evaluation_config": batch_results.get("evaluation_config", {}),
-            "method": "contextual_keyword_matching",
-        }
+                result_source="contextual_keyword_evaluator",
+                success=True,
+                error_stage=None,
+                mock_data=False,
+            )
+        except Exception as exc:
+            return evaluation_error_result(
+                result_source="contextual_keyword_evaluator_error",
+                error_stage="evaluate_responses",
+                error=str(exc),
+                mock_data=False,
+                extra={"available": True},
+            )
 
     def _contains_chinese(self, text: str) -> bool:
         """Check if text contains Chinese characters."""
