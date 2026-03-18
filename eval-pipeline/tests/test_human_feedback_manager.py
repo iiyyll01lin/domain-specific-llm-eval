@@ -146,3 +146,49 @@ def test_reviewer_result_ingestion_resolves_existing_feedback(tmp_path: Path) ->
     assert results[0]["feedback_required"] is False
     assert results[0]["human_feedback_score"] == 1.0
     assert results[0]["review_resolution"] == "resolved"
+
+
+def test_submit_reviewer_decision_resolves_queue_item(tmp_path: Path) -> None:
+    manager = HumanFeedbackManager(
+        {
+            "evaluation": {
+                "human_feedback": {
+                    "enabled": True,
+                    "threshold": 0.7,
+                    "review_queue_dir": str(tmp_path),
+                }
+            }
+        }
+    )
+
+    process_result = manager.process_feedback(
+        {"questions": ["What happened?"]},
+        [
+            {
+                "answer": "Too short",
+                "confidence": 0.4,
+                "ragas_score": 0.3,
+                "keyword_score": 0.9,
+                "domain_score": 0.3,
+            }
+        ],
+    )
+    queued_review = process_result["queued_reviews"][0]
+
+    submission = manager.submit_reviewer_decision(
+        {
+            "review_id": queued_review["review_id"],
+            "approved": True,
+            "score": 1.0,
+            "notes": "Verified via reviewer workflow.",
+            "reviewer": "qa-reviewer",
+        }
+    )
+
+    summary = manager.get_review_summary()
+
+    assert submission["submitted"] is True
+    assert submission["matched_queue_item"] is True
+    assert summary["pending_reviews"] == 0
+    assert summary["resolved_reviews"] == 1
+    assert summary["state_store_backend"] == "sqlite"

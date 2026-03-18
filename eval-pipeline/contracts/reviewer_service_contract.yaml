@@ -1,0 +1,71 @@
+service:
+  name: reviewer-service
+  version: v1
+  basePath: /
+auth:
+  headers:
+    - name: X-Reviewer-Token
+      type: string
+      required: true
+      description: Static or delegated reviewer access token.
+    - name: X-Reviewer-Id
+      type: string
+      required: true
+      description: Stable reviewer identity for audit and attribution.
+    - name: X-Tenant-Id
+      type: string
+      required: true
+      description: Tenant scope for authorization and data partitioning.
+    - name: X-Reviewer-Roles
+      type: string
+      required: false
+      description: Comma-separated reviewer roles. Defaults to reviewer.
+identitySchema:
+  reviewer:
+    reviewer_id: string
+    tenant_id: string
+    roles:
+      type: array
+      items: string
+tenantAuthorizationSchema:
+  allowed_tenants:
+    type: array
+    items: string
+  required_roles:
+    type: array
+    items: string
+moderationDecisionSchema:
+  allowed: boolean
+  violations:
+    type: array
+    items: string
+  matched_terms:
+    type: array
+    items: string
+persistenceSchema:
+  review_queue:
+    review_id: string
+    item_index: integer
+    question: string
+    priority: string
+    status: string
+    reviewer: string
+    created_at: string
+    updated_at: string
+  reviewer_results:
+    review_id: string
+    item_index: integer
+    question: string
+    approved: boolean
+    score: number
+    reviewer: string
+    resolution: string
+endpoints:
+  - method: GET
+    path: /healthz
+  - method: GET
+    path: /reviews
+  - method: GET
+    path: /reviews/summary
+  - method: POST
+    path: /reviews/submit

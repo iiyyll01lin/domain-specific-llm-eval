@@ -6,8 +6,12 @@ import json
 import logging
 import random
 import statistics
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from .reviewer_state_repository import SQLiteReviewerStateRepository
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +61,24 @@ class HumanFeedbackManager:
         self.review_queue_dir.mkdir(parents=True, exist_ok=True)
         self.review_queue_file = self.review_queue_dir / "review_queue.jsonl"
         self.policy_state_file = self.review_queue_dir / "feedback_policy_state.json"
+        self.state_store_backend = str(
+            self.feedback_config.get("state_store_backend", "sqlite")
+        )
+        self.state_store_path = Path(
+            self.feedback_config.get(
+                "state_store_path", self.review_queue_dir / "reviewer_state.db"
+            )
+        )
         reviewer_results_file = self.feedback_config.get("reviewer_results_file")
         self.reviewer_results_file = (
             Path(reviewer_results_file)
             if reviewer_results_file
             else self.review_queue_dir / "reviewer_results.jsonl"
+        )
+        self.repository = SQLiteReviewerStateRepository(
+            db_path=self.state_store_path,
+            review_queue_snapshot_path=self.review_queue_file,
+            reviewer_results_snapshot_path=self.reviewer_results_file,
         )
 
         logger.info(
@@ -341,28 +358,56 @@ class HumanFeedbackManager:
     ) -> List[Dict[str, Any]]:
         candidate_by_index = {candidate["index"]: candidate for candidate in candidates}
         queued_items: List[Dict[str, Any]] = []
+        existing_queue = self._load_review_queue()
+        existing_queue_by_key = {
+            self._review_queue_key(item): item for item in existing_queue
+        }
+        resolved_keys = {
+            self._review_queue_key(item)
+            for item in existing_queue
+            if item.get("status") == "resolved"
+        }
+        resolved_keys.update(
+            self._reviewer_queue_key(item) for item in self._load_reviewer_results()
+        )
 
         if not recommendations.get("recommendations"):
             return queued_items
 
-        with open(self.review_queue_file, "a", encoding="utf-8") as handle:
-            for recommendation in recommendations["recommendations"]:
-                candidate = candidate_by_index.get(recommendation["index"], {})
-                response = candidate.get("response", {})
-                queue_item = {
-                    "index": recommendation["index"],
-                    "question": recommendation["question"],
-                    "reason": recommendation["reason"],
-                    "priority": recommendation["priority"],
-                    "status": "pending",
-                    "suggested_action": recommendation["suggested_action"],
-                    "answer": response.get("answer", ""),
-                    "confidence": response.get("confidence"),
-                    "ragas_score": response.get("ragas_score"),
-                    "keyword_score": response.get("keyword_score"),
-                }
-                handle.write(json.dumps(queue_item, ensure_ascii=False) + "\n")
-                queued_items.append(queue_item)
+        new_items: List[Dict[str, Any]] = []
+        for recommendation in recommendations["recommendations"]:
+            queue_key = self._review_queue_key(recommendation)
+            if queue_key in resolved_keys:
+                continue
+
+            existing_item = existing_queue_by_key.get(queue_key)
+            if existing_item and existing_item.get("status") in {"pending", "in_review"}:
+                queued_items.append(existing_item)
+                continue
+
+            candidate = candidate_by_index.get(recommendation["index"], {})
+            response = candidate.get("response", {})
+            timestamp = datetime.now().isoformat()
+            queue_item = {
+                "review_id": uuid.uuid4().hex,
+                "index": recommendation["index"],
+                "question": recommendation["question"],
+                "reason": recommendation["reason"],
+                "priority": recommendation["priority"],
+                "status": "pending",
+                "suggested_action": recommendation["suggested_action"],
+                "answer": response.get("answer", ""),
+                "confidence": response.get("confidence"),
+                "ragas_score": response.get("ragas_score"),
+                "keyword_score": response.get("keyword_score"),
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            }
+            queued_items.append(queue_item)
+            new_items.append(queue_item)
+
+        if new_items:
+            self.repository.upsert_queue_items(new_items)
 
         return queued_items
 
@@ -419,19 +464,19 @@ class HumanFeedbackManager:
         dedupe_keys = {
             self._reviewer_result_key(item) for item in existing
         }
-        ingested = 0
-        with open(self.reviewer_results_file, "a", encoding="utf-8") as handle:
-            for item in normalized_items:
-                item_key = self._reviewer_result_key(item)
-                if item_key in dedupe_keys:
-                    continue
-                handle.write(json.dumps(item, ensure_ascii=False) + "\n")
-                dedupe_keys.add(item_key)
-                ingested += 1
+        items_to_ingest: List[Dict[str, Any]] = []
+        for item in normalized_items:
+            item_key = self._reviewer_result_key(item)
+            if item_key in dedupe_keys:
+                continue
+            items_to_ingest.append(item)
+            dedupe_keys.add(item_key)
+        ingested = self.repository.ingest_reviewer_results(items_to_ingest)
 
         return {
             "ingested": ingested,
             "results_file": str(self.reviewer_results_file),
+            "state_store_path": str(self.state_store_path),
         }
 
     def _coerce_reviewer_results(self, reviewer_results: Any) -> List[Dict[str, Any]]:
@@ -478,18 +523,121 @@ class HumanFeedbackManager:
             str(item.get("reviewer", "unknown")).strip(),
         )
 
+    def _review_queue_key(self, item: Dict[str, Any]) -> tuple[Any, str]:
+        return (
+            item.get("index"),
+            str(item.get("question", "")).strip(),
+        )
+
+    def _reviewer_queue_key(self, item: Dict[str, Any]) -> tuple[Any, str]:
+        return (
+            item.get("index"),
+            str(item.get("question", "")).strip(),
+        )
+
+    def _normalize_queue_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        timestamp = item.get("updated_at") or item.get("created_at") or datetime.now().isoformat()
+        return {
+            "review_id": str(item.get("review_id", uuid.uuid4().hex)),
+            "index": item.get("index"),
+            "question": str(item.get("question", "")).strip(),
+            "reason": str(item.get("reason", "")).strip(),
+            "priority": str(item.get("priority", "medium")).strip() or "medium",
+            "status": str(item.get("status", "pending")).strip() or "pending",
+            "suggested_action": str(item.get("suggested_action", "")).strip(),
+            "answer": str(item.get("answer", "")),
+            "confidence": item.get("confidence"),
+            "ragas_score": item.get("ragas_score"),
+            "keyword_score": item.get("keyword_score"),
+            "reviewer": str(item.get("reviewer", "")).strip(),
+            "reviewer_notes": str(item.get("reviewer_notes", "")).strip(),
+            "resolution": str(item.get("resolution", "")).strip(),
+            "created_at": str(item.get("created_at", timestamp)),
+            "updated_at": str(timestamp),
+            "resolved_at": item.get("resolved_at"),
+        }
+
+    def _load_review_queue(self) -> List[Dict[str, Any]]:
+        return [
+            self._normalize_queue_item(item)
+            for item in self.repository.list_queue(status=None, include_resolved=True)
+        ]
+
+    def _write_review_queue(self, items: List[Dict[str, Any]]) -> None:
+        self.repository.replace_queue([self._normalize_queue_item(item) for item in items])
+
+    def list_review_queue(
+        self,
+        status: Optional[str] = "pending",
+        include_resolved: bool = False,
+    ) -> List[Dict[str, Any]]:
+        items = self._load_review_queue()
+        if status:
+            items = [item for item in items if item.get("status") == status]
+        elif not include_resolved:
+            items = [item for item in items if item.get("status") != "resolved"]
+        return items
+
+    def get_review_summary(self) -> Dict[str, Any]:
+        queue_items = self._load_review_queue()
+        reviewer_results = self._load_reviewer_results()
+        pending = sum(1 for item in queue_items if item.get("status") == "pending")
+        in_review = sum(1 for item in queue_items if item.get("status") == "in_review")
+        resolved = sum(1 for item in queue_items if item.get("status") == "resolved")
+        return {
+            "total_queue_items": len(queue_items),
+            "pending_reviews": pending,
+            "in_review_reviews": in_review,
+            "resolved_reviews": resolved,
+            "ingested_reviewer_results": len(reviewer_results),
+            "review_queue_path": str(self.review_queue_file),
+            "reviewer_results_path": str(self.reviewer_results_file),
+            "state_store_backend": self.state_store_backend,
+            "state_store_path": str(self.state_store_path),
+        }
+
+    def submit_reviewer_decision(self, review_payload: Dict[str, Any]) -> Dict[str, Any]:
+        decision = self._normalize_reviewer_result(review_payload)
+        queue_items = self._load_review_queue()
+        now = datetime.now().isoformat()
+        matched_queue_item = None
+
+        for item in queue_items:
+            review_id = review_payload.get("review_id")
+            matches_review_id = bool(review_id) and item.get("review_id") == review_id
+            matches_lookup = self._review_queue_key(item) == self._reviewer_queue_key(decision)
+            if not matches_review_id and not matches_lookup:
+                continue
+
+            item["status"] = "resolved"
+            item["resolution"] = decision.get("resolution", "resolved")
+            item["reviewer"] = decision.get("reviewer", "unknown")
+            item["reviewer_notes"] = decision.get("notes", "")
+            item["updated_at"] = now
+            item["resolved_at"] = now
+            matched_queue_item = item
+            decision["index"] = item.get("index")
+            decision["question"] = item.get("question", decision.get("question", ""))
+            review_payload["review_id"] = item.get("review_id")
+            break
+
+        if matched_queue_item is not None:
+            self._write_review_queue(queue_items)
+
+        ingestion = self.ingest_reviewer_results([decision])
+        return {
+            "submitted": bool(matched_queue_item is not None or ingestion.get("ingested", 0) > 0),
+            "matched_queue_item": matched_queue_item is not None,
+            "review_id": review_payload.get("review_id"),
+            "ingested": ingestion.get("ingested", 0),
+            "summary": self.get_review_summary(),
+        }
+
     def _load_reviewer_results(self) -> List[Dict[str, Any]]:
-        if not self.reviewer_results_file.exists():
-            return []
-        results: List[Dict[str, Any]] = []
-        for line in self.reviewer_results_file.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            try:
-                results.append(self._normalize_reviewer_result(json.loads(line)))
-            except Exception:
-                continue
-        return results
+        return [
+            self._normalize_reviewer_result(item)
+            for item in self.repository.list_reviewer_results()
+        ]
 
     def _generate_feedback_recommendations(
         self, candidates: List[Dict[str, Any]]

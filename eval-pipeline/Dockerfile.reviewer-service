@@ -1,0 +1,12 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY eval-pipeline/requirements.minimal.txt /app/requirements.minimal.txt
+RUN pip install --no-cache-dir -r /app/requirements.minimal.txt fastapi uvicorn requests pyyaml
+
+COPY eval-pipeline /app
+
+EXPOSE 8010
+
+CMD ["python", "reviewer_service_api.py"]
