@@ -175,3 +175,38 @@ def test_extended_partial_metrics_wire_into_main_evaluator_helpers() -> None:
     assert spatial_metrics["spatial_reasoning_score"]["mean"] == 1.0
     assert intent_metrics["intent_alignment_score"]["mean"] == 1.0
     assert temporal_metrics["temporal_causality_score"]["mean"] > 0.5
+
+
+def test_ragas_evaluator_fallback_marks_result_source(monkeypatch) -> None:
+    evaluator = object.__new__(RagasEvaluator)
+    evaluator.ragas_available = True
+    evaluator.metrics = []
+    evaluator._prepare_evaluation_data = lambda testset, responses: {
+        "question": ["Q1"],
+        "answer": ["A1"],
+        "contexts": [["C1"]],
+        "ground_truth": ["G1"],
+    }
+
+    monkeypatch.setattr(
+        "src.evaluation.ragas_evaluator.RagasModelDumpFix.fix_ragas_dataset_format",
+        lambda data: data,
+    )
+    monkeypatch.setattr(
+        "src.evaluation.ragas_evaluator.RagasModelDumpFix.create_safe_ragas_dataset",
+        lambda data: type("_Dataset", (), {"__len__": lambda self: 1, "column_names": ["question"]})(),
+    )
+    monkeypatch.setattr(
+        "src.evaluation.ragas_evaluator.RagasModelDumpFix.safe_ragas_evaluate",
+        lambda dataset, metrics: None,
+    )
+    monkeypatch.setattr(
+        "src.evaluation.ragas_evaluator.RagasModelDumpFix.convert_to_mock_results",
+        lambda data, metrics: {"context_precision": [0.2]},
+    )
+
+    result = evaluator.evaluate({"questions": ["Q1"]}, [{"answer": "A1"}])
+
+    assert result["mock_data"] is True
+    assert result["result_source"] == "ragas_model_dump_fix_mock"
+    assert result["error_stage"] == "ragas_safe_evaluate"

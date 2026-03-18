@@ -733,6 +733,8 @@ class RagasEvaluator:
                         "metrics": mock_scores,
                         "message": "RAGAS evaluation failed - using enhanced mock results with model_dump fix",
                         "mock_data": True,
+                        "result_source": "ragas_model_dump_fix_mock",
+                        "error_stage": "ragas_safe_evaluate",
                     }
 
                 logger.info("✅ RAGAS evaluation completed successfully")
@@ -762,6 +764,8 @@ class RagasEvaluator:
                     },
                     "message": "RAGAS evaluation failed - using fallback mock results",
                     "mock_data": True,
+                    "result_source": "ragas_fallback_mock",
+                    "error_stage": "ragas_exception_fallback",
                 }
 
             domain_regex_scores = self._score_domain_regex(evaluation_data["answer"])
@@ -1077,6 +1081,8 @@ class RagasEvaluator:
                 name: {
                     "model_name": binding.model_name,
                     "endpoint": binding.endpoint,
+                    "result_source": "ragas_fallback_mock",
+                    "error_stage": "ragas_exception_fallback",
                     "temperature": binding.temperature,
                     "max_tokens": binding.max_tokens,
                     "enabled": binding.enabled,

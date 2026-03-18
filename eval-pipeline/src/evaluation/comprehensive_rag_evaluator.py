@@ -181,11 +181,17 @@ class ComprehensiveRAGEvaluator:
                     "success": False,
                     "error": f"HTTP {response.status_code}: {response.text}",
                     "status_code": response.status_code,
+                    "error_stage": "rag_request",
                 }
 
         except Exception as e:
             logger.error(f"Error querying RAG system: {e}")
-            return {"success": False, "error": str(e), "status_code": None}
+            return {
+                "success": False,
+                "error": str(e),
+                "status_code": None,
+                "error_stage": "rag_request",
+            }
 
     def _extract_nested_field(self, data: Dict, field_path: str) -> str:
         """Extract nested field from response data."""
@@ -275,6 +281,8 @@ class ComprehensiveRAGEvaluator:
             "answer_relevancy": 0.72,
             "message": "RAGAS evaluation disabled due to model_dump compatibility issues",
             "mock_data": True,
+            "result_source": "ragas_disabled_mock",
+            "error_stage": "ragas_disabled",
         }
 
         try:
@@ -311,7 +319,11 @@ class ComprehensiveRAGEvaluator:
 
         except Exception as e:
             logger.error(f"Error in RAGAS evaluation: {e}")
-            return {"error": str(e)}
+            return {
+                "error": str(e),
+                "error_stage": "ragas_runtime",
+                "result_source": "ragas_error",
+            }
 
     def evaluate_testset(self, testset_file: Path, output_dir: Path) -> Dict[str, Any]:
         """Evaluate RAG system using enhanced testset."""
