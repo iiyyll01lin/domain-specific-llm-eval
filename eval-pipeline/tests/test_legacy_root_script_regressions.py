@@ -346,3 +346,109 @@ def test_legacy_comprehensive_report_script_behaviour_is_covered(tmp_path: Path)
 
     assert reports
     assert "ragas_composite_score" in evaluation_results.columns
+
+
+def test_legacy_direct_reporting_script_behaviour_is_covered(tmp_path: Path) -> None:
+    eval_dir = tmp_path / "outputs" / "run_legacy" / "evaluations"
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    eval_file = eval_dir / "evaluation_results.json"
+    eval_file.write_text(
+        json.dumps(
+            {
+                "rag_results": [
+                    {
+                        "question": "Q1",
+                        "answer": "A1",
+                        "context_precision": 0.5,
+                        "context_recall": 0.88,
+                        "faithfulness": 0.826,
+                        "answer_relevancy": 0.634,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = json.loads(eval_file.read_text(encoding="utf-8"))
+    results_df = pd.DataFrame(payload["rag_results"])
+    numeric_cols = list(results_df.select_dtypes(include=["number"]).columns)
+
+    assert numeric_cols
+    assert not results_df[numeric_cols].describe().empty
+
+
+def test_legacy_gates_integration_script_behaviour_is_covered(monkeypatch) -> None:
+    import src.evaluation.comprehensive_rag_evaluator_fixed as comprehensive_module
+    from src.evaluation.gates_system import GatesSystem
+
+    class _FakeRagasEvaluator:
+        def __init__(self, config):
+            self.config = config
+
+    class _FakeEnhancedEvaluator:
+        def __init__(self, config):
+            self.config = config
+
+    monkeypatch.setattr(comprehensive_module, "RAGASEvaluatorWithFallbacks", _FakeRagasEvaluator)
+    monkeypatch.setattr(comprehensive_module, "EnhancedContextualKeywordEvaluator", _FakeEnhancedEvaluator)
+
+    config = {
+        "evaluation": {
+            "contextual_keywords": {"evaluator": "enhanced"},
+            "gates": {
+                "contextual_keywords": {"enabled": True, "threshold": 0.6, "weight": 0.4},
+                "ragas_metrics": {"enabled": True, "threshold": 0.7, "weight": 0.6},
+                "combination": {"method": "weighted_average", "minimum_gates_required": 1},
+            },
+        },
+        "rag_system": {"enabled": False},
+    }
+
+    evaluator = comprehensive_module.ComprehensiveRAGEvaluatorFixed(config)
+    gates_system = GatesSystem(config)
+    gates_results = gates_system.evaluate_gates(
+        {
+            "contextual_keyword": {
+                "success": True,
+                "summary_metrics": {"avg_similarity_score": 0.7, "pass_rate": 0.75, "total_questions": 4},
+                "total_questions": 4,
+            },
+            "ragas": {
+                "success": True,
+                "overall_scores": {
+                    "ContextPrecision": 0.95,
+                    "ContextRecall": 0.9,
+                    "Faithfulness": 0.85,
+                    "AnswerRelevancy": 0.88,
+                },
+                "total_questions": 4,
+            },
+        }
+    )
+
+    assert evaluator.gates_system is not None
+    assert evaluator.keyword_evaluator.__class__.__name__ == "_FakeEnhancedEvaluator"
+    assert gates_results.overall_pass is True
+    assert gates_results.weighted_score > 0.0
+
+
+def test_legacy_enhanced_evaluator_script_behaviour_is_covered(monkeypatch) -> None:
+    from src.evaluation.enhanced_contextual_keyword_evaluator import EnhancedContextualKeywordEvaluator
+
+    monkeypatch.setattr(EnhancedContextualKeywordEvaluator, "_initialize_models", lambda self: setattr(self, "sentence_model", None))
+    evaluator = EnhancedContextualKeywordEvaluator(
+        {
+            "evaluation": {
+                "contextual_keywords": {
+                    "evaluator": "enhanced",
+                    "similarity_threshold": 0.7,
+                    "fuzzy_threshold": 80,
+                }
+            }
+        }
+    )
+
+    assert evaluator.keyword_config["evaluator"] == "enhanced"
+    assert evaluator.similarity_threshold == 0.7
+    assert evaluator.fuzzy_threshold == 80

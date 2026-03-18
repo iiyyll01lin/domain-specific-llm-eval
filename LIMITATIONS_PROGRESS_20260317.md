@@ -134,6 +134,21 @@ Impact:
 - operational readiness now includes auditable state transitions and a reproducible backup surface
 - regression coverage exists in `eval-pipeline/tests/test_reviewer_state_repository_postgres.py`
 
+### Reviewer State Recovery Now Includes Backup Restore And Audit Replay Coverage
+
+The maintained reviewer state layer now also supports:
+
+- exact JSON backup restore into fresh state stores
+- audit-log restoration alongside queue and reviewer-result payloads
+- deterministic audit replay into clean repositories for recovery drills
+- reviewer-result recovery carrying `tenant_id` and `created_at` metadata through serialization paths
+
+Impact:
+
+- reviewer recovery is no longer limited to queue/result payload import without audit continuity
+- backup verification can now be exercised as an end-to-end restore/replay path rather than a write-only export surface
+- regression coverage exists in `eval-pipeline/tests/test_reviewer_state_repository.py`
+
 ### Reviewer Deployment Hardening Has Advanced Beyond First-Pass Manifests
 
 The reviewer deployment scaffolding now also includes:
@@ -193,6 +208,36 @@ Impact:
 - fallback-heavy evaluators are less likely to drift into incompatible result shapes
 - reviewer, reporting, and downstream debugging paths can rely on a more stable provenance contract
 - regression coverage exists in `eval-pipeline/tests/test_evaluator_result_contracts.py`
+
+### Core RAGAS Evaluator Paths Now Emit The Normalized Result Contract
+
+The maintained `RagasEvaluator.evaluate(...)` path now also normalizes:
+
+- unavailable-library responses
+- invalid-input responses
+- dataset-creation failures
+- mock fallback responses
+- successful evaluation responses
+- terminal exception responses
+
+Impact:
+
+- one of the most central fallback-heavy evaluators is no longer mixing ad hoc return shapes across major branches
+- downstream pipeline consumers can rely on `result_source`, `error_stage`, `mock_data`, and `contract_version` for the core RAGAS path as well
+- regression coverage exists in `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py`
+
+### Seventh Legacy Migration Batch Has Started
+
+Maintained pytest coverage now also preserves core intent from additional print-driven legacy scripts focused on:
+
+- direct reporting smoke behavior
+- gates integration smoke behavior
+- enhanced evaluator initialization behavior
+
+Impact:
+
+- another batch of root-level debug and verification scripts now has maintained regression anchors
+- maintained coverage exists in `eval-pipeline/tests/test_legacy_root_script_regressions.py`
 
 ### Temporal Causality Metrics Now Participate In Main RAGAS Evaluation
 
@@ -362,7 +407,7 @@ These are still real limitations in the current repository and should not be ove
    Symbolic, spatial, intent, temporal, and swarm metrics now use backend adapters with fixture coverage, but they still do not represent fully externalized reasoning services or model-backed arbitration engines.
 
 4. Legacy root-level test scripts still exist.
-   More batches of their intent are now preserved in maintained pytest coverage, including the sixth migration batch, but the long tail of old `eval-pipeline/test_*.py` scripts has not been fully retired yet.
+   More batches of their intent are now preserved in maintained pytest coverage, including the sixth and seventh migration batches, but the long tail of old `eval-pipeline/test_*.py` scripts has not been fully retired yet.
 
 5. Repo-wide “all roadmap items complete” is still not an honest claim.
    The audit should continue to distinguish between implemented, partial, stub, and design-only items.
