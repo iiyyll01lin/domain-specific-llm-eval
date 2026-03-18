@@ -17,8 +17,11 @@ if str(SCRIPT_DIR) not in sys.path:
 from tiktoken_fallback import patch_tiktoken_with_fallback
 
 import test_comprehensive_fixes
+import test_config_check
 import test_custom_documents
 import test_document_chunking
+import test_orchestrator_update
+import test_report_generation
 
 
 def test_legacy_report_fixes_behaviour_is_covered(tmp_path: Path) -> None:
@@ -114,3 +117,43 @@ def test_legacy_comprehensive_fixes_behaviour_is_covered() -> None:
     assert config_path.exists()
     assert ragas_config is not None
     assert service_boundary.get("auth", {}).get("api_token") == "local-dev-reviewer-token"
+
+
+def test_legacy_config_check_behaviour_is_covered() -> None:
+    result = test_config_check.check_config_duplication()
+
+    assert result is True
+
+
+def test_legacy_report_generation_behaviour_is_covered(tmp_path: Path) -> None:
+    from src.reports.report_generator import ReportGenerator
+
+    generator = ReportGenerator({"reporting": {"enabled": True}})
+    eval_file = tmp_path / "evaluation.json"
+    eval_file.write_text(
+        json.dumps(
+            {
+                "rag_results": [
+                    {
+                        "question": "Q1",
+                        "answer": "A1",
+                        "context_precision": 0.7,
+                        "faithfulness": 0.8,
+                        "answer_relevancy": 0.75,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    reports = generator.generate_reports([eval_file], "legacy-report-generation")
+
+    assert reports
+
+
+def test_legacy_orchestrator_update_behaviour_is_covered() -> None:
+    result = test_orchestrator_update.test_orchestrator_testset_generation()
+
+    assert result["success"] is True
+    assert result["testsets_generated"] == 1

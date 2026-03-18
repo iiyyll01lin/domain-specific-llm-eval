@@ -69,6 +69,39 @@ Impact:
 - a minimal remote deployment contract now exists before introducing a production database or auth provider
 - regression coverage exists in `eval-pipeline/tests/test_reviewer_service_api.py`
 
+### Reviewer Service Now Has Configurable Auth Sources And Production Backend Wiring
+
+The maintained reviewer service now supports:
+
+- configurable reviewer principal and tenant-membership sources
+- static token auth for local/dev use
+- file-backed reviewer principal directories
+- internal signed-token auth for service-to-service or delegated issuer flows
+- PostgreSQL-backed reviewer state storage alongside the earlier SQLite adapter
+
+Impact:
+
+- reviewer principal resolution is no longer hard-wired only to a single local token path
+- tenant membership can now come from an explicit reviewer principal source instead of only runtime defaults
+- production persistence wiring is now available before a full managed deployment is introduced
+- regression coverage exists in `eval-pipeline/tests/test_reviewer_auth.py`, `eval-pipeline/tests/test_reviewer_state_repository_postgres.py`, `eval-pipeline/tests/test_reviewer_service.py`, and `eval-pipeline/tests/test_reviewer_service_api.py`
+
+### Reviewer Deployment Manifests Now Exist
+
+The repo now also includes reviewer-service deployment scaffolding with:
+
+- a dedicated compose file for reviewer-service + PostgreSQL + reverse proxy
+- an environment sample for deployment variables
+- readiness and liveness probes via `/readyz` and `/healthz`
+- Kubernetes deployment and ingress examples
+- reverse proxy header forwarding for reviewer auth context
+
+Impact:
+
+- reviewer service deployment is no longer only implicit or ad hoc
+- DB DSN wiring, health probes, and ingress/proxy structure now have concrete repo artifacts
+- the remaining work is operational hardening rather than first-pass deployment definition
+
 ### Temporal Causality Metrics Now Participate In Main RAGAS Evaluation
 
 `TemporalCausalityEvaluator` is now merged into `RagasEvaluator.evaluate(...)` so temporal reasoning signals can contribute to the formatted metrics payload when timeline-style inputs are present.
@@ -135,6 +168,21 @@ Impact:
 - error drill-down can now point to relevant retained artifacts directly
 - regression coverage exists in `eval-pipeline/tests/test_dashboard_data.py`
 
+### Failure Forensics Now Have A Searchable Artifact Index
+
+The retained observability layer now also includes:
+
+- anomaly severity classification
+- artifact search keys
+- run-to-run regression labels
+- retained issue clustering
+
+Impact:
+
+- retained telemetry can now be searched and grouped instead of only browsed manually
+- regressions across runs are easier to triage into stable, warning, and critical cohorts
+- regression coverage exists in `eval-pipeline/tests/test_dashboard_data.py`
+
 ### Additional Legacy Root Scripts Have Maintained Coverage Or Deprecation Markers
 
 Maintained pytest coverage now also preserves core intent from additional root scripts, while stale root scripts now carry deprecation markers pointing at maintained tests.
@@ -168,6 +216,16 @@ Impact:
 - the long tail of root scripts is shrinking in practical risk even before full retirement
 - maintained coverage exists in `eval-pipeline/tests/test_legacy_runtime_smoke_regressions.py`
 
+### Fifth Legacy Migration Batch Has Started
+
+Maintained pytest coverage now also preserves core intent from additional ad hoc scripts focused on config verification, report generation smoke checks, and orchestrator update verification.
+
+Impact:
+
+- more debug-heavy and verification-heavy root scripts are now covered by maintained regressions
+- the migration is now covering pipeline verification and direct reporting style scripts, not only narrower utilities
+- maintained coverage exists in `eval-pipeline/tests/test_legacy_runtime_smoke_regressions.py`
+
 ### Mock RAGAS Results Are Now Explicitly Marked As Mock
 
 The RAGAS bypass path now marks generated fallback results as mock outputs instead of letting them blend silently into normal result flows.
@@ -178,6 +236,26 @@ Impact:
 - missing mock metrics now raise explicit key errors instead of silently returning empty arrays
 - regression coverage exists in `eval-pipeline/tests/test_ragas_bypass_regression.py`
 
+### Additional Evaluation Fallback Paths Now Expose Source And Stage Metadata
+
+The maintained evaluation path now exposes clearer result provenance for more fallback branches, including RAGAS evaluator fallback and disabled/mock paths.
+
+Impact:
+
+- downstream consumers can distinguish between model-dump-fix mock results, generic fallback mock results, and explicit disabled paths
+- failure diagnosis is less dependent on log-only inspection
+- regression coverage exists in `eval-pipeline/tests/test_ragas_evaluator_domain_metrics.py`
+
+### Hardware Acceleration Path Now Attempts Real Inference Before Simulated Fallback
+
+The maintained `vLLMInferenceClient` now attempts a real completion request before falling back to simulated responses when the backend is unavailable or generation fails.
+
+Impact:
+
+- hardware observability is less likely to be based on fabricated generation paths when a real backend is reachable
+- fallback telemetry now more accurately reflects direct inference versus simulated response paths
+- regression coverage exists in `eval-pipeline/tests/test_v9_components.py` and `eval-pipeline/tests/test_pipeline_integration_regression.py`
+
 ## Remaining Practical Limitations
 
 These are still real limitations in the current repository and should not be overstated.
@@ -185,8 +263,8 @@ These are still real limitations in the current repository and should not be ove
 1. External-backend roadmap items are still only partially closed.
    Examples: full distributed execution, full marketplace trust service, real post-quantum cryptography, real cloud orchestration runtimes, and design-only V14 concepts still require infrastructure or product decisions outside this repo.
 
-2. Human feedback now has a maintained workflow, service boundary, and standalone API surface, but it is not yet a production-grade deployed service.
-   The repo now provides reviewer UI/API, SQLite-backed state storage, auth/identity/tenant/moderation service contracts, an optional remote client path, and a standalone reviewer-service app, but it still lacks persistent production storage, managed auth integration, service orchestration, and operational hardening.
+2. Human feedback now has a maintained workflow, configurable auth source, production-backend wiring, and standalone API surface, but it is not yet a production-grade deployed service.
+   The repo now provides reviewer UI/API, SQLite and PostgreSQL-backed state paths, configurable principal sources, auth/identity/tenant/moderation contracts, an optional remote client path, standalone reviewer-service deployment manifests, and a standalone reviewer-service app, but it still lacks managed secrets, managed auth integration, service orchestration, audited production rollout, and real operations automation.
 
 3. Several advanced evaluators are now contract-backed, but they are still deterministic local engines.
    Symbolic, spatial, intent, temporal, and swarm metrics now use backend adapters with fixture coverage, but they still do not represent fully externalized reasoning services or model-backed arbitration engines.
@@ -200,7 +278,7 @@ These are still real limitations in the current repository and should not be ove
 ## Recommended Next Engineering Steps
 
 1. Continue migrating remaining `eval-pipeline/test_*.py` scripts into `eval-pipeline/tests/` and then retire the old scripts in batches.
-2. Replace the current SQLite-backed reviewer persistence adapter behind the standalone reviewer-service API with a production persistence backend only after tenancy, auth source, and audit requirements are finalized.
+2. Connect the reviewer service to a managed principal source or OIDC provider only after claim mapping, tenancy semantics, and audit logging requirements are finalized.
 3. Continue replacing heuristic evaluators with backend adapters only where deterministic fixtures and regression coverage can be maintained, prioritizing remaining mock or inconsistent fallback paths.
-4. Expand hardware observability from current retained summaries and failure forensics into longer-horizon retention, richer anomaly classification, and artifact searchability.
+4. Expand hardware observability from current retained summaries, searchable forensics, and anomaly labels into longer-horizon retention, richer clustering, and operator-facing triage workflows.
 5. Keep V14 items design-gated until a reproducible simulator or scoring contract exists.

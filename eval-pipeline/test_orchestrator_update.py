@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-"""
-Test script to verify the orchestrator update works with the new hybrid testset generator.
+"""Deprecated legacy script.
 
-This script demonstrates:
-1. The import change from testset_generator to hybrid_testset_generator
-2. The API change from generate_testsets to generate_comprehensive_testset
-3. The new data structure handling
+Maintained coverage now lives in eval-pipeline/tests/test_legacy_runtime_smoke_regressions.py.
 """
 
 from pathlib import Path
