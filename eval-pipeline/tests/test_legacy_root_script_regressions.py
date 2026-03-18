@@ -298,3 +298,51 @@ def test_legacy_direct_orchestrator_script_behaviour_is_covered(monkeypatch, tmp
 
     assert hasattr(orchestrator, "run")
     assert orchestrator.run_id == "run-id"
+
+
+def test_legacy_document_processing_script_behaviour_is_covered(tmp_path: Path) -> None:
+    from data.document_processor import DocumentProcessor
+
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    sample_doc = docs_dir / "doc.txt"
+    sample_doc.write_text("Document processing regression coverage sample.", encoding="utf-8")
+
+    processor = DocumentProcessor({"text_files": [str(sample_doc)]}, tmp_path / "processed")
+    processed = processor.process_documents()
+
+    assert len(processed) == 1
+    assert processed[0]["filename"] == "doc.txt"
+
+
+def test_legacy_local_generation_script_behaviour_is_covered() -> None:
+    from local_dataset_generator import LocalSyntheticDatasetGenerator
+
+    generator = LocalSyntheticDatasetGenerator({"local": {}, "fallback": {}})
+    assert generator is not None
+
+
+def test_legacy_comprehensive_report_script_behaviour_is_covered(tmp_path: Path) -> None:
+    generator = ReportGenerator({"paths": {"output_dir": str(tmp_path)}})
+    evaluation_results = pd.DataFrame(
+        [
+            {
+                "question": "What is the main benefit?",
+                "answer": "Efficiency.",
+                "context_precision": 0.5,
+                "context_recall": 0.88,
+                "faithfulness": 0.826,
+                "answer_relevancy": 0.634,
+                "kw_metric": 0.508,
+                "weighted_average_score": 0.71,
+            }
+        ]
+    )
+    reports = generator.generate_comprehensive_report(
+        evaluation_results=evaluation_results,
+        evaluation_summary={"run_id": "legacy", "timestamp": "2026-03-18T00:00:00"},
+        output_dir=tmp_path,
+    )
+
+    assert reports
+    assert "ragas_composite_score" in evaluation_results.columns

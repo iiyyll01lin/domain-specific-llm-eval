@@ -102,6 +102,98 @@ Impact:
 - DB DSN wiring, health probes, and ingress/proxy structure now have concrete repo artifacts
 - the remaining work is operational hardening rather than first-pass deployment definition
 
+### Internal Reviewer Tokens Now Have Issuance, Rotation, And Revocation State
+
+The maintained reviewer auth path now also supports a real internal issuer workflow with:
+
+- a dedicated token issuance service with persisted keyring state
+- signing-key rotation with grace windows via `kid` tracking
+- token revocation state keyed by `jti`
+- reviewer-service issuer endpoints for issuance, rotation, revocation, and issuer health
+- auth-source validation against keyring and revocation files instead of only a single shared secret
+
+Impact:
+
+- internal-token auth is no longer only a static signature verifier
+- service-to-service reviewer auth can now be exercised with a realistic issuance lifecycle before integrating an external IdP
+- regression coverage exists in `eval-pipeline/tests/test_reviewer_auth.py` and `eval-pipeline/tests/test_reviewer_service_api.py`
+
+### PostgreSQL Reviewer Backend Now Has Migration, Audit, Backup, And Pooling Contracts
+
+The maintained PostgreSQL reviewer backend now also supports:
+
+- explicit schema migration state tracking
+- connection-pool configuration hooks with TLS/connect-timeout DSN hardening
+- an audit-log schema for queue upserts, replacements, and reviewer-result ingestion
+- JSON backup / restore contracts for operational export and recovery drills
+- a dedicated migration CLI entrypoint for repository state initialization
+
+Impact:
+
+- reviewer persistence is no longer limited to best-effort schema creation in application startup
+- operational readiness now includes auditable state transitions and a reproducible backup surface
+- regression coverage exists in `eval-pipeline/tests/test_reviewer_state_repository_postgres.py`
+
+### Reviewer Deployment Hardening Has Advanced Beyond First-Pass Manifests
+
+The reviewer deployment scaffolding now also includes:
+
+- a Kubernetes `ServiceAccount`
+- a Kubernetes `Service`
+- a `NetworkPolicy`
+- a secret example manifest for DSN and issuer bootstrap material
+- startup probe support, container resource requests/limits, and container/pod security context hardening
+- structured reverse-proxy access logs with request IDs
+
+Impact:
+
+- deployment assets now cover the minimum production-hardening surface instead of only basic liveness/readiness wiring
+- reviewer-service ingress and runtime behavior are easier to operate and audit in cluster environments
+
+### Forensics Searchable Index Now Exposes An Operator Workflow Surface
+
+The retained observability layer now also exposes maintained helper paths for:
+
+- artifact search and filtering
+- severity-ordered triage queue generation
+- run-to-run artifact diff views
+- issue-cluster drill-down payloads
+
+Impact:
+
+- searchable forensics is no longer only a retained JSON artifact
+- operator-facing review flows can now be built on a maintained API/helper surface rather than manual artifact inspection
+- regression coverage exists in `eval-pipeline/tests/test_dashboard_data.py`
+
+### Sixth Legacy Migration Batch Now Has Maintained Coverage Anchors
+
+Maintained pytest coverage now also preserves core intent from additional root scripts focused on:
+
+- direct orchestrator smoke behavior
+- document processing smoke behavior
+- local generation smoke behavior
+- comprehensive report generation smoke behavior
+
+Impact:
+
+- the sixth migration batch closes more of the print-driven root-script tail the repo still carried
+- maintained coverage exists in `eval-pipeline/tests/test_legacy_root_script_regressions.py`
+
+### Fallback-Heavy Evaluators Now Share A More Explicit Result Contract
+
+The maintained evaluator layer now also has a shared result-contract helper with:
+
+- normalized `result_source`
+- normalized `error_stage`
+- normalized `mock_data`
+- explicit `contract_version`
+
+Impact:
+
+- fallback-heavy evaluators are less likely to drift into incompatible result shapes
+- reviewer, reporting, and downstream debugging paths can rely on a more stable provenance contract
+- regression coverage exists in `eval-pipeline/tests/test_evaluator_result_contracts.py`
+
 ### Temporal Causality Metrics Now Participate In Main RAGAS Evaluation
 
 `TemporalCausalityEvaluator` is now merged into `RagasEvaluator.evaluate(...)` so temporal reasoning signals can contribute to the formatted metrics payload when timeline-style inputs are present.
@@ -263,14 +355,14 @@ These are still real limitations in the current repository and should not be ove
 1. External-backend roadmap items are still only partially closed.
    Examples: full distributed execution, full marketplace trust service, real post-quantum cryptography, real cloud orchestration runtimes, and design-only V14 concepts still require infrastructure or product decisions outside this repo.
 
-2. Human feedback now has a maintained workflow, configurable auth source, production-backend wiring, and standalone API surface, but it is not yet a production-grade deployed service.
-   The repo now provides reviewer UI/API, SQLite and PostgreSQL-backed state paths, configurable principal sources, auth/identity/tenant/moderation contracts, an optional remote client path, standalone reviewer-service deployment manifests, and a standalone reviewer-service app, but it still lacks managed secrets, managed auth integration, service orchestration, audited production rollout, and real operations automation.
+2. Human feedback now has a maintained workflow, configurable auth source, internal issuer lifecycle, production-backend wiring, operator-forensics helper surface, and hardened deployment scaffolding, but it is not yet a production-grade deployed service.
+   The repo now provides reviewer UI/API, SQLite and PostgreSQL-backed state paths, configurable principal sources, internal issuance / rotation / revocation state, audit-log and backup contracts, standalone reviewer-service deployment manifests with baseline hardening, and an operator-facing forensics helper surface, but it still lacks managed secrets, managed auth integration, service orchestration, audited production rollout, and real operations automation.
 
 3. Several advanced evaluators are now contract-backed, but they are still deterministic local engines.
    Symbolic, spatial, intent, temporal, and swarm metrics now use backend adapters with fixture coverage, but they still do not represent fully externalized reasoning services or model-backed arbitration engines.
 
 4. Legacy root-level test scripts still exist.
-   More batches of their intent are now preserved in maintained pytest coverage, but the long tail of old `eval-pipeline/test_*.py` scripts has not been fully retired yet.
+   More batches of their intent are now preserved in maintained pytest coverage, including the sixth migration batch, but the long tail of old `eval-pipeline/test_*.py` scripts has not been fully retired yet.
 
 5. Repo-wide “all roadmap items complete” is still not an honest claim.
    The audit should continue to distinguish between implemented, partial, stub, and design-only items.
