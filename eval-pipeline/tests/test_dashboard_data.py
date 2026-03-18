@@ -112,6 +112,7 @@ def test_build_observability_retention_index_persists_windowed_summary(tmp_path:
     assert Path(retention["retention_index_path"]).exists()
     assert retention["per_run_diffs"][0]["p95_latency_delta"] == 0.0
     assert retention["error_mode_artifacts"]["backend_unreachable"][0]["run_id"] == "pure_ragas_run_demo"
+    assert retention["searchable_artifacts"][0]["artifact_search_key"]
 
 
 def test_build_observability_retention_index_flags_anomalies(tmp_path: Path) -> None:
@@ -144,3 +145,7 @@ def test_build_observability_retention_index_flags_anomalies(tmp_path: Path) -> 
     anomaly_row = next(item for item in retention["anomaly_flags"] if item["run_id"] == "run_3")
     assert anomaly_row["is_anomalous"] is True
     assert "high_latency" in anomaly_row["flags"]
+    assert anomaly_row["severity"] == "critical"
+    regression_row = next(item for item in retention["regression_labels"] if item["run_id"] == "run_3")
+    assert "latency_regression" in regression_row["labels"]
+    assert retention["issue_clusters"]

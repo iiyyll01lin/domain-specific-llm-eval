@@ -117,6 +117,19 @@ else:
             for entry in entries:
                 cross_links.append({"error_mode": mode, **entry})
         st.dataframe(pd.DataFrame(cross_links), use_container_width=True)
+    searchable_df = pd.DataFrame(retention_index.get("searchable_artifacts", []))
+    if not searchable_df.empty:
+        st.caption("Searchable artifact index")
+        st.dataframe(searchable_df, use_container_width=True)
+    clusters = retention_index.get("issue_clusters", {})
+    if clusters:
+        st.caption("Retained issue clusters")
+        st.dataframe(
+            pd.DataFrame(
+                [{"cluster": key, **value} for key, value in clusters.items()]
+            ),
+            use_container_width=True,
+        )
 
 # Task 5 Orchestration
 st.subheader("Generate new Testset")

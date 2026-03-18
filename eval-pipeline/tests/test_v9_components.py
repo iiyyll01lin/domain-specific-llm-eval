@@ -26,6 +26,11 @@ class _FakeSession:
             return _FakeResponse({"gpu_utilization": 0.72, "kv_cache_utilization": 0.33})
         return _FakeResponse(self.payload)
 
+    def post(self, url, json=None, timeout=0):
+        assert url.endswith("/completions")
+        prompt = (json or {}).get("prompt", "")
+        return _FakeResponse({"choices": [{"text": f"Hardware Accelerated Response for: {prompt}"}]})
+
 
 def test_optuna_optimizer(tmp_path) -> None:
     opt = OptunaOptimizer(output_dir=str(tmp_path), n_trials=6)

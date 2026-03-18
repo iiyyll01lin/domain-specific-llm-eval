@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+def _cluster_key(severity: str, labels: List[str]) -> str:
+    label_part = "+".join(sorted(labels)) if labels else "stable"
+    return f"{severity}:{label_part}"
+
+
 def load_telemetry_data(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
     resolved_base_dir = Path(base_dir or Path(__file__).resolve().parents[2])
     outputs_dir = resolved_base_dir / "outputs"
@@ -248,17 +253,77 @@ def build_observability_retention_index(
         views["latency_trends"], views["fallback_trends"]
     ):
         flags: List[str] = []
+        severity = "info"
         if latency_item["p95_latency_seconds"] > latency_threshold and latency_threshold > 0:
             flags.append("high_latency")
         if fallback_item["fallback_ratio"] > fallback_threshold and fallback_threshold > 0:
             flags.append("high_fallback_ratio")
+        if len(flags) >= 2:
+            severity = "critical"
+        elif flags:
+            severity = "warning"
         anomaly_flags.append(
             {
                 "run_id": latency_item["run_id"],
                 "flags": flags,
+                "severity": severity,
                 "is_anomalous": bool(flags),
             }
         )
+
+    regression_labels: List[Dict[str, Any]] = []
+    for diff_entry in per_run_diffs:
+        labels: List[str] = []
+        if diff_entry["p95_latency_delta"] > 0.2:
+            labels.append("latency_regression")
+        elif diff_entry["p95_latency_delta"] < -0.2:
+            labels.append("latency_improvement")
+        if diff_entry["fallback_ratio_delta"] > 0.1:
+            labels.append("fallback_regression")
+        elif diff_entry["fallback_ratio_delta"] < -0.1:
+            labels.append("fallback_improvement")
+        regression_labels.append(
+            {
+                "run_id": diff_entry["run_id"],
+                "labels": labels or ["stable"],
+            }
+        )
+
+    searchable_artifacts: List[Dict[str, Any]] = []
+    issue_clusters: Dict[str, Dict[str, Any]] = {}
+    for artifact in run_artifacts:
+        anomaly = next(
+            (row for row in anomaly_flags if row["run_id"] == artifact["run_id"]),
+            {"severity": "info", "flags": [], "is_anomalous": False},
+        )
+        labels = next(
+            (row["labels"] for row in regression_labels if row["run_id"] == artifact["run_id"]),
+            ["stable"],
+        )
+        search_key = "|".join(
+            [
+                str(artifact["run_id"]),
+                str(anomaly.get("severity", "info")),
+                ",".join(labels),
+                str(artifact.get("hardware_observability_artifact", "")),
+                str(artifact.get("telemetry_artifact", "")),
+            ]
+        )
+        searchable_entry = {
+            **artifact,
+            "severity": anomaly.get("severity", "info"),
+            "regression_labels": labels,
+            "artifact_search_key": search_key,
+        }
+        searchable_artifacts.append(searchable_entry)
+
+        cluster_name = _cluster_key(str(anomaly.get("severity", "info")), list(labels))
+        cluster = issue_clusters.setdefault(
+            cluster_name,
+            {"severity": anomaly.get("severity", "info"), "labels": labels, "run_ids": [], "count": 0},
+        )
+        cluster["run_ids"].append(artifact["run_id"])
+        cluster["count"] += 1
 
     retention_index = {
         "retained_runs": len(trimmed_runs),
@@ -268,6 +333,9 @@ def build_observability_retention_index(
         "error_drilldown": error_drilldown,
         "error_mode_artifacts": error_mode_artifacts,
         "anomaly_flags": anomaly_flags,
+        "regression_labels": regression_labels,
+        "searchable_artifacts": searchable_artifacts,
+        "issue_clusters": issue_clusters,
         "artifacts": run_artifacts,
     }
 

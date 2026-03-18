@@ -41,6 +41,11 @@ class _HardwareSession:
             return _HardwareResponse({"data": [{"id": "model-a"}]})
         return _HardwareResponse({"gpu_utilization": 0.8, "memory_utilization": 0.5})
 
+    def post(self, endpoint, json=None, timeout=0):
+        return _HardwareResponse(
+            {"choices": [{"text": f"Hardware Accelerated Response for: {(json or {}).get('prompt', '')}"}]}
+        )
+
 
 def test_orchestrator_taxonomy_topology_appstore_and_federated_helpers(tmp_path: Path) -> None:
     manifest_dir = tmp_path / "manifests"

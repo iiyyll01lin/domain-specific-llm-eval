@@ -41,6 +41,25 @@ class vLLMInferenceClient:
             return {}
         return {}
 
+    def _parse_generation_response(self, payload: Any, prompt: str) -> str:
+        if isinstance(payload, dict):
+            choices = payload.get("choices")
+            if isinstance(choices, list) and choices:
+                first_choice = choices[0]
+                if isinstance(first_choice, dict):
+                    text = first_choice.get("text")
+                    if isinstance(text, str) and text.strip():
+                        return text
+                    message = first_choice.get("message")
+                    if isinstance(message, dict):
+                        content = message.get("content")
+                        if isinstance(content, str) and content.strip():
+                            return content
+            generated_text = payload.get("generated_text")
+            if isinstance(generated_text, str) and generated_text.strip():
+                return generated_text
+        return f"Hardware Accelerated Response for: {prompt}"
+
     def get_capabilities(self) -> Dict[str, Any]:
         try:
             response = self.session.get(f"{self.endpoint_url}/models", timeout=self.timeout)
@@ -134,11 +153,39 @@ class vLLMInferenceClient:
         capabilities = self.get_capabilities()
         self.is_connected = bool(capabilities["connected"])
         logger.info(f"Generating via vLLM TensorRT at {self.endpoint_url} (300+ tok/s)")
-        response = f"Hardware Accelerated Response for: {prompt}"
+        error_mode = "none"
+        fallback_path = "direct_vllm"
+        request_status = "success"
+        if self.is_connected:
+            try:
+                model_ids = capabilities.get("model_ids", []) if isinstance(capabilities, dict) else []
+                payload = {
+                    "model": model_ids[0] if model_ids else None,
+                    "prompt": prompt,
+                    "max_tokens": 128,
+                }
+                response_payload = self.session.post(
+                    f"{self.endpoint_url}/completions",
+                    json=payload,
+                    timeout=self.timeout,
+                )
+                response_payload.raise_for_status()
+                response = self._parse_generation_response(response_payload.json(), prompt)
+            except Exception as exc:
+                logger.warning("vLLM generation failed, using simulated fallback: %s", exc)
+                response = f"Hardware Accelerated Response for: {prompt}"
+                self.is_connected = False
+                error_mode = "generation_failed"
+                fallback_path = "simulated_response"
+                request_status = "fallback"
+        else:
+            response = f"Hardware Accelerated Response for: {prompt}"
+            error_mode = "backend_unreachable"
+            fallback_path = "simulated_response"
+            request_status = "fallback"
+
         duration = max(time.perf_counter() - started_at, 1e-6)
         generated_tokens = self._estimate_tokens(response)
-        error_mode = "none" if self.is_connected else "backend_unreachable"
-        fallback_path = "direct_vllm" if self.is_connected else "simulated_response"
         self.last_generation_telemetry = {
             "prompt_chars": len(prompt),
             "prompt_tokens_estimate": self._estimate_tokens(prompt),
@@ -149,7 +196,7 @@ class vLLMInferenceClient:
             "endpoint": self.endpoint_url,
             "backend": capabilities.get("backend", "vllm"),
             "runtime_metrics": capabilities.get("runtime_metrics", {}),
-            "request_status": "success",
+            "request_status": request_status,
             "error_mode": error_mode,
             "fallback_path": fallback_path,
         }
