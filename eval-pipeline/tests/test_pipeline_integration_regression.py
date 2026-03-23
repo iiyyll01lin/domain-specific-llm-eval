@@ -2,10 +2,39 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import MagicMock, patch
 
+from src.evaluation.evaluation_result_contract import (
+    EVALUATION_RESULT_CONTRACT_VERSION,
+    attach_result_contract,
+    evaluation_error_result,
+)
 from src.pipeline.orchestrator import PipelineOrchestrator
 from src.ui.app_store_marketplace import UnifiedAppStore
 from src.ui.force_graph_viewer import ForceGraphVisualizer
+
+# ---------------------------------------------------------------------------
+# Contract assertion helpers
+# ---------------------------------------------------------------------------
+
+_REQUIRED_CONTRACT_KEYS = {
+    "success",
+    "result_source",
+    "error_stage",
+    "mock_data",
+    "contract_version",
+}
+
+
+def _assert_contract(result: Dict[str, Any], *, source: str, success: bool) -> None:
+    """Shared helper: verify all mandatory result-contract fields are present."""
+    missing = _REQUIRED_CONTRACT_KEYS - result.keys()
+    assert not missing, f"Missing contract keys: {missing}"
+    assert result["contract_version"] == EVALUATION_RESULT_CONTRACT_VERSION
+    assert result["result_source"] == source
+    assert result["success"] is success
+    assert isinstance(result["mock_data"], bool)
 
 
 class _FederatedResponse:
@@ -143,3 +172,184 @@ def test_orchestrator_collects_hardware_acceleration_telemetry() -> None:
     assert telemetry["observability"]["gpu_saturation"]["saturation_level"] == "moderate"
     assert telemetry["request_distribution"]["total_requests"] >= 1
     assert telemetry["benchmarks"][0]["latency_samples_seconds"]
+
+# ---------------------------------------------------------------------------
+# _run_evaluation() — end-to-end contract assertions
+# ---------------------------------------------------------------------------
+
+def _make_eval_orchestrator(tmp_path: Path) -> PipelineOrchestrator:
+    """Build a minimal PipelineOrchestrator stub for evaluation-stage tests."""
+    orchestrator = object.__new__(PipelineOrchestrator)
+    orchestrator.run_id = "run-eval-contract"
+    orchestrator.config = {}
+    orchestrator.output_dirs = {
+        "testsets": tmp_path / "testsets",
+        "metadata": tmp_path / "metadata",
+        "evaluations": tmp_path / "evaluations",
+    }
+    for d in orchestrator.output_dirs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    orchestrator.memory_tracker = MagicMock()
+    orchestrator.hyperparameter_optimizer = None
+    orchestrator.federated_client = MagicMock()
+    orchestrator.federated_client  # silence "unused" warning
+    orchestrator.hardware_acceleration_client = None
+    return orchestrator
+
+
+def test_run_evaluation_success_contract_shape(tmp_path: Path) -> None:
+    """_run_evaluation() success path must carry all normalised contract fields."""
+    orchestrator = _make_eval_orchestrator(tmp_path)
+
+    # Plant a fake testset xlsx so the stage can find it
+    testset_file = orchestrator.output_dirs["testsets"] / "testset.xlsx"
+    testset_file.write_bytes(b"fake-xlsx")
+
+    mock_eval_result = {
+        "success": True,
+        "total_queries": 5,
+        "keyword_metrics": {"pass_rate": 0.8},
+        "ragas_metrics": {"average_score": 0.7},
+        "feedback_metrics": {"requests": 1},
+        "output_file": "eval_out.json",
+    }
+    orchestrator.rag_evaluator = MagicMock()
+    orchestrator.rag_evaluator.evaluate_testsets.return_value = mock_eval_result
+
+    result = orchestrator._run_evaluation()
+
+    _assert_contract(result, source="pipeline_orchestrator_evaluation", success=True)
+    assert result["testsets_evaluated"] == 1
+    assert result["queries_executed"] == 5
+    assert isinstance(result["duration"], float)
+    assert isinstance(result["metadata_file"], str)
+
+
+def test_run_evaluation_failure_contract_shape(tmp_path: Path) -> None:
+    """_run_evaluation() failure path must carry all normalised contract fields."""
+    orchestrator = _make_eval_orchestrator(tmp_path)
+    # No testset files -> will raise immediately
+
+    result = orchestrator._run_evaluation()
+
+    _assert_contract(result, source="pipeline_orchestrator_evaluation", success=False)
+    assert result["error_stage"] == "evaluation"
+    assert "error" in result
+    assert isinstance(result["error"], str)
+
+
+def test_run_evaluation_evaluator_raises_contract_shape(tmp_path: Path) -> None:
+    """_run_evaluation() propagates evaluator exceptions via the contract."""
+    orchestrator = _make_eval_orchestrator(tmp_path)
+
+    testset_file = orchestrator.output_dirs["testsets"] / "testset.xlsx"
+    testset_file.write_bytes(b"fake-xlsx")
+
+    orchestrator.rag_evaluator = MagicMock()
+    orchestrator.rag_evaluator.evaluate_testsets.side_effect = RuntimeError("eval-boom")
+
+    result = orchestrator._run_evaluation()
+
+    _assert_contract(result, source="pipeline_orchestrator_evaluation", success=False)
+    assert result["error_stage"] == "evaluation"
+    assert "eval-boom" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# _run_reporting() — end-to-end contract assertions
+# ---------------------------------------------------------------------------
+
+def _make_report_orchestrator(tmp_path: Path) -> PipelineOrchestrator:
+    """Build a minimal PipelineOrchestrator stub for reporting-stage tests."""
+    orchestrator = object.__new__(PipelineOrchestrator)
+    orchestrator.run_id = "run-report-contract"
+    orchestrator.config = {}
+    orchestrator.output_dirs = {
+        "metadata": tmp_path / "metadata",
+        "evaluations": tmp_path / "evaluations",
+        "reports": tmp_path / "reports",
+    }
+    for d in orchestrator.output_dirs.values():
+        d.mkdir(parents=True, exist_ok=True)
+    orchestrator.memory_tracker = MagicMock()
+    orchestrator.topology_visualizer = ForceGraphVisualizer()
+    return orchestrator
+
+
+def test_run_reporting_success_contract_shape(tmp_path: Path) -> None:
+    """_run_reporting() success path must carry all normalised contract fields."""
+    orchestrator = _make_report_orchestrator(tmp_path)
+
+    # Plant a fake eval-results file in metadata dir
+    eval_file = orchestrator.output_dirs["metadata"] / "evaluation_results_test.json"
+    eval_file.write_text(json.dumps({"results": []}), encoding="utf-8")
+
+    mock_reports = [
+        {"type": "html", "file_path": str(tmp_path / "report.html")},
+        {"type": "json", "file_path": str(tmp_path / "report.json")},
+    ]
+    orchestrator.report_generator = MagicMock()
+    orchestrator.report_generator.generate_reports.return_value = mock_reports
+
+    result = orchestrator._run_reporting()
+
+    _assert_contract(result, source="pipeline_orchestrator_reporting", success=True)
+    assert result["reports_generated"] == mock_reports
+    assert isinstance(result["report_directory"], str)
+    assert isinstance(result["metadata_file"], str)
+    assert isinstance(result["duration"], float)
+
+
+def test_run_reporting_failure_contract_shape(tmp_path: Path) -> None:
+    """_run_reporting() failure path must carry all normalised contract fields."""
+    orchestrator = _make_report_orchestrator(tmp_path)
+    # No eval files in any directory -> will raise
+
+    result = orchestrator._run_reporting()
+
+    _assert_contract(result, source="pipeline_orchestrator_reporting", success=False)
+    assert result["error_stage"] == "reporting"
+    assert "error" in result
+    assert isinstance(result["error"], str)
+
+
+def test_run_reporting_generator_raises_contract_shape(tmp_path: Path) -> None:
+    """_run_reporting() propagates report generator exceptions via the contract."""
+    orchestrator = _make_report_orchestrator(tmp_path)
+
+    eval_file = orchestrator.output_dirs["metadata"] / "evaluation_results_test.json"
+    eval_file.write_text(json.dumps({"results": []}), encoding="utf-8")
+
+    orchestrator.report_generator = MagicMock()
+    orchestrator.report_generator.generate_reports.side_effect = RuntimeError(
+        "report-boom"
+    )
+
+    result = orchestrator._run_reporting()
+
+    _assert_contract(result, source="pipeline_orchestrator_reporting", success=False)
+    assert result["error_stage"] == "reporting"
+    assert "report-boom" in result["error"]
+
+
+def test_run_evaluation_contract_missing_testsets_dir(tmp_path: Path) -> None:
+    """_run_evaluation(): missing testsets dir is handled gracefully via contract."""
+    orchestrator = _make_eval_orchestrator(tmp_path)
+    # Remove testsets dir to simulate missing directory
+    import shutil
+    shutil.rmtree(orchestrator.output_dirs["testsets"])
+
+    result = orchestrator._run_evaluation()
+
+    # Should produce a failure contract, not an unhandled exception
+    _assert_contract(result, source="pipeline_orchestrator_evaluation", success=False)
+
+
+def test_run_reporting_contract_error_stage_is_string(tmp_path: Path) -> None:
+    """_run_reporting(): error_stage is always a non-empty string on failure."""
+    orchestrator = _make_report_orchestrator(tmp_path)
+
+    result = orchestrator._run_reporting()
+
+    assert isinstance(result.get("error_stage"), str)
+    assert len(result["error_stage"]) > 0
