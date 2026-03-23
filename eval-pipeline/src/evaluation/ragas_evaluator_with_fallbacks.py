@@ -10,6 +10,7 @@ This module implements a robust RAGAS evaluation system that:
 
 import json
 import logging
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,18 @@ from typing import Any, Dict, List, Optional, Union
 import pandas as pd
 
 from .evaluation_result_contract import attach_result_contract, evaluation_error_result
+
+# NaN handling utilities from the shared utils package
+try:
+    from utils.nan_handling import (
+        apply_nan_tolerance,
+        calculate_robust_summary_stats,
+        is_valid_score,
+        validate_metric_results,
+    )
+    _NAN_HANDLING_AVAILABLE = True
+except ImportError:
+    _NAN_HANDLING_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +152,10 @@ class RAGASEvaluatorWithFallbacks:
         self.llm_metrics = []
         self.nonllm_metrics = []
         self.legacy_metrics = []
+
+        # Structured extraction failure tracking: each entry is a dict with
+        # keys: metric_name, attempted_paths, result_type, error_detail, timestamp
+        self.extraction_failures: List[Dict[str, Any]] = []
 
         # Setup custom LLM and embeddings
         self._setup_llm_and_embeddings()
@@ -543,12 +560,8 @@ class RAGASEvaluatorWithFallbacks:
 
                     if scores and any(s is not None for s in scores):
                         # Use robust NaN handling utilities
-                        import sys
-                        from pathlib import Path
-
-                        sys.path.append(str(Path(__file__).parent.parent / "utils"))
-                        from nan_handling import (
-                            calculate_robust_summary_stats, is_valid_score)
+                        if not _NAN_HANDLING_AVAILABLE:
+                            raise ImportError("nan_handling utils not available")
 
                         # Calculate robust statistics
                         stats = calculate_robust_summary_stats(scores, metric_name)
@@ -799,16 +812,36 @@ class RAGASEvaluatorWithFallbacks:
                         f"Failed to extract via indexing for {metric_name}: {e}"
                     )
 
+            failure_record: Dict[str, Any] = {
+                "metric_name": metric_name,
+                "result_type": str(type(result)),
+                "attempted_paths": ["dataframe", "dict", "attribute", "index"],
+                "error_detail": (
+                    f"No matching column/key/attribute found in result of type "
+                    f"{type(result).__name__}"
+                ),
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.extraction_failures.append(failure_record)
             logger.warning(
                 f"Could not extract scores for {metric_name} from result type {type(result)}"
             )
             logger.error(
-                "Metric extraction failed for '%s' after trying DataFrame, dict, attribute, and index access paths",
+                "Metric extraction failed for '%s' after trying DataFrame, dict, attribute, "
+                "and index access paths [extraction_failure recorded]",
                 metric_name,
             )
             return []
 
         except Exception as e:
+            failure_record = {
+                "metric_name": metric_name,
+                "result_type": str(type(result)),
+                "attempted_paths": ["dataframe", "dict", "attribute", "index"],
+                "error_detail": str(e),
+                "timestamp": datetime.now().isoformat(),
+            }
+            self.extraction_failures.append(failure_record)
             logger.error(f"Error extracting scores for {metric_name}: {e}")
             return []
 
@@ -1020,12 +1053,8 @@ class RAGASEvaluatorWithFallbacks:
                 logger.info(f"💾 Enhanced detailed calculations saved: {detailed_file}")
 
             # Apply NaN tolerance to final results
-            import sys
-            from pathlib import Path
-
-            sys.path.append(str(Path(__file__).parent.parent / "utils"))
-            from nan_handling import (apply_nan_tolerance,
-                                      validate_metric_results)
+            if not _NAN_HANDLING_AVAILABLE:
+                raise ImportError("nan_handling utils not available")
 
             # Clean up results before saving
             all_results = apply_nan_tolerance(
@@ -1097,6 +1126,29 @@ class RAGASEvaluatorWithFallbacks:
                 fallback_source = "ragas_nonllm_fallback"
                 fallback_error_stage = "llm_metrics"
 
+            # Persist structured extraction failures as a dedicated artifact so
+            # downstream consumers can inspect them without parsing log output.
+            extraction_failures_file: Optional[str] = None
+            if self.extraction_failures:
+                extraction_failures_file = str(
+                    output_dir / f"ragas_extraction_failures_{timestamp}.json"
+                )
+                with open(extraction_failures_file, "w", encoding="utf-8") as _ef:
+                    json.dump(
+                        {
+                            "evaluation_timestamp": timestamp,
+                            "total_failures": len(self.extraction_failures),
+                            "failures": self.extraction_failures,
+                        },
+                        _ef,
+                        indent=2,
+                    )
+                logger.warning(
+                    "⚠️ %d metric extraction failure(s) persisted to: %s",
+                    len(self.extraction_failures),
+                    extraction_failures_file,
+                )
+
             return attach_result_contract({
                 "success": True,
                 "evaluation_type": "ragas_with_comprehensive_fallbacks",
@@ -1109,6 +1161,9 @@ class RAGASEvaluatorWithFallbacks:
                 "results_file": str(results_file),
                 "timestamp": timestamp,
                 "fallback_summary": comprehensive_results["fallback_summary"],
+                "extraction_failures": self.extraction_failures,
+                "extraction_failures_file": extraction_failures_file,
+                "extraction_failure_count": len(self.extraction_failures),
             },
                 result_source=fallback_source,
                 success=True,
