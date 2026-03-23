@@ -239,6 +239,36 @@ Impact:
 - another batch of root-level debug and verification scripts now has maintained regression anchors
 - maintained coverage exists in `eval-pipeline/tests/test_legacy_root_script_regressions.py`
 
+### More Evaluator And Pipeline Surfaces Now Share The Normalized Result Contract
+
+The maintained evaluation and orchestration layer now also normalizes more high-traffic result paths, including:
+
+- `RAGEvaluator.evaluate_single_testset(...)` and `RAGEvaluator.evaluate_testsets(...)`
+- `ComprehensiveRAGEvaluatorFixed.evaluate_testset(...)`
+- `ComprehensiveRAGEvaluatorFixed._generate_comprehensive_report(...)`
+- `PipelineOrchestrator` stage results for testset generation, evaluation, and reporting
+- the older `ComprehensiveRAGEvaluator` contextual, RAGAS, and testset-level outputs
+
+Impact:
+
+- downstream pipeline stages are less dependent on ad hoc `success` and `error` shapes
+- batch and stage failures now carry clearer provenance through `result_source`, `error_stage`, and `contract_version`
+- regression coverage exists in `eval-pipeline/tests/test_rag_evaluator_regression.py`, `eval-pipeline/tests/test_evaluator_result_contracts.py`, and `eval-pipeline/tests/test_pipeline_integration_regression.py`
+
+### Eighth Legacy Migration Batch Has Started
+
+Maintained pytest coverage now also preserves core intent from additional print-driven legacy scripts focused on:
+
+- detailed CSV pipeline verification behavior
+- pure-RAGAS conversion and generation smoke behavior
+- orchestrator initialization smoke behavior
+
+Impact:
+
+- more root-level verification scripts now have deterministic maintained regression anchors
+- the remaining legacy test-script tail is smaller and better documented by executable tests
+- maintained coverage exists in `eval-pipeline/tests/test_legacy_root_script_regressions.py`
+
 ### Temporal Causality Metrics Now Participate In Main RAGAS Evaluation
 
 `TemporalCausalityEvaluator` is now merged into `RagasEvaluator.evaluate(...)` so temporal reasoning signals can contribute to the formatted metrics payload when timeline-style inputs are present.
