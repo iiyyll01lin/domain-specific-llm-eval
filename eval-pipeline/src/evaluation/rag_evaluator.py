@@ -18,11 +18,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from .evaluation_result_contract import (attach_result_contract,
+                                         evaluation_error_result)
+
 logger = logging.getLogger(__name__)
 
 
 class RAGEvaluator:
     """Main RAG system evaluator that coordinates different evaluation approaches."""
+
+    @staticmethod
+    def _result_failed(result: Dict[str, Any]) -> bool:
+        """Detect downstream evaluator failure using the normalized contract when present."""
+        if not isinstance(result, dict):
+            return False
+        if "success" in result:
+            return not bool(result.get("success"))
+        return "error" in result
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -357,14 +369,22 @@ class RAGEvaluator:
                     )
                 except Exception as e:
                     logger.error(f"Keyword evaluation failed: {e}")
-                    keyword_metrics = {"error": str(e)}
-            if "error" in keyword_metrics:
-                return {
-                    "testset_path": testset_path,
-                    "error": keyword_metrics["error"],
-                    "keyword_metrics": keyword_metrics,
-                    "evaluation_timestamp": datetime.now().isoformat(),
-                }
+                    keyword_metrics = evaluation_error_result(
+                        result_source="rag_evaluator_keyword_metrics",
+                        error_stage="keyword_evaluation",
+                        error=str(e),
+                    )
+            if self._result_failed(keyword_metrics):
+                return evaluation_error_result(
+                    result_source="rag_evaluator",
+                    error_stage="keyword_evaluation",
+                    error=keyword_metrics.get("error", "Keyword evaluation failed"),
+                    extra={
+                        "testset_path": testset_path,
+                        "keyword_metrics": keyword_metrics,
+                        "evaluation_timestamp": datetime.now().isoformat(),
+                    },
+                )
 
             # Step 5: Calculate RAGAS metrics on RAG responses
             ragas_metrics = {}
@@ -380,15 +400,23 @@ class RAGEvaluator:
                     )
                 except Exception as e:
                     logger.error(f"RAGAS evaluation failed: {e}")
-                    ragas_metrics = {"error": str(e)}
-            if "error" in ragas_metrics:
-                return {
-                    "testset_path": testset_path,
-                    "error": ragas_metrics["error"],
-                    "keyword_metrics": keyword_metrics,
-                    "ragas_metrics": ragas_metrics,
-                    "evaluation_timestamp": datetime.now().isoformat(),
-                }
+                    ragas_metrics = evaluation_error_result(
+                        result_source="rag_evaluator_ragas_metrics",
+                        error_stage="ragas_evaluation",
+                        error=str(e),
+                    )
+            if self._result_failed(ragas_metrics):
+                return evaluation_error_result(
+                    result_source="rag_evaluator",
+                    error_stage="ragas_evaluation",
+                    error=ragas_metrics.get("error", "RAGAS evaluation failed"),
+                    extra={
+                        "testset_path": testset_path,
+                        "keyword_metrics": keyword_metrics,
+                        "ragas_metrics": ragas_metrics,
+                        "evaluation_timestamp": datetime.now().isoformat(),
+                    },
+                )
 
             # Step 6: Compile results
             results = {
@@ -403,15 +431,23 @@ class RAGEvaluator:
             }
 
             logger.info("✅ RAG evaluation completed successfully")
-            return results
+            return attach_result_contract(
+                results,
+                result_source="rag_evaluator",
+                success=True,
+            )
 
         except Exception as e:
             logger.error(f"❌ RAG evaluation failed: {e}")
-            return {
-                "testset_path": testset_path,
-                "error": str(e),
-                "evaluation_timestamp": datetime.now().isoformat(),
-            }
+            return evaluation_error_result(
+                result_source="rag_evaluator",
+                error_stage="evaluate_single_testset",
+                error=str(e),
+                extra={
+                    "testset_path": testset_path,
+                    "evaluation_timestamp": datetime.now().isoformat(),
+                },
+            )
 
     def evaluate_testsets(self, testset_files: List[str]) -> Dict[str, Any]:
         """
@@ -425,48 +461,71 @@ class RAGEvaluator:
         """
         logger.info(f"🔄 Evaluating RAG system with {len(testset_files)} testsets...")
 
-        all_results = []
-        failed_results = []
-        total_queries = 0
-        total_successful = 0
+        try:
+            all_results = []
+            failed_results = []
+            total_queries = 0
+            total_successful = 0
 
-        for testset_file in testset_files:
-            logger.info(f"📋 Processing testset: {Path(testset_file).name}")
+            for testset_file in testset_files:
+                logger.info(f"📋 Processing testset: {Path(testset_file).name}")
 
-            result = self.evaluate_single_testset(str(testset_file))
-            all_results.append(result)
-            if "error" in result:
-                failed_results.append(result)
-                continue
+                result = self.evaluate_single_testset(str(testset_file))
+                all_results.append(result)
+                result_success = (
+                    result.get("success")
+                    if "success" in result
+                    else "error" not in result
+                )
+                if not result_success:
+                    failed_results.append(result)
+                    continue
 
-            total_queries += result.get("total_questions", 0)
-            total_successful += result.get("successful_queries", 0)
+                total_queries += result.get("total_questions", 0)
+                total_successful += result.get("successful_queries", 0)
 
-        # Combine metrics from all testsets
-        combined_results = {
-            "total_testsets": len(testset_files),
-            "total_queries": total_queries,
-            "total_successful": total_successful,
-            "success_rate": (
-                total_successful / total_queries if total_queries > 0 else 0
-            ),
-            "individual_results": all_results,
-            "failed_results": failed_results,
-            "failed_testsets": len(failed_results),
-            "evaluation_timestamp": datetime.now().isoformat(),
-        }
+            # Combine metrics from all testsets
+            combined_results = {
+                "total_testsets": len(testset_files),
+                "total_queries": total_queries,
+                "total_successful": total_successful,
+                "success_rate": (
+                    total_successful / total_queries if total_queries > 0 else 0
+                ),
+                "individual_results": all_results,
+                "failed_results": failed_results,
+                "failed_testsets": len(failed_results),
+                "evaluation_timestamp": datetime.now().isoformat(),
+            }
 
-        # Save combined results
-        output_file = (
-            f"rag_evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        )
-        with open(output_file, "w") as f:
-            json.dump(combined_results, f, indent=2, default=str)
+            # Save combined results
+            output_file = (
+                f"rag_evaluation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            )
+            with open(output_file, "w") as f:
+                json.dump(combined_results, f, indent=2, default=str)
 
-        combined_results["output_file"] = output_file
+            combined_results["output_file"] = output_file
 
-        logger.info(f"✅ RAG evaluation completed. Results saved to: {output_file}")
-        return combined_results
+            logger.info(f"✅ RAG evaluation completed. Results saved to: {output_file}")
+            return attach_result_contract(
+                combined_results,
+                result_source="rag_evaluator_batch",
+                success=not failed_results,
+                error_stage="partial_failure" if failed_results else None,
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Batch RAG evaluation failed: {e}")
+            return evaluation_error_result(
+                result_source="rag_evaluator_batch",
+                error_stage="evaluate_testsets",
+                error=str(e),
+                extra={
+                    "total_testsets": len(testset_files),
+                    "evaluation_timestamp": datetime.now().isoformat(),
+                },
+            )
 
     def evaluate_testset(self, testset_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """

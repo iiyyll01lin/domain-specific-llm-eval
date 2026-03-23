@@ -1,8 +1,16 @@
 import sys
 import types
 
+import pandas as pd
+
+from src.evaluation.comprehensive_rag_evaluator_fixed import \
+    ComprehensiveRAGEvaluatorFixed
+from src.evaluation.comprehensive_rag_evaluator import \
+    ComprehensiveRAGEvaluator
 from src.evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
 from src.evaluation.gates_system import GatesSystem
+from src.evaluation.rag_evaluator import RAGEvaluator
+from src.pipeline.orchestrator import PipelineOrchestrator
 
 
 def test_gates_result_exposes_normalized_contract_fields() -> None:
@@ -115,4 +123,111 @@ def test_contextual_keyword_evaluator_aggregate_result_includes_contract_fields(
     assert result["success"] is True
     assert result["result_source"] == "contextual_keyword_evaluator"
     assert result["mock_data"] is False
+    assert result["contract_version"]
+
+
+def test_rag_evaluator_success_result_includes_contract_fields(tmp_path) -> None:
+    evaluator = object.__new__(RAGEvaluator)
+    testset_path = tmp_path / "testset.csv"
+    testset_path.write_text("question,ground_truth\nWhat changed?,Answer\n", encoding="utf-8")
+
+    evaluator.load_testset = lambda path: [{"question": "What changed?", "ground_truth": "Answer"}]  # type: ignore[method-assign]
+    evaluator.query_rag_system = lambda question: {"rag_answer": "normalized answer"}  # type: ignore[method-assign]
+    evaluator.keyword_evaluator = None
+    evaluator.ragas_evaluator = None
+    evaluator.extract_keywords_from_response = lambda answer: ["normalized"]  # type: ignore[method-assign]
+
+    result = RAGEvaluator.evaluate_single_testset(evaluator, str(testset_path))
+
+    assert result["success"] is True
+    assert result["result_source"] == "rag_evaluator"
+    assert result["mock_data"] is False
+    assert result["contract_version"]
+
+
+def test_comprehensive_rag_evaluator_missing_columns_result_includes_contract_fields(tmp_path) -> None:
+    evaluator = object.__new__(ComprehensiveRAGEvaluatorFixed)
+    evaluator.keyword_evaluator = None
+    evaluator.ragas_evaluator = None
+    evaluator.gates_system = None
+
+    testset_path = tmp_path / "invalid.csv"
+    pd.DataFrame({"question": ["What changed?"]}).to_csv(testset_path, index=False)
+
+    result = ComprehensiveRAGEvaluatorFixed.evaluate_testset(
+        evaluator,
+        testset_path,
+        tmp_path / "outputs",
+    )
+
+    assert result["success"] is False
+    assert result["result_source"] == "comprehensive_rag_evaluator_fixed"
+    assert result["error_stage"] == "validate_testset"
+    assert result["contract_version"]
+
+
+def test_comprehensive_rag_evaluator_contextual_result_includes_contract_fields() -> None:
+    evaluator = object.__new__(ComprehensiveRAGEvaluator)
+    evaluator.contextual_functions = {
+        "weighted_keyword_score": lambda mandatory, answer, weights, optional: (0.8, 0.75, 0.2, [answer]),
+    }
+    evaluator.contextual_weights = {"mandatory": 0.8, "optional": 0.2}
+    evaluator.contextual_threshold = 0.6
+
+    result = ComprehensiveRAGEvaluator.evaluate_contextual_keywords(
+        evaluator,
+        "A robotic assembly arm is visible.",
+        ["robotic", "assembly"],
+    )
+
+    assert result["success"] is True
+    assert result["result_source"] == "comprehensive_rag_evaluator"
+    assert result["contract_version"]
+
+
+def test_pipeline_orchestrator_stage_result_includes_contract_fields(tmp_path) -> None:
+    orchestrator = object.__new__(PipelineOrchestrator)
+    orchestrator.run_id = "run-test"
+    orchestrator.output_dirs = {
+        "metadata": tmp_path / "metadata",
+        "testsets": tmp_path / "testsets",
+        "evaluations": tmp_path / "evaluations",
+        "reports": tmp_path / "reports",
+    }
+    for path in orchestrator.output_dirs.values():
+        path.mkdir(parents=True, exist_ok=True)
+
+    class _MemoryTracker:
+        def log_memory_usage(self, _stage):
+            return None
+
+    orchestrator.memory_tracker = _MemoryTracker()
+    orchestrator._run_taxonomy_discovery = lambda: None
+    orchestrator._install_requested_runbooks = lambda: []
+
+    orchestrator.document_processor = type(
+        "_Processor",
+        (),
+        {
+            "process_documents": lambda self: [
+                {"source_file": "doc1.txt", "content": "text"}
+            ]
+        },
+    )()
+    orchestrator.testset_generator = type(
+        "_Generator",
+        (),
+        {
+            "generate_comprehensive_testset": lambda self, document_paths, output_dir: {
+                "testset": [{"question": "Q1", "answer": "A1"}],
+                "metadata": {"generation_method": "mock"},
+                "results_by_method": {},
+            }
+        },
+    )()
+
+    result = PipelineOrchestrator._run_testset_generation(orchestrator)
+
+    assert result["success"] is True
+    assert result["result_source"] == "pipeline_orchestrator_testset_generation"
     assert result["contract_version"]

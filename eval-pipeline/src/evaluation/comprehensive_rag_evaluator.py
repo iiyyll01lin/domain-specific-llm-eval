@@ -33,6 +33,9 @@ import numpy as np
 import pandas as pd
 import requests
 
+from .evaluation_result_contract import (attach_result_contract,
+                                         evaluation_error_result)
+
 logger = logging.getLogger(__name__)
 
 
@@ -225,7 +228,11 @@ class ComprehensiveRAGEvaluator:
     ) -> Dict[str, Any]:
         """Evaluate RAG answer using contextual keyword matching."""
         if not self.contextual_functions:
-            return {"error": "Contextual keyword evaluator not available"}
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator",
+                error_stage="contextual_keyword_init",
+                error="Contextual keyword evaluator not available",
+            )
 
         try:
             # Use existing contextual keyword evaluation
@@ -248,42 +255,57 @@ class ComprehensiveRAGEvaluator:
             # Determine if passes threshold
             passes_threshold = total_score >= self.contextual_threshold
 
-            return {
-                "total_score": float(total_score),
-                "mandatory_score": float(mandatory_score),
-                "optional_score": float(optional_score),
-                "passes_threshold": bool(passes_threshold),
-                "threshold": self.contextual_threshold,
-                "answer_segments": answer_segments,
-                "mandatory_keywords": mandatory_keywords,
-                "optional_keywords": optional_keywords,
-            }
+            return attach_result_contract(
+                {
+                    "total_score": float(total_score),
+                    "mandatory_score": float(mandatory_score),
+                    "optional_score": float(optional_score),
+                    "passes_threshold": bool(passes_threshold),
+                    "threshold": self.contextual_threshold,
+                    "answer_segments": answer_segments,
+                    "mandatory_keywords": mandatory_keywords,
+                    "optional_keywords": optional_keywords,
+                },
+                result_source="comprehensive_rag_evaluator",
+                success=True,
+            )
 
         except Exception as e:
             logger.error(f"Error in contextual keyword evaluation: {e}")
-            return {"error": str(e)}
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator",
+                error_stage="contextual_keyword_evaluation",
+                error=str(e),
+            )
 
     def evaluate_ragas_metrics(
         self, question: str, rag_answer: str, contexts: List[str], ground_truth: str
     ) -> Dict[str, Any]:
         """Evaluate using RAGAS metrics."""
         if not self.ragas_evaluate or not self.ragas_metrics:
-            return {"error": "RAGAS evaluator not available"}
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator",
+                error_stage="ragas_init",
+                error="RAGAS evaluator not available",
+            )
 
         # Temporary disable RAGAS evaluation to fix model_dump errors
         logger.warning(
             "⚠️ RAGAS metrics evaluation temporarily disabled due to model_dump compatibility issues"
         )
-        return {
-            "context_precision": 0.7,
-            "context_recall": 0.8,
-            "faithfulness": 0.75,
-            "answer_relevancy": 0.72,
-            "message": "RAGAS evaluation disabled due to model_dump compatibility issues",
-            "mock_data": True,
-            "result_source": "ragas_disabled_mock",
-            "error_stage": "ragas_disabled",
-        }
+        return attach_result_contract(
+            {
+                "context_precision": 0.7,
+                "context_recall": 0.8,
+                "faithfulness": 0.75,
+                "answer_relevancy": 0.72,
+                "message": "RAGAS evaluation disabled due to model_dump compatibility issues",
+            },
+            result_source="ragas_disabled_mock",
+            success=True,
+            error_stage="ragas_disabled",
+            mock_data=True,
+        )
 
         try:
             # Prepare dataset for RAGAS
@@ -310,20 +332,24 @@ class ComprehensiveRAGEvaluator:
                 if metric_name in result:
                     scores[metric_name] = float(result[metric_name])
 
-            return {
-                "scores": scores,
-                "raw_result": (
-                    result.to_dict() if hasattr(result, "to_dict") else str(result)
-                ),
-            }
+            return attach_result_contract(
+                {
+                    "scores": scores,
+                    "raw_result": (
+                        result.to_dict() if hasattr(result, "to_dict") else str(result)
+                    ),
+                },
+                result_source="comprehensive_rag_evaluator",
+                success=True,
+            )
 
         except Exception as e:
             logger.error(f"Error in RAGAS evaluation: {e}")
-            return {
-                "error": str(e),
-                "error_stage": "ragas_runtime",
-                "result_source": "ragas_error",
-            }
+            return evaluation_error_result(
+                result_source="ragas_error",
+                error_stage="ragas_runtime",
+                error=str(e),
+            )
 
     def evaluate_testset(self, testset_file: Path, output_dir: Path) -> Dict[str, Any]:
         """Evaluate RAG system using enhanced testset."""
@@ -456,19 +482,26 @@ class ComprehensiveRAGEvaluator:
             logger.info(f"📋 Summary report: {summary_file}")
             logger.info(f"📈 CSV report: {csv_file}")
 
-            return {
-                "success": True,
-                "detailed_results_file": str(detailed_file),
-                "summary_report_file": str(summary_file),
-                "csv_report_file": str(csv_file),
-                "summary_stats": summary_stats,
-                "total_questions": len(df),
-                "successful_evaluations": len(detailed_results),
-            }
+            return attach_result_contract(
+                {
+                    "detailed_results_file": str(detailed_file),
+                    "summary_report_file": str(summary_file),
+                    "csv_report_file": str(csv_file),
+                    "summary_stats": summary_stats,
+                    "total_questions": len(df),
+                    "successful_evaluations": len(detailed_results),
+                },
+                result_source="comprehensive_rag_evaluator",
+                success=True,
+            )
 
         except Exception as e:
             logger.error(f"Error in RAG evaluation: {e}")
-            return {"success": False, "error": str(e)}
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator",
+                error_stage="evaluate_testset",
+                error=str(e),
+            )
 
     def _calculate_summary_stats(self, scores: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate summary statistics from scores with robust NaN handling."""

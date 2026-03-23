@@ -59,6 +59,38 @@ def test_evaluate_single_testset_surfaces_keyword_evaluator_errors(tmp_path: Pat
 
     assert result["error"] == "keyword evaluator exploded"
     assert result["keyword_metrics"]["error"] == "keyword evaluator exploded"
+    assert result["result_source"] == "rag_evaluator"
+    assert result["error_stage"] == "keyword_evaluation"
+    assert result["contract_version"]
+
+
+def test_evaluate_single_testset_honors_contract_based_keyword_failures(tmp_path: Path) -> None:
+    evaluator = object.__new__(RAGEvaluator)
+    testset_path = tmp_path / "testset.csv"
+    testset_path.write_text("question,ground_truth\nWhat changed?,Answer\n", encoding="utf-8")
+
+    evaluator.load_testset = lambda path: [{"question": "What changed?", "ground_truth": "Answer"}]  # type: ignore[method-assign]
+    evaluator.query_rag_system = lambda question: {"rag_answer": "normalized answer"}  # type: ignore[method-assign]
+    evaluator.extract_keywords_from_response = lambda answer: ["normalized"]  # type: ignore[method-assign]
+
+    class _ContractBrokenKeywordEvaluator:
+        def evaluate_responses(self, _responses):
+            return {
+                "success": False,
+                "error": "contract failure",
+                "result_source": "keyword_evaluator",
+                "error_stage": "evaluate_responses",
+            }
+
+    evaluator.keyword_evaluator = _ContractBrokenKeywordEvaluator()
+    evaluator.ragas_evaluator = None
+
+    result = RAGEvaluator.evaluate_single_testset(evaluator, str(testset_path))
+
+    assert result["success"] is False
+    assert result["error"] == "contract failure"
+    assert result["keyword_metrics"]["success"] is False
+    assert result["error_stage"] == "keyword_evaluation"
 
 
 def test_evaluate_testsets_separates_failed_results(tmp_path: Path) -> None:
@@ -73,3 +105,6 @@ def test_evaluate_testsets_separates_failed_results(tmp_path: Path) -> None:
     assert result["failed_testsets"] == 1
     assert len(result["failed_results"]) == 1
     assert result["total_queries"] == 2
+    assert result["result_source"] == "rag_evaluator_batch"
+    assert result["error_stage"] == "partial_failure"
+    assert result["contract_version"]

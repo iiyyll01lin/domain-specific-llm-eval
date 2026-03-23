@@ -802,6 +802,10 @@ class RAGASEvaluatorWithFallbacks:
             logger.warning(
                 f"Could not extract scores for {metric_name} from result type {type(result)}"
             )
+            logger.error(
+                "Metric extraction failed for '%s' after trying DataFrame, dict, attribute, and index access paths",
+                metric_name,
+            )
             return []
 
         except Exception as e:

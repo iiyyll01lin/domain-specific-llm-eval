@@ -19,6 +19,8 @@ import pandas as pd
 from .contextual_keyword_evaluator_fixed import ContextualKeywordEvaluatorFixed
 from .enhanced_contextual_keyword_evaluator import \
     EnhancedContextualKeywordEvaluator
+from .evaluation_result_contract import (attach_result_contract,
+                                         evaluation_error_result)
 from .gates_system import GatesSystem
 from .ragas_evaluator_with_fallbacks import RAGASEvaluatorWithFallbacks
 
@@ -242,12 +244,15 @@ class ComprehensiveRAGEvaluatorFixed:
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
                 logger.error(f"Missing required columns: {missing_columns}")
-                return {
-                    "success": False,
-                    "error": f"Missing required columns in testset: {missing_columns}",
-                    "total_questions": 0,
-                    "successful_evaluations": 0,
-                }
+                return evaluation_error_result(
+                    result_source="comprehensive_rag_evaluator_fixed",
+                    error_stage="validate_testset",
+                    error=f"Missing required columns in testset: {missing_columns}",
+                    extra={
+                        "total_questions": 0,
+                        "successful_evaluations": 0,
+                    },
+                )
 
             # Add default columns if missing
             if "reference_contexts" not in df.columns:
@@ -266,12 +271,15 @@ class ComprehensiveRAGEvaluatorFixed:
 
         except Exception as e:
             logger.error(f"Failed to load testset: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to load testset: {e}",
-                "total_questions": 0,
-                "successful_evaluations": 0,
-            }
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator_fixed",
+                error_stage="load_testset",
+                error=f"Failed to load testset: {e}",
+                extra={
+                    "total_questions": 0,
+                    "successful_evaluations": 0,
+                },
+            )
 
         # First, query RAG system once for all questions if we have any evaluators that need it
         rag_responses = None
@@ -315,10 +323,13 @@ class ComprehensiveRAGEvaluatorFixed:
 
             except Exception as e:
                 logger.error(f"❌ Contextual keyword evaluation exception: {e}")
-                evaluation_results["results"]["contextual_keyword"] = {
-                    "success": False,
-                    "error": str(e),
-                }
+                evaluation_results["results"]["contextual_keyword"] = (
+                    evaluation_error_result(
+                        result_source="comprehensive_rag_evaluator_fixed_contextual_keyword",
+                        error_stage="contextual_keyword_evaluation",
+                        error=str(e),
+                    )
+                )
 
         # 2. RAGAS Evaluation with RAG System Responses
         if self.ragas_evaluator:
@@ -386,11 +397,12 @@ class ComprehensiveRAGEvaluatorFixed:
                 import traceback
 
                 logger.error(f"RAGAS exception traceback: {traceback.format_exc()}")
-                evaluation_results["results"]["ragas"] = {
-                    "success": False,
-                    "error": str(e),
-                    "traceback": traceback.format_exc(),
-                }
+                evaluation_results["results"]["ragas"] = evaluation_error_result(
+                    result_source="comprehensive_rag_evaluator_fixed_ragas",
+                    error_stage="ragas_evaluation",
+                    error=str(e),
+                    extra={"traceback": traceback.format_exc()},
+                )
 
         # 3. Generate comprehensive report
         try:
@@ -400,7 +412,11 @@ class ComprehensiveRAGEvaluatorFixed:
             evaluation_results["report"] = report_results
         except Exception as e:
             logger.error(f"Failed to generate comprehensive report: {e}")
-            evaluation_results["report"] = {"success": False, "error": str(e)}
+            evaluation_results["report"] = evaluation_error_result(
+                result_source="comprehensive_rag_evaluator_fixed_report",
+                error_stage="report_generation",
+                error=str(e),
+            )
 
         # 4. Determine overall success
         overall_success = success_count > 0
@@ -453,7 +469,12 @@ class ComprehensiveRAGEvaluatorFixed:
             logger.error(f"❌ Comprehensive evaluation failed")
             logger.error(f"❌ {success_count}/{total_evaluators} evaluators succeeded")
 
-        return evaluation_results
+        return attach_result_contract(
+            evaluation_results,
+            result_source="comprehensive_rag_evaluator_fixed",
+            success=overall_success,
+            error_stage="evaluator_execution" if not overall_success else None,
+        )
 
     def _generate_comprehensive_report(
         self, evaluation_results: Dict[str, Any], output_dir: Path
@@ -563,12 +584,15 @@ class ComprehensiveRAGEvaluatorFixed:
             logger.info(f"📄 Report: {report_file}")
             logger.info(f"📝 Summary: {summary_file}")
 
-            return {
-                "success": True,
-                "report_file": str(report_file),
-                "summary_file": str(summary_file),
-                "timestamp": timestamp,
-            }
+            return attach_result_contract(
+                {
+                    "report_file": str(report_file),
+                    "summary_file": str(summary_file),
+                    "timestamp": timestamp,
+                },
+                result_source="comprehensive_rag_evaluator_fixed_report",
+                success=True,
+            )
 
         except Exception as e:
             logger.error(f"Failed to generate comprehensive report: {e}")
@@ -576,11 +600,12 @@ class ComprehensiveRAGEvaluatorFixed:
 
             logger.error(f"Traceback: {traceback.format_exc()}")
 
-            return {
-                "success": False,
-                "error": str(e),
-                "traceback": traceback.format_exc(),
-            }
+            return evaluation_error_result(
+                result_source="comprehensive_rag_evaluator_fixed_report",
+                error_stage="generate_report",
+                error=str(e),
+                extra={"traceback": traceback.format_exc()},
+            )
 
     def _calculate_combined_metrics(
         self, evaluation_results: Dict[str, Any]

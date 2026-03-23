@@ -28,6 +28,8 @@ from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
 from reports.report_generator import ReportGenerator
 from ui.app_store_marketplace import UnifiedAppStore
 from ui.force_graph_viewer import ForceGraphVisualizer
+from evaluation.evaluation_result_contract import (attach_result_contract,
+                                                   evaluation_error_result)
 from utils.knowledge_graph_manager import KnowledgeGraphManager
 
 logger = logging.getLogger(__name__)
@@ -87,21 +89,21 @@ class PipelineOrchestrator:
                 results["testset_generation"] = self._run_testset_generation()
                 results["stages_completed"].append("testset-generation")
 
-                if not results["testset_generation"]["success"]:
+                if not results["testset_generation"].get("success", False):
                     raise Exception("Testset generation failed")
 
             if stage in ["all", "evaluation"]:
                 results["evaluation"] = self._run_evaluation()
                 results["stages_completed"].append("evaluation")
 
-                if not results["evaluation"]["success"]:
+                if not results["evaluation"].get("success", False):
                     raise Exception("Evaluation failed")
 
             if stage in ["all", "reporting"]:
                 results["reporting"] = self._run_reporting()
                 results["stages_completed"].append("reporting")
 
-                if not results["reporting"]["success"]:
+                if not results["reporting"].get("success", False):
                     raise Exception("Reporting failed")
 
             # Pipeline completed successfully
@@ -486,16 +488,19 @@ class PipelineOrchestrator:
                 stage_duration = time.time() - stage_start
                 log_stage_end(logger, "Testset Generation", True, stage_duration)
 
-                return {
-                    "success": True,
-                    "documents_processed": len(processed_documents),
-                    "testsets_generated": metadata["testsets_generated"],
-                    "total_qa_pairs": metadata["total_qa_pairs"],
-                    "generation_method": metadata["generation_method"],
-                    "metadata_file": str(metadata_file),
-                    "testset_data": testset_data,
-                    "duration": stage_duration,
-                }
+                return attach_result_contract(
+                    {
+                        "documents_processed": len(processed_documents),
+                        "testsets_generated": metadata["testsets_generated"],
+                        "total_qa_pairs": metadata["total_qa_pairs"],
+                        "generation_method": metadata["generation_method"],
+                        "metadata_file": str(metadata_file),
+                        "testset_data": testset_data,
+                        "duration": stage_duration,
+                    },
+                    result_source="pipeline_orchestrator_testset_generation",
+                    success=True,
+                )
 
         except Exception as e:
             stage_duration = time.time() - stage_start
@@ -509,12 +514,15 @@ class PipelineOrchestrator:
             )
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
 
-            return {
-                "success": False,
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "duration": stage_duration,
-            }
+            return evaluation_error_result(
+                result_source="pipeline_orchestrator_testset_generation",
+                error_stage="testset_generation",
+                error=str(e),
+                extra={
+                    "error_type": type(e).__name__,
+                    "duration": stage_duration,
+                },
+            )
 
     def _run_evaluation(self) -> Dict[str, Any]:
         """
@@ -600,23 +608,31 @@ class PipelineOrchestrator:
                 stage_duration = time.time() - stage_start
                 log_stage_end(logger, "RAG Evaluation", True, stage_duration)
 
-                return {
-                    "success": True,
-                    "testsets_evaluated": len(testset_files),
-                    "queries_executed": metadata["queries_executed"],
-                    "keyword_pass_rate": metadata["keyword_pass_rate"],
-                    "avg_ragas_score": metadata["avg_ragas_score"],
-                    "feedback_requests": metadata["feedback_requests"],
-                    "evaluation_file": metadata["evaluation_file"],
-                    "metadata_file": str(eval_metadata_file),
-                    "duration": stage_duration,
-                }
+                return attach_result_contract(
+                    {
+                        "testsets_evaluated": len(testset_files),
+                        "queries_executed": metadata["queries_executed"],
+                        "keyword_pass_rate": metadata["keyword_pass_rate"],
+                        "avg_ragas_score": metadata["avg_ragas_score"],
+                        "feedback_requests": metadata["feedback_requests"],
+                        "evaluation_file": metadata["evaluation_file"],
+                        "metadata_file": str(eval_metadata_file),
+                        "duration": stage_duration,
+                    },
+                    result_source="pipeline_orchestrator_evaluation",
+                    success=True,
+                )
 
         except Exception as e:
             stage_duration = time.time() - stage_start
             log_stage_end(logger, "RAG Evaluation", False, stage_duration)
 
-            return {"success": False, "error": str(e), "duration": stage_duration}
+            return evaluation_error_result(
+                result_source="pipeline_orchestrator_evaluation",
+                error_stage="evaluation",
+                error=str(e),
+                extra={"duration": stage_duration},
+            )
 
     def _run_reporting(self) -> Dict[str, Any]:
         """
@@ -684,16 +700,24 @@ class PipelineOrchestrator:
                 stage_duration = time.time() - stage_start
                 log_stage_end(logger, "Report Generation", True, stage_duration)
 
-                return {
-                    "success": True,
-                    "reports_generated": report_results,
-                    "report_directory": str(self.output_dirs["reports"]),
-                    "metadata_file": str(report_metadata_file),
-                    "duration": stage_duration,
-                }
+                return attach_result_contract(
+                    {
+                        "reports_generated": report_results,
+                        "report_directory": str(self.output_dirs["reports"]),
+                        "metadata_file": str(report_metadata_file),
+                        "duration": stage_duration,
+                    },
+                    result_source="pipeline_orchestrator_reporting",
+                    success=True,
+                )
 
         except Exception as e:
             stage_duration = time.time() - stage_start
             log_stage_end(logger, "Report Generation", False, stage_duration)
 
-            return {"success": False, "error": str(e), "duration": stage_duration}
+            return evaluation_error_result(
+                result_source="pipeline_orchestrator_reporting",
+                error_stage="reporting",
+                error=str(e),
+                extra={"duration": stage_duration},
+            )
