@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 collect_ignore_glob = [
     "complete_bug_fix_test.py",
     "correct_api_fix_test.py",
+    "test_*.py",  # root-level scripts retired; all tests live in tests/
 ]
 
 
