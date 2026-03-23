@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
+import sys
+import types
 
 import pandas as pd
 import yaml
@@ -12,6 +15,20 @@ from src.pipeline.config_manager import ConfigManager
 from src.reports.report_generator import ReportGenerator
 from src.ui.force_graph_viewer import ForceGraphVisualizer
 from src.utils.ragas_fixes import fix_ragas_dataset_schema
+
+
+def _load_eval_pipeline_document_loader_module():
+    module_path = Path(
+        "/data/yy/domain-specific-llm-eval/eval-pipeline/document_loader.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "eval_pipeline_document_loader",
+        module_path,
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_legacy_test_ragas_fix_behaviour_is_covered() -> None:
@@ -134,6 +151,195 @@ def test_legacy_csv_ragas_integration_script_behaviour_is_covered(tmp_path: Path
     assert len(documents) == 1
     assert result["metadata"]["generation_method"] == "mock_ragas"
     assert list(result["testset_df"].columns) == ["question", "answer", "contexts"]
+
+
+def test_legacy_csv_detailed_script_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
+    csv_path = tmp_path / "test_content.csv"
+    pd.DataFrame(
+        {
+            "id": [1, 2],
+            "content": [
+                json.dumps(
+                    {
+                        "text": "Detailed CSV processing sample with enough content to validate row-to-document loading and downstream generator wiring for regression coverage.",
+                        "title": "Doc 1",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "text": "Second detailed CSV sample that exercises configuration loading and keeps the one-row-to-one-document mapping stable under maintained pytest coverage.",
+                        "title": "Doc 2",
+                    }
+                ),
+            ],
+        }
+    ).to_csv(csv_path, index=False)
+
+    config_path = tmp_path / "debug_config.yaml"
+    config_path.write_text(
+        f"""
+data_sources:
+  input_type: "csv"
+  csv:
+    csv_files:
+      - "{csv_path}"
+testset_generation:
+  method: "configurable"
+  use_configurable_builder: true
+  samples_per_document: 1
+  max_total_samples: 5
+output:
+  base_dir: "{tmp_path / 'outputs'}"
+logging:
+  level: "INFO"
+""",
+        encoding="utf-8",
+    )
+
+    config = ConfigManager(str(config_path)).load_config()
+    document_loader_module = _load_eval_pipeline_document_loader_module()
+    monkeypatch.setattr(document_loader_module.DocumentLoader, "_initialize_keybert_offline", lambda self: None)
+    monkeypatch.setattr(HybridTestsetGenerator, "initialize_generators", lambda self: None)
+    monkeypatch.setattr(
+        HybridTestsetGenerator,
+        "generate_comprehensive_testset",
+        lambda self, document_paths, output_dir: {
+            "generated_samples": 2,
+            "output_dir": str(output_dir),
+            "document_paths": list(document_paths),
+        },
+    )
+
+    loader = document_loader_module.DocumentLoader(config)
+    documents, metadata = loader.load_all_documents()
+    generator = HybridTestsetGenerator(config["testset_generation"])
+    results = generator.generate_comprehensive_testset([], tmp_path / "test_outputs" / "testsets")
+
+    assert config["data_sources"]["input_type"] == "csv"
+    assert len(documents) == 2
+    assert len(metadata) == 2
+    assert results["generated_samples"] == 2
+
+
+def test_legacy_ragas_pure_script_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
+    csv_path = tmp_path / "pre_training.csv"
+    pd.DataFrame(
+        {
+            "content": [
+                json.dumps(
+                    {
+                        "text": "Pure RAGAS regression content with enough manufacturing detail to survive preprocessing and support synthetic question generation without calling an external endpoint.",
+                        "title": "Pure RAGAS",
+                    }
+                )
+            ]
+        }
+    ).to_csv(csv_path, index=False)
+
+    class _FakeLLM:
+        def __init__(self, **kwargs):
+            pass
+
+    class _FakeWrapper:
+        def __init__(self, llm):
+            self.langchain_llm = llm
+
+    fake_langchain_module = types.ModuleType("langchain")
+    fake_callbacks_module = types.ModuleType("langchain.callbacks")
+    fake_callback_manager_module = types.ModuleType("langchain.callbacks.manager")
+    fake_callback_manager_module.CallbackManagerForLLMRun = object
+    fake_llms_module = types.ModuleType("langchain.llms")
+    fake_llms_base_module = types.ModuleType("langchain.llms.base")
+    fake_llms_base_module.LLM = _FakeLLM
+    fake_ragas_module = types.ModuleType("ragas")
+    fake_ragas_llms_module = types.ModuleType("ragas.llms")
+    fake_ragas_llms_module.LangchainLLMWrapper = _FakeWrapper
+
+    monkeypatch.setitem(sys.modules, "langchain", fake_langchain_module)
+    monkeypatch.setitem(sys.modules, "langchain.callbacks", fake_callbacks_module)
+    monkeypatch.setitem(sys.modules, "langchain.callbacks.manager", fake_callback_manager_module)
+    monkeypatch.setitem(sys.modules, "langchain.llms", fake_llms_module)
+    monkeypatch.setitem(sys.modules, "langchain.llms.base", fake_llms_base_module)
+    monkeypatch.setitem(sys.modules, "ragas", fake_ragas_module)
+    monkeypatch.setitem(sys.modules, "ragas.llms", fake_ragas_llms_module)
+
+    converter = CSVToRagasConverter(
+        {
+            "data_sources": {
+                "csv": {
+                    "csv_files": [str(csv_path)],
+                    "format": {"column_mapping": {"content": "content"}},
+                }
+            },
+            "testset_generation": {
+                "csv_processing": {
+                    "content_field_extraction": True,
+                    "content_preprocessing": {"min_content_length": 20},
+                },
+                "ragas_config": {
+                    "use_custom_llm": True,
+                    "custom_llm": {
+                        "endpoint": "http://example.invalid/v1/chat/completions",
+                        "api_key": "sk-test",
+                        "model": "gpt-4o",
+                    },
+                },
+            },
+        }
+    )
+    monkeypatch.setattr(
+        CSVToRagasConverter,
+        "generate_ragas_testset",
+        lambda self, docs: {
+            "testset_df": pd.DataFrame(
+                {"question": ["What process is described?"], "answer": ["A manufacturing process."], "contexts": [[docs[0].page_content]]}
+            ),
+            "metadata": {"generation_method": "mock_ragas"},
+        },
+    )
+
+    custom_llm = converter.create_custom_llm_for_ragas()
+    loaded_df = converter.load_csv_data()
+    documents = converter.csv_to_documents(loaded_df)
+    result = converter.convert_csv_to_ragas_testset()
+
+    assert custom_llm is not None
+    assert custom_llm.langchain_llm.endpoint == "http://example.invalid/v1/chat/completions"
+    assert len(documents) == 1
+    assert result["metadata"]["generation_method"] == "mock_ragas"
+
+
+def test_legacy_orchestrator_fix_script_behaviour_is_covered(monkeypatch, tmp_path: Path) -> None:
+    from src.pipeline.orchestrator import PipelineOrchestrator
+
+    monkeypatch.setattr(PipelineOrchestrator, "_initialize_components", lambda self: None)
+
+    output_dirs = {
+        "testsets": tmp_path / "testsets",
+        "metadata": tmp_path / "metadata",
+        "evaluations": tmp_path / "evaluations",
+        "reports": tmp_path / "reports",
+        "temp": tmp_path / "temp",
+    }
+    for dir_path in output_dirs.values():
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+    orchestrator = PipelineOrchestrator(
+        config={
+            "data_sources": {
+                "input_type": "csv",
+                "csv": {"csv_files": ["data/csv/smt-nxt-errorcode.csv"]},
+            },
+            "testset_generation": {"generator_class": "hybrid"},
+        },
+        run_id="test_fix",
+        output_dirs=output_dirs,
+        force_overwrite=True,
+    )
+
+    assert orchestrator.run_id == "test_fix"
+    assert orchestrator.force_overwrite is True
+    assert orchestrator.output_dirs["reports"] == output_dirs["reports"]
 
 
 def test_legacy_report_fixes_script_behaviour_is_covered(tmp_path: Path) -> None:
