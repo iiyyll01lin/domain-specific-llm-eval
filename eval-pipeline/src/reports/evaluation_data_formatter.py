@@ -120,6 +120,9 @@ class EvaluationDataFormatter:
         if not file_path:
             return None
 
+        # Path traversal guard: resolved path must stay within the workspace.
+        _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
         try:
             path = Path(file_path)
 
@@ -142,7 +145,15 @@ class EvaluationDataFormatter:
                 logger.warning(f"Detailed results file not found: {file_path}")
                 return None
 
-            with open(path, "r", encoding="utf-8") as f:
+            # Resolve symlinks and check the final path is within the workspace.
+            resolved = path.resolve()
+            if not resolved.is_relative_to(_WORKSPACE_ROOT):
+                raise ValueError(
+                    f"Path traversal detected: {file_path!r} resolves to {resolved}, "
+                    f"which is outside the workspace root {_WORKSPACE_ROOT}"
+                )
+
+            with open(resolved, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if isinstance(data, list):
@@ -153,6 +164,9 @@ class EvaluationDataFormatter:
                 logger.warning(f"Unexpected format in {file_path}")
                 return None
 
+        except ValueError:
+            # Path traversal detected — re-raise so callers cannot silently ignore it.
+            raise
         except Exception as e:
             logger.warning(f"Could not load detailed results from {file_path}: {e}")
             return None
