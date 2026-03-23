@@ -11,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, MutableMapping, Optional, TypedDict
 
+from src.utils.graph_store import GraphStore, SQLiteGraphStore, hash_content
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,15 +37,32 @@ class KnowledgeGraphArtifact(TypedDict, total=False):
 
 
 class KnowledgeGraphManager:
-    """Manages knowledge graph storage, lookup, loading, and tenant filtering."""
+    """Manages knowledge graph storage, lookup, loading, and tenant filtering.
 
-    def __init__(self, base_output_dir: str | Path) -> None:
+    Parameters
+    ----------
+    base_output_dir:
+        Root directory for persisted artefacts (JSON snapshots, pickles).
+    graph_store:
+        Optional :class:`~src.utils.graph_store.GraphStore` backend.  When
+        provided, every call to :meth:`save_knowledge_graph` will also sync the
+        nodes and relationships into the persistent store, enabling incremental
+        re-use across runs.  If omitted, behaviour is identical to the legacy
+        flat-file implementation.
+    """
+
+    def __init__(
+        self,
+        base_output_dir: str | Path,
+        graph_store: Optional[GraphStore] = None,
+    ) -> None:
         self.base_output_dir = Path(base_output_dir)
         self.testset_kg_dir = self.base_output_dir / "testsets" / "knowledge_graphs"
         self.management_kg_dir = self.base_output_dir / "metadata" / "knowledge_graphs"
         self.testset_kg_dir.mkdir(parents=True, exist_ok=True)
         self.management_kg_dir.mkdir(parents=True, exist_ok=True)
         self.kg: Optional[Any] = None
+        self.graph_store: Optional[GraphStore] = graph_store
 
     def save_knowledge_graph(
         self,
@@ -76,6 +95,11 @@ class KnowledgeGraphManager:
         self.kg = kg
         logger.info("💾 Knowledge graph saved to %s", json_path)
         logger.info("💾 Knowledge graph pickle saved to %s", pickle_path)
+
+        # --- Sync into the persistent GraphStore (incremental, deduplicating) ---
+        if self.graph_store is not None:
+            self._sync_to_graph_store(kg)
+
         return str(json_path)
 
     def list_available_knowledge_graphs(self) -> List[KnowledgeGraphArtifact]:
@@ -161,6 +185,56 @@ class KnowledgeGraphManager:
             tenant_id,
             role,
             len(allowed_nodes),
+        )
+
+    def _sync_to_graph_store(self, kg: Any) -> None:
+        """Sync nodes and relationships from a RAGAS KG into the GraphStore.
+
+        Uses the node's ``content`` property as the canonical text for
+        content-hash addressing.  Falls back to the node ``id`` string when
+        ``content`` is absent.
+        """
+        if self.graph_store is None:
+            return
+
+        node_id_to_hash: Dict[str, str] = {}
+        nodes_synced = 0
+        for node in list(getattr(kg, "nodes", [])):
+            properties = deepcopy(getattr(node, "properties", {}) or {})
+            content = str(properties.get("content") or getattr(node, "id", ""))
+            node_hash = hash_content(content)
+            node_id_to_hash[str(getattr(node, "id", ""))] = node_hash
+
+            # Preserve RAGAS node UUID for stable round-trip reconstruction
+            if "_node_uuid" not in properties:
+                properties["_node_uuid"] = str(getattr(node, "id", ""))
+
+            self.graph_store.upsert_node(
+                node_hash=node_hash,
+                node_type=str(getattr(node, "type", "document")),
+                properties=properties,
+            )
+            nodes_synced += 1
+
+        rels_synced = 0
+        for rel in list(getattr(kg, "relationships", []) or []):
+            src_id = self._extract_endpoint_id(getattr(rel, "source", None))
+            tgt_id = self._extract_endpoint_id(getattr(rel, "target", None))
+            src_hash = node_id_to_hash.get(src_id)
+            tgt_hash = node_id_to_hash.get(tgt_id)
+            if src_hash and tgt_hash:
+                self.graph_store.add_relationship(
+                    src_hash=src_hash,
+                    tgt_hash=tgt_hash,
+                    rel_type=str(getattr(rel, "type", getattr(rel, "relation_type", "related_to"))),
+                    properties=deepcopy(getattr(rel, "properties", {}) or {}),
+                )
+                rels_synced += 1
+
+        logger.info(
+            "\ud83d\udd04 Synced %d nodes and %d relationships to GraphStore.",
+            nodes_synced,
+            rels_synced,
         )
 
     def _serialize_knowledge_graph(self, kg: Any) -> Dict[str, Any]:

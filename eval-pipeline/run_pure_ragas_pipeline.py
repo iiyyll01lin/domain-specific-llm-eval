@@ -73,6 +73,7 @@ from src.utils.prompt_templates import (get_fallback_generation_templates,
                                         load_prompt_library)
 from src.utils.neo4j_manager import Neo4jGraphManager
 from src.utils.pipeline_telemetry import PipelineTelemetry
+from src.utils.graph_store import GraphStore, SQLiteGraphStore, hash_content
 
 
 GLOBAL_TELEMETRY = None
@@ -744,8 +745,17 @@ async def create_knowledge_graph_from_documents(
     documents: List[Document],
     embeddings_model: LangchainEmbeddingsWrapper = None,
     async_settings: Optional[Dict[str, Any]] = None,
+    graph_store: Optional["GraphStore"] = None,
 ) -> KnowledgeGraph:
-    """Create RAGAS knowledge graph from documents with relationships"""
+    """Create RAGAS knowledge graph from documents with relationships.
+
+    When *graph_store* is provided the function operates **incrementally**:
+    chunks whose content-hash is already present in the store are reconstructed
+    from cached data without re-running the (expensive) embedding model.  Only
+    genuinely new chunks are embedded and ingested, reducing wall-clock time
+    from O(n²) to O(new_docs × total_docs) on repeated runs with overlapping
+    corpora.
+    """
     logger.info(f"🧠 Creating RAGAS Knowledge Graph from {len(documents)} documents...")
 
     # Create knowledge graph
@@ -781,12 +791,58 @@ async def create_knowledge_graph_from_documents(
 
     pending_embedding_nodes: List[Tuple[Node, str, str]] = []
     async_settings = async_settings or {}
+    cached_nodes_count = 0
 
-    for chunk_idx, chunk_doc in enumerate(split_docs):
-        if len(chunk_doc.page_content.strip()) < 30:  # Skip very short chunks
+    # Pre-compute all content hashes to identify cache hits in one batch query
+    chunk_hashes: List[str] = []
+    valid_chunks: List[Any] = []
+    for chunk_doc in split_docs:
+        if len(chunk_doc.page_content.strip()) < 30:
+            continue
+        chunk_hashes.append(hash_content(chunk_doc.page_content))
+        valid_chunks.append(chunk_doc)
+
+    # Determine which hashes are genuinely new when a store is available
+    new_hashes: set = set(chunk_hashes)
+    cached_node_records: dict = {}
+    if graph_store is not None:
+        new_hash_list = graph_store.filter_new_hashes(chunk_hashes)
+        new_hashes = set(new_hash_list)
+        # Load cached records for the rest so we can reconstruct their nodes
+        all_stored = {rec["node_hash"]: rec for rec in graph_store.get_all_nodes()}
+        cached_node_records = {
+            h: all_stored[h] for h in chunk_hashes if h in all_stored
+        }
+        logger.info(
+            "⚡ Graph store cache: %d/%d chunks are new, %d served from cache.",
+            len(new_hashes),
+            len(chunk_hashes),
+            len(cached_node_records),
+        )
+
+    for chunk_idx, (chunk_doc, chunk_hash) in enumerate(zip(valid_chunks, chunk_hashes)):
+        content_text = chunk_doc.page_content.strip()
+
+        # ---- Cache hit: reconstruct node from store, skip re-embedding ----
+        if graph_store is not None and chunk_hash in cached_node_records:
+            cached_record = cached_node_records[chunk_hash]
+            cached_props = cached_record["properties"]
+            cached_node_uuid = cached_props.get("_node_uuid")
+            try:
+                node_id = uuid.UUID(cached_node_uuid) if cached_node_uuid else uuid.uuid4()
+            except (ValueError, AttributeError):
+                node_id = uuid.uuid4()
+            node = Node(
+                id=node_id,
+                type=NodeType.DOCUMENT,
+                properties={k: v for k, v in cached_props.items() if k != "_node_uuid"},
+            )
+            kg._add_node(node)
+            cached_nodes_count += 1
             continue
 
-        node_id = uuid.uuid4()  # Use proper UUID object, not string
+        # ---- Cache miss: build node from scratch ----
+        node_id = uuid.uuid4()
 
         # Extract entities/keywords for relationship building
         entities = []
@@ -839,6 +895,17 @@ async def create_knowledge_graph_from_documents(
 
         kg._add_node(node)
 
+        # Persist new node to the graph store immediately (before embeddings are ready;
+        # embeddings will be stored after the async gather below)
+        if graph_store is not None:
+            node_props = dict(node.properties)
+            node_props["_node_uuid"] = str(node_id)
+            graph_store.upsert_node(
+                node_hash=chunk_hash,
+                node_type="document",
+                properties=node_props,
+            )
+
     if embeddings_model and pending_embedding_nodes:
         max_workers = max(1, int(async_settings.get("max_workers", 8) or 1))
         logger.info(
@@ -860,8 +927,27 @@ async def create_knowledge_graph_from_documents(
                 node.properties.pop("embedding", None)
                 node.properties.pop("summary_embedding", None)
                 node.properties["summary"] = summary
+            elif graph_store is not None:
+                # Update the store record with the freshly computed embeddings
+                node_content = node.properties.get("content", "")
+                node_hash = hash_content(node_content)
+                updated_props = dict(node.properties)
+                updated_props["_node_uuid"] = str(node.id)
+                graph_store.upsert_node(
+                    node_hash=node_hash,
+                    node_type="document",
+                    properties=updated_props,
+                )
 
-    logger.info(f"✅ Created knowledge graph with {len(kg.nodes)} nodes")
+    if graph_store is not None:
+        logger.info(
+            "✅ Created knowledge graph with %d nodes (%d new, %d from cache).",
+            len(kg.nodes),
+            len(kg.nodes) - cached_nodes_count,
+            cached_nodes_count,
+        )
+    else:
+        logger.info(f"✅ Created knowledge graph with {len(kg.nodes)} nodes")
 
     # Build relationships between nodes
     logger.info("🔗 Building relationships between nodes...")
@@ -1388,6 +1474,11 @@ def main(argv: Optional[List[str]] = None):
         # Step 4.1: Build async settings baseline for KG creation
         run_config, _ = build_run_config(config)
 
+        # Step 4.2: Initialise the persistent graph store (SQLite, zero extra deps)
+        kg_store_path = output_dir.parent / "kg_store.db"
+        kg_graph_store = SQLiteGraphStore(kg_store_path)
+        logger.info("🗄️  Persistent graph store: %s", kg_store_path)
+
         # Step 5: Create knowledge graph with relationships
         kg = asyncio.run(
             create_knowledge_graph_from_documents(
@@ -1396,6 +1487,7 @@ def main(argv: Optional[List[str]] = None):
                 async_settings={
                     "max_workers": run_config.max_workers,
                 },
+                graph_store=kg_graph_store,
             )
         )
         telemetry.log_stage_event(

@@ -32,20 +32,22 @@ import pandas as pd
 # Add parent directories to path for imports
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
-# Import your existing evaluation systems
-from contextual_keyword_gate import (ContextualKeywordGate,
-                                     get_contextual_segments,
-                                     weighted_keyword_score)
-from dynamic_ragas_gate_with_human_feedback import (
-    adaptive_exponential_smoothing, calculate_adaptive_window_size,
-    calculate_feedback_consistency, needs_human_feedback_dynamic)
+# Lazy imports — these root-level scripts have module-level side effects when
+# run as __main__ (Excel reads, plt.show()).  We import them inside methods so
+# that importing this module does NOT trigger those side effects.
+# The names below are resolved at call-time inside each method that needs them.
 
 # Import RAGAS components
 sys.path.append(str(Path(__file__).parent.parent.parent.parent / "ragas"))
-from ragas import evaluate
-from ragas.metrics import (answer_correctness, answer_relevancy,
-                           answer_similarity, context_precision,
-                           context_recall, faithfulness)
+try:
+    from ragas import evaluate
+    from ragas.metrics import (answer_correctness, answer_relevancy,
+                               answer_similarity, context_precision,
+                               context_recall, faithfulness)
+    _RAGAS_AVAILABLE = True
+except Exception:
+    evaluate = None  # type: ignore[assignment]
+    _RAGAS_AVAILABLE = False
 
 from .evaluation_result_contract import attach_result_contract
 
@@ -64,7 +66,7 @@ class HybridEvaluator:
         self.logger = logging.getLogger(__name__)
 
         # Initialize evaluation components
-        self.contextual_gate = ContextualKeywordGate()
+        # Note: contextual_keyword_gate functions are imported lazily inside methods
 
         # Evaluation thresholds and weights
         self.evaluation_config = config.get("evaluation", {})
@@ -185,6 +187,8 @@ class HybridEvaluator:
     ) -> Dict[str, Any]:
         """Evaluate using your existing contextual keyword system"""
         try:
+            from contextual_keyword_gate import (  # lazy: avoids model download at import time
+                get_contextual_segments, weighted_keyword_score)
             # Use your existing weighted keyword scoring
             total_score, mandatory_score, optional_score, answer_segments = (
                 weighted_keyword_score(auto_keywords, rag_answer, self.keyword_weights)
@@ -334,6 +338,7 @@ class HybridEvaluator:
             ).item()
 
             # Additional semantic metrics
+            from contextual_keyword_gate import get_contextual_segments  # lazy
             rag_segments = get_contextual_segments(rag_answer)
             expected_segments = get_contextual_segments(expected_answer)
 
@@ -384,6 +389,8 @@ class HybridEvaluator:
             ragas_score = ragas_results.get("ragas_composite_score", 0.0)
 
             # Use your existing dynamic human feedback system
+            from dynamic_ragas_gate_with_human_feedback import (  # lazy: avoids plt.show() at import
+                calculate_feedback_consistency, needs_human_feedback_dynamic)
             needs_feedback = needs_human_feedback_dynamic(
                 ragas_score,
                 self.all_ragas_scores,
@@ -396,7 +403,7 @@ class HybridEvaluator:
             # Calculate feedback consistency if we have enough data
             feedback_consistency = 0.0
             if len(self.feedback_history) >= 5:
-                feedback_consistency = calculate_feedback_consistency(
+                feedback_consistency = calculate_feedback_consistency(  # already imported above
                     self.feedback_history[-5:]
                 )
 
@@ -593,6 +600,7 @@ class HybridEvaluator:
 
             # Update threshold using your adaptive system
             if len(self.all_ragas_scores) > evaluation_id:
+                from dynamic_ragas_gate_with_human_feedback import adaptive_exponential_smoothing  # lazy
                 old_threshold = self.ragas_threshold
                 self.ragas_threshold = adaptive_exponential_smoothing(
                     self.all_ragas_scores[evaluation_id], old_threshold, alpha=0.1

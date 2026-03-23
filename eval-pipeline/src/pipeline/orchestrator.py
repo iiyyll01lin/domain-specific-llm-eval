@@ -12,15 +12,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from data.document_processor import DocumentProcessor
+try:
+    from data.document_processor import DocumentProcessor
+except ImportError:
+    DocumentProcessor = None  # type: ignore[assignment,misc]
 from data.hybrid_testset_generator import HybridTestsetGenerator
-from distributed.federated_learning import FederatedLearningClient
+try:
+    from distributed.federated_learning import FederatedLearningClient
+except ImportError:
+    FederatedLearningClient = None  # type: ignore[assignment,misc]
 from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
+from evaluation.evaluation_dispatcher import EvaluationDispatcher
 from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
-from inference.vllm_client import vLLMInferenceClient
+try:
+    from inference.vllm_client import vLLMInferenceClient
+except ImportError:
+    vLLMInferenceClient = None  # type: ignore[assignment,misc]
 from loaders.taxonomy_discovery import ZeroShotTaxonomyDiscoverer
 from optimization.hyperparam_search import OptunaOptimizer
 from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
@@ -171,8 +181,11 @@ class PipelineOrchestrator:
         else:
             self.feedback_manager = None
 
-        # RAG evaluator (coordinator)
+        # RAG evaluator (coordinator) + dispatcher facade
         self.rag_evaluator = RAGEvaluator(config=self.config)
+        self.evaluation_dispatcher = EvaluationDispatcher(
+            rag_evaluator=self.rag_evaluator,
+        )
 
         # Report generator
         self.report_generator = ReportGenerator(config=self.config)
@@ -548,7 +561,7 @@ class PipelineOrchestrator:
                 logger.info(
                     f"🔄 Evaluating RAG system with {len(testset_files)} testsets..."
                 )
-                evaluation_results = self.rag_evaluator.evaluate_testsets(testset_files)
+                evaluation_results = self.evaluation_dispatcher.evaluate_testsets(testset_files)
 
                 logger.info("✅ RAG evaluation completed")
 

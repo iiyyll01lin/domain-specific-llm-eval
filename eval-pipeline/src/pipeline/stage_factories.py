@@ -22,6 +22,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from data.document_processor import DocumentProcessor
 from data.hybrid_testset_generator import HybridTestsetGenerator
 from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
+from evaluation.evaluation_dispatcher import EvaluationDispatcher, InMemorySpec
 from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
@@ -199,6 +200,9 @@ class EvaluationStageExecutor(StageExecutor):
     ):
         super().__init__(config, run_id, output_dirs)
         self.rag_evaluator = RAGEvaluator(config)
+        self.evaluation_dispatcher = EvaluationDispatcher(
+            rag_evaluator=self.rag_evaluator,
+        )
         self.contextual_keyword_evaluator = ContextualKeywordEvaluator(config)
         self.ragas_evaluator = RagasEvaluator(config)
         self.human_feedback_manager = HumanFeedbackManager(config)
@@ -236,8 +240,8 @@ class EvaluationStageExecutor(StageExecutor):
                 qa_pairs = testset.get("qa_pairs", [])
                 queries_executed += len(qa_pairs)
 
-                # RAG evaluation
-                rag_results = self.rag_evaluator.evaluate_testset(testset)
+                # RAG evaluation — routed through EvaluationDispatcher
+                rag_results = self.evaluation_dispatcher.dispatch(InMemorySpec(data=testset))
                 evaluation_results["rag_results"].extend(rag_results)
 
                 # Contextual keyword evaluation

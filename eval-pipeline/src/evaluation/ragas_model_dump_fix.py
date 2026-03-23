@@ -101,6 +101,14 @@ class RagasModelDumpFix:
                     fixed_data[col] = [["No context available"] for _ in range(len(fixed_data.get('user_input', [])))]
                 else:
                         fixed_data[col] = ["No data available" for _ in range(len(fixed_data.get('user_input', [])))]
+
+        # Add reference_contexts (copy of retrieved_contexts) required by
+        # NonLLMContextPrecisionWithReference and NonLLMContextRecall.
+        if 'reference_contexts' not in fixed_data and 'retrieved_contexts' in fixed_data:
+            fixed_data['reference_contexts'] = [
+                list(ctx) for ctx in fixed_data['retrieved_contexts']
+            ]
+            logger.debug("   Added reference_contexts (copy of retrieved_contexts)")
         
         logger.info(f"✅ Fixed RAGAS dataset format: {list(fixed_data.keys())}")
         return fixed_data

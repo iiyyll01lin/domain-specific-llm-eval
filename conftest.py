@@ -31,6 +31,11 @@ _DEFAULT_ENV = {
     "OBJECT_STORE_SECRET_KEY": "test-secret-key",
     "OBJECT_STORE_BUCKET": "test-bucket",
     "OBJECT_STORE_USE_SSL": "false",
+    # Prevent all HuggingFace model downloads during tests so SentenceTransformer
+    # and transformers raise immediately instead of hanging on network I/O.
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "HF_DATASETS_OFFLINE": "1",
 }
 
 for key, value in _DEFAULT_ENV.items():

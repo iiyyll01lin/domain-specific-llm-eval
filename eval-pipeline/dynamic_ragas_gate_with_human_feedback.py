@@ -137,85 +137,86 @@ def adaptive_exponential_smoothing(
     return new_threshold
 
 
-# Track scores to recalibrate uncertainty range periodically
-all_ragas_scores = []
+if __name__ == "__main__":
+    # Track scores to recalibrate uncertainty range periodically
+    all_ragas_scores = []
 
-# track feedback to calculate feedback consistency & update threshold
-feedback_history = []
+    # track feedback to calculate feedback consistency & update threshold
+    feedback_history = []
 
-# for report
-feedback_needed_count = 0
-threshold_history = [initial_ragas_threshold]
+    # for report
+    feedback_needed_count = 0
+    threshold_history = [initial_ragas_threshold]
 
-df_res = pd.read_excel("my_custom_testset.xlsx")
-df_res = df_res[
-    [
-        "question",
-        "contexts",
-        "answer",
-        "ground_truth",
-        "context_precision",
-        "context_recall",
-        "faithfulness",
-        "answer_relevancy",
-        "kw",
-        "kw_metric",
-        "weighted_average_score",
+    df_res = pd.read_excel("my_custom_testset.xlsx")
+    df_res = df_res[
+        [
+            "question",
+            "contexts",
+            "answer",
+            "ground_truth",
+            "context_precision",
+            "context_recall",
+            "faithfulness",
+            "answer_relevancy",
+            "kw",
+            "kw_metric",
+            "weighted_average_score",
+        ]
     ]
-]
 
-# Calculate ragas_score as mean of the 4 metrics
-df_res["ragas_score"] = df_res[
-    ["context_precision", "context_recall", "faithfulness", "answer_relevancy"]
-].mean(axis=1)
+    # Calculate ragas_score as mean of the 4 metrics
+    df_res["ragas_score"] = df_res[
+        ["context_precision", "context_recall", "faithfulness", "answer_relevancy"]
+    ].mean(axis=1)
 
-for step, ragas_score in enumerate(df_res["ragas_score"]):
-    # can also put in contextual keyword score to get dynamic threshold
-    all_ragas_scores.append(ragas_score)
+    for step, ragas_score in enumerate(df_res["ragas_score"]):
+        # can also put in contextual keyword score to get dynamic threshold
+        all_ragas_scores.append(ragas_score)
 
-    # if uncertainty is high enough, we need human feedback, aka active learning gate
-    if needs_human_feedback_dynamic(
-        ragas_score,
-        all_ragas_scores,
-        step,
-        human_feedback_uncertainty_min_bound,
-        human_feedback_uncertainty_max_bound,
-        human_feedback_uncertainty_bound_buffer,
-    ):
-        feedback_needed_count += 1
-        human_feedback = human_feedback_for_ragas()
-        feedback_history.append(human_feedback)
-
-        current_variance = calculate_feedback_consistency(
-            feedback_history, max_window_size
-        )
-        adaptive_window_size = calculate_adaptive_window_size(
-            current_variance,
-            min_window_size,
-            max_window_size,
-            feedback_consistency_threshold,
-        )
-
-        # Update threshold
-        ragas_threshold = adaptive_exponential_smoothing(
+        # if uncertainty is high enough, we need human feedback, aka active learning gate
+        if needs_human_feedback_dynamic(
             ragas_score,
-            human_feedback,
-            ragas_threshold,
-            feedback_history[-adaptive_window_size:],
-            adaptive_window_size,
-        )
+            all_ragas_scores,
+            step,
+            human_feedback_uncertainty_min_bound,
+            human_feedback_uncertainty_max_bound,
+            human_feedback_uncertainty_bound_buffer,
+        ):
+            feedback_needed_count += 1
+            human_feedback = human_feedback_for_ragas()
+            feedback_history.append(human_feedback)
 
-        # Track the new threshold
-        threshold_history.append(ragas_threshold)
+            current_variance = calculate_feedback_consistency(
+                feedback_history, max_window_size
+            )
+            adaptive_window_size = calculate_adaptive_window_size(
+                current_variance,
+                min_window_size,
+                max_window_size,
+                feedback_consistency_threshold,
+            )
 
-print(f"Total Feedback Needed: {feedback_needed_count}")
-print(f"Dynamic Uncertainty Range: {certainty_low:.2f} - {certainty_high:.2f}")
-print(f"Final Adjusted RAGAS Threshold: {ragas_threshold:.2f}")
+            # Update threshold
+            ragas_threshold = adaptive_exponential_smoothing(
+                ragas_score,
+                human_feedback,
+                ragas_threshold,
+                feedback_history[-adaptive_window_size:],
+                adaptive_window_size,
+            )
 
-plt.figure(figsize=(10, 6))
-plt.plot(range(len(threshold_history)), threshold_history, marker="o")
-plt.title("RAGAS Threshold Adjustment Over Time")
-plt.xlabel("Feedback Iterations")
-plt.ylabel("RAGAS Threshold")
-plt.grid(True)
-plt.show()
+            # Track the new threshold
+            threshold_history.append(ragas_threshold)
+
+    print(f"Total Feedback Needed: {feedback_needed_count}")
+    print(f"Dynamic Uncertainty Range: {certainty_low:.2f} - {certainty_high:.2f}")
+    print(f"Final Adjusted RAGAS Threshold: {ragas_threshold:.2f}")
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(threshold_history)), threshold_history, marker="o")
+    plt.title("RAGAS Threshold Adjustment Over Time")
+    plt.xlabel("Feedback Iterations")
+    plt.ylabel("RAGAS Threshold")
+    plt.grid(True)
+    plt.show()

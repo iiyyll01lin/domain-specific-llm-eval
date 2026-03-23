@@ -176,16 +176,28 @@ class RagasEvaluator:
 
             from datasets import Dataset
             from ragas import evaluate  # type: ignore[attr-defined]
-            from ragas.metrics import (  # Use only metrics that work well with custom LLMs
-                context_precision, faithfulness)
+            # Default to offline deterministic metrics — no LLM endpoint required.
+            # LLM-based metrics (context_precision, faithfulness) are appended by
+            # _setup_custom_llm() only when a valid endpoint is explicitly configured.
+            from ragas.metrics import (
+                NonLLMContextPrecisionWithReference,
+                NonLLMContextRecall,
+                BleuScore,
+                RougeScore,
+            )
 
             self.evaluate_func = evaluate
-            self.metrics = [context_precision, faithfulness]
+            self.metrics = [
+                NonLLMContextPrecisionWithReference(),
+                NonLLMContextRecall(),
+                BleuScore(),
+                RougeScore(),
+            ]
 
             # Default metrics
             self.Dataset = Dataset
 
-            # Setup custom LLM for RAGAS if configured
+            # Optionally append LLM-based metrics if endpoint is configured
             self._setup_custom_llm()
 
             self.ragas_available = True
@@ -292,6 +304,17 @@ class RagasEvaluator:
                         metric.llm = (
                             self.critic_llm
                         )  # Use critic specifically for metrics
+
+                # Append LLM-based metrics now that a valid endpoint is configured
+                try:
+                    from ragas.metrics import context_precision, faithfulness
+
+                    self.metrics = self.metrics + [context_precision, faithfulness]
+                    logger.info(
+                        "✅ LLM-based metrics appended (context_precision, faithfulness)"
+                    )
+                except ImportError as _e:
+                    logger.warning(f"⚠️ Could not import LLM-based metrics: {_e}")
 
                 logger.info("✅ Actor/Critic LLM roles configured for RAGAS evaluation")
                 logger.info(
@@ -713,55 +736,39 @@ class RagasEvaluator:
                 )
 
                 if results is None:
-                    # If safe evaluation failed, generate mock results
-                    logger.warning(
-                        "🔄 RAGAS evaluation failed, generating mock results..."
+                    logger.error(
+                        "❌ RAGAS offline evaluation returned None — "
+                        "no mock fallback in CI/offline mode"
                     )
-                    mock_scores = RagasModelDumpFix.convert_to_mock_results(
-                        fixed_data, self.metrics
+                    return evaluation_error_result(
+                        result_source="ragas_safe_evaluate_failed",
+                        error_stage="ragas_safe_evaluate",
+                        error=(
+                            "Offline RAGAS evaluation returned None. "
+                            "Check that datasets has required columns and metric "
+                            "dependencies (sacrebleu, rouge_score) are installed."
+                        ),
+                        mock_data=False,
+                        extra={"available": True},
                     )
-
-                    return attach_result_contract({
-                        "available": True,
-                        "summary": {
-                            "average_score": (
-                                sum(list(mock_scores.values())[0])
-                                / len(list(mock_scores.values())[0])
-                                if mock_scores
-                                else 0.0
-                            )
-                        },
-                        "metrics": mock_scores,
-                        "message": "RAGAS evaluation failed - using enhanced mock results with model_dump fix",
-                    }, result_source="ragas_model_dump_fix_mock", success=True, error_stage="ragas_safe_evaluate", mock_data=True)
 
                 logger.info("✅ RAGAS evaluation completed successfully")
 
             except Exception as e:
-                logger.warning(f"⚠️ RAGAS evaluation failed with error: {e}")
-                logger.warning("🔄 Falling back to mock RAGAS results...")
-
-                # Generate mock results based on evaluation data length
-                num_samples = len(evaluation_data["question"])
-                mock_score_list = [
-                    0.5 + (i * 0.1) % 0.5 for i in range(num_samples)
-                ]  # Generate varied mock scores
-
-                return attach_result_contract({
-                    "available": True,
-                    "summary": {
-                        "average_score": (
-                            sum(mock_score_list) / len(mock_score_list)
-                            if mock_score_list
-                            else 0.0
-                        )
+                logger.error(
+                    f"❌ RAGAS offline evaluation raised an exception: {e}. "
+                    "No mock fallback — returning error result for CI reliability."
+                )
+                return evaluation_error_result(
+                    result_source="ragas_exception_fallback",
+                    error_stage="ragas_exception_fallback",
+                    error=str(e),
+                    mock_data=False,
+                    extra={
+                        "available": True,
+                        "message": "RAGAS offline evaluation failed — no mock fallback",
                     },
-                    "metrics": {
-                        "context_precision": mock_score_list,
-                        "faithfulness": mock_score_list,
-                    },
-                    "message": "RAGAS evaluation failed - using fallback mock results",
-                }, result_source="ragas_fallback_mock", success=True, error_stage="ragas_exception_fallback", mock_data=True)
+                )
 
             domain_regex_scores = self._score_domain_regex(evaluation_data["answer"])
 
