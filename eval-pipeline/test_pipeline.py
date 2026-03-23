@@ -1,3 +1,8 @@
+# DEPRECATED: This root-level script has been migrated to
+# eval-pipeline/tests/test_legacy_final_batch_migration.py.
+# It is retained for reference only and should not be executed directly.
+# See LIMITATIONS_PROGRESS_20260317.md for migration history.
+
 #!/usr/bin/env python3
 """
 Comprehensive Test Suite for RAG Evaluation Pipeline
