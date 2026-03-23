@@ -353,3 +353,60 @@ def test_run_reporting_contract_error_stage_is_string(tmp_path: Path) -> None:
 
     assert isinstance(result.get("error_stage"), str)
     assert len(result["error_stage"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# Hardware observability artifact — E2E path
+# ---------------------------------------------------------------------------
+
+def test_run_evaluation_writes_hardware_observability_artifact(tmp_path: Path) -> None:
+    """When hardware_acceleration_client is active, _run_evaluation() must persist
+    hardware_observability_<run_id>.json to output_dirs["metadata"]."""
+    orchestrator = _make_eval_orchestrator(tmp_path)
+    orchestrator.run_id = "hw-obs-test"
+    orchestrator.config = {
+        "inference": {
+            "hardware_acceleration": {
+                "enabled": True,
+                "benchmark_prompts": ["hw benchmark prompt"],
+                "benchmark_repeats": 1,
+            }
+        }
+    }
+
+    # Wire the hardware client with the session stub defined in this module
+    orchestrator.hardware_acceleration_client = __import__(
+        "src.inference.vllm_client", fromlist=["vLLMInferenceClient"]
+    ).vLLMInferenceClient(session=_HardwareSession())
+
+    # Plant a fake testset so the stage doesn't fail early
+    testset_file = orchestrator.output_dirs["testsets"] / "testset.xlsx"
+    testset_file.write_bytes(b"fake-xlsx")
+
+    mock_eval_result = {
+        "success": True,
+        "total_queries": 2,
+        "keyword_metrics": {"pass_rate": 1.0},
+        "ragas_metrics": {"average_score": 0.9},
+        "feedback_metrics": {"requests": 0},
+        "output_file": "eval_out.json",
+    }
+    orchestrator.rag_evaluator = MagicMock()
+    orchestrator.rag_evaluator.evaluate_testsets.return_value = mock_eval_result
+
+    result = orchestrator._run_evaluation()
+
+    # Evaluation must succeed
+    assert result["success"] is True, f"Unexpected failure: {result.get('error')}"
+
+    # The artifact file must exist on disk
+    artifact_path = (
+        orchestrator.output_dirs["metadata"] / f"hardware_observability_{orchestrator.run_id}.json"
+    )
+    assert artifact_path.exists(), (
+        f"hardware_observability artifact not written to {artifact_path}"
+    )
+
+    payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert "capabilities" in payload
+    assert payload["capabilities"]["connected"] is True
