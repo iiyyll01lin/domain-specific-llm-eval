@@ -233,3 +233,122 @@ class TestExtractionFailureIntegration:
         }
         with pytest.raises(AssertionError):
             _ci_extraction_failure_gate(result, max_allowed=0)
+
+
+# ---------------------------------------------------------------------------
+# Integration smoke test — real _extract_scores_from_result() code path
+# ---------------------------------------------------------------------------
+
+class TestExtractionFailureRealCodePath:
+    """Smoke-tests that call the real production _extract_scores_from_result()
+    method with a result object that has NO matching columns/keys/attributes,
+    verifying that extraction_failures is populated by the live code path.
+
+    These differ from TestExtractionFailureRecording (which manipulates the
+    list directly) in that they exercise the actual conditional branches inside
+    RAGASEvaluatorWithFallbacks._extract_scores_from_result().
+    """
+
+    def test_no_matching_column_populates_extraction_failures(self) -> None:
+        """Passing a result object whose columns/keys do not contain the
+        requested metric name must append exactly one failure record and
+        return an empty list of scores."""
+        evaluator = _make_evaluator()
+
+        # Build a minimal result object that exposes a 'to_pandas' method
+        # but whose DataFrame columns do NOT contain the requested metric.
+        import pandas as pd
+
+        class _ResultWithWrongColumns:
+            """Mimics a RAGAS EvaluationResult with an irrelevant column."""
+            def to_pandas(self):
+                return pd.DataFrame({"some_other_metric": [0.5, 0.7]})
+
+        scores = evaluator._extract_scores_from_result(
+            _ResultWithWrongColumns(), metric_name="faithfulness"
+        )
+
+        assert scores == [], "Expected empty list when no column matches"
+        assert len(evaluator.extraction_failures) == 1, (
+            "Expected exactly one failure record to be appended"
+        )
+        record = evaluator.extraction_failures[0]
+        assert record["metric_name"] == "faithfulness"
+        assert "error_detail" in record
+        assert "timestamp" in record
+        assert "attempted_paths" in record
+
+    def test_no_matching_key_in_dict_result_populates_extraction_failures(self) -> None:
+        """A result with a 'to_dict' that returns irrelevant keys must record
+        a failure for the requested metric."""
+        evaluator = _make_evaluator()
+
+        class _ResultWithWrongDict:
+            def to_dict(self):
+                return {"irrelevant_key": [0.3, 0.8]}
+
+        scores = evaluator._extract_scores_from_result(
+            _ResultWithWrongDict(), metric_name="context_precision"
+        )
+
+        assert scores == []
+        assert len(evaluator.extraction_failures) == 1
+        assert evaluator.extraction_failures[0]["metric_name"] == "context_precision"
+
+    def test_plain_object_with_no_relevant_attribute_populates_extraction_failures(self) -> None:
+        """A plain object whose only attribute is unrelated to the metric must
+        trigger the full four-path fallback and record the failure."""
+        evaluator = _make_evaluator()
+
+        class _PlainResult:
+            unrelated_attr = [0.9]
+
+        scores = evaluator._extract_scores_from_result(
+            _PlainResult(), metric_name="answer_relevancy"
+        )
+
+        assert scores == []
+        assert len(evaluator.extraction_failures) == 1
+        record = evaluator.extraction_failures[0]
+        assert record["metric_name"] == "answer_relevancy"
+        assert "dataframe" in record["attempted_paths"]
+        assert "dict" in record["attempted_paths"]
+        assert "attribute" in record["attempted_paths"]
+        assert "index" in record["attempted_paths"]
+
+    def test_multiple_failed_extractions_all_recorded(self) -> None:
+        """Calling _extract_scores_from_result() for three unresolvable metrics
+        should add three failure records."""
+        evaluator = _make_evaluator()
+
+        class _EmptyResult:
+            pass
+
+        for metric in ("faithfulness", "context_precision", "answer_relevancy"):
+            evaluator._extract_scores_from_result(_EmptyResult(), metric_name=metric)
+
+        assert len(evaluator.extraction_failures) == 3
+        recorded_names = [r["metric_name"] for r in evaluator.extraction_failures]
+        assert "faithfulness" in recorded_names
+        assert "context_precision" in recorded_names
+        assert "answer_relevancy" in recorded_names
+
+    def test_ci_gate_catches_real_extraction_failure(self) -> None:
+        """Full round-trip: real extraction failure → CI gate raises."""
+        evaluator = _make_evaluator()
+
+        class _EmptyResult:
+            pass
+
+        evaluator._extract_scores_from_result(_EmptyResult(), metric_name="faithfulness")
+
+        result = {
+            "success": True,
+            "extraction_failures": evaluator.extraction_failures,
+            "extraction_failures_file": None,
+            "extraction_failure_count": len(evaluator.extraction_failures),
+        }
+
+        with pytest.raises(AssertionError) as exc_info:
+            _ci_extraction_failure_gate(result, max_allowed=0)
+        assert "1 failure(s)" in str(exc_info.value)
