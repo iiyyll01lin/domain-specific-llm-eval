@@ -240,7 +240,7 @@ class PureRAGASTestsetGeneratorFixes:
                         if clusters:
                             self.logger.info(f"Using fallback relation type: {fallback_type}")
                             break
-                    except:
+                    except Exception:
                         continue
                 
                 # If still no clusters, create basic clusters from nodes

@@ -320,7 +320,7 @@ class CSVTestsetGenerator:
         # Format with topic
         try:
             question = template.format(topic=main_topic)
-        except:
+        except Exception:
             # Fallback if formatting fails
             if language == 'chinese':
                 question = f"根據文件內容，{main_topic}是什麼？"

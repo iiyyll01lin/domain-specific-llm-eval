@@ -299,7 +299,7 @@ class PipelineBugFixes:
                     try:
                         # Try creating with keyword arguments
                         enhanced_doc = Document(page_content=content, metadata=enhanced_metadata)
-                    except:
+                    except Exception:
                         # Create a simple document-like object
                         class SimpleDocument:
                             def __init__(self, page_content, metadata):
@@ -318,7 +318,7 @@ class PipelineBugFixes:
                                 page_content=content,
                                 metadata=enhanced_metadata
                             )
-                        except:
+                        except Exception:
                             # Final fallback: modify original document
                             enhanced_doc = doc
                             if hasattr(enhanced_doc, 'metadata'):

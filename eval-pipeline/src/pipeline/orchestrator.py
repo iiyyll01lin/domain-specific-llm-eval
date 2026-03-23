@@ -476,7 +476,6 @@ class PipelineOrchestrator:
                     self.output_dirs["metadata"]
                     / f"testset_metadata_{self.run_id}.json"
                 )
-                import json
 
                 # Make metadata JSON serializable
                 serializable_metadata = make_json_serializable(metadata)
@@ -598,7 +597,6 @@ class PipelineOrchestrator:
                     self.output_dirs["metadata"]
                     / f"evaluation_metadata_{self.run_id}.json"
                 )
-                import json
 
                 with open(eval_metadata_file, "w") as f:
                     json.dump(metadata, f, indent=2)
@@ -690,7 +688,6 @@ class PipelineOrchestrator:
                 report_metadata_file = (
                     self.output_dirs["metadata"] / f"report_metadata_{self.run_id}.json"
                 )
-                import json
 
                 with open(report_metadata_file, "w") as f:
                     json.dump(metadata, f, indent=2)

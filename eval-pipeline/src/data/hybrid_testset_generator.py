@@ -3251,7 +3251,7 @@ class HybridTestsetGenerator:
         try:
             import ragas
             return ragas.__version__ if hasattr(ragas, '__version__') else 'unknown'
-        except:
+        except Exception:
             return 'unknown'
 
     def _cleanup_old_knowledge_graphs(self):
