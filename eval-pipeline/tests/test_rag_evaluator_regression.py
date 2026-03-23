@@ -107,4 +107,47 @@ def test_evaluate_testsets_separates_failed_results(tmp_path: Path) -> None:
     assert result["total_queries"] == 2
     assert result["result_source"] == "rag_evaluator_batch"
     assert result["error_stage"] == "partial_failure"
+
+
+def test_evaluate_single_testset_rejects_dataframe_argument() -> None:
+    """evaluate_single_testset() must raise TypeError immediately when given a
+    DataFrame (or any non-str/Path value) to prevent silent misuse."""
+    import pandas as pd
+    import pytest
+
+    evaluator = object.__new__(RAGEvaluator)
+
+    with pytest.raises(TypeError) as exc_info:
+        RAGEvaluator.evaluate_single_testset(evaluator, pd.DataFrame())  # type: ignore[arg-type]
+
+    assert "DataFrame" in str(exc_info.value) or "expected" in str(exc_info.value).lower()
+    assert "evaluate_single_testset" in str(exc_info.value)
+
+
+def test_evaluate_single_testset_rejects_dict_argument() -> None:
+    """evaluate_single_testset() must raise TypeError when given a dict."""
+    import pytest
+
+    evaluator = object.__new__(RAGEvaluator)
+
+    with pytest.raises(TypeError):
+        RAGEvaluator.evaluate_single_testset(evaluator, {"questions": ["Q1"]})  # type: ignore[arg-type]
+
+
+def test_evaluate_single_testset_accepts_path_object(tmp_path: Path) -> None:
+    """evaluate_single_testset() must accept a pathlib.Path without raising TypeError."""
+    fake_xlsx = tmp_path / "testset.xlsx"
+    fake_xlsx.write_bytes(b"fake")
+
+    evaluator = object.__new__(RAGEvaluator)
+    evaluator.keyword_evaluator = None
+    evaluator.ragas_evaluator = None
+    # load_testset will fail on the fake file, but TypeError must NOT be raised
+    evaluator.load_testset = lambda path: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        FileNotFoundError("intentional")
+    )
+
+    result = RAGEvaluator.evaluate_single_testset(evaluator, fake_xlsx)
+    # Should get an error result (FileNotFoundError), not a TypeError
+    assert "error" in result or result.get("success") is False
     assert result["contract_version"]

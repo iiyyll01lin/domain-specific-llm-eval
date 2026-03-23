@@ -309,11 +309,22 @@ class RAGEvaluator:
         Evaluate RAG system with a single testset.
 
         Args:
-            testset_path: Path to testset file
+            testset_path: Path to testset file (str or Path).  Passing any
+                other type (e.g. a pandas DataFrame) is a programming error
+                and will raise TypeError immediately.
 
         Returns:
             Evaluation results
         """
+        if not isinstance(testset_path, (str, Path)):
+            raise TypeError(
+                f"evaluate_single_testset() expects a file path (str or Path), "
+                f"got {type(testset_path).__name__}. "
+                "If you have a DataFrame, serialise it to a file first and pass "
+                "its path, or use evaluate_testset(testset_data) for in-memory data."
+            )
+        testset_path = str(testset_path)  # normalise Path → str
+
         logger.info(f"🔄 Evaluating RAG system with testset: {testset_path}")
 
         try:
