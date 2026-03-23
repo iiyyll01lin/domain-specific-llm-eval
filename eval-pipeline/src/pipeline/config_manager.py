@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 class ConfigManager:
     """Manages pipeline configuration loading and validation."""
 
+    # Candidate default config paths, resolved relative to this file's location.
+    # First existing file wins.
+    _DEFAULT_CONFIG_CANDIDATES: tuple = (
+        "pipeline_config.template.yaml",
+        "pipeline_config.yaml",
+    )
+
     def __init__(self, config_path: str):
         """
         Initialize configuration manager.
@@ -29,6 +36,32 @@ class ConfigManager:
         """
         self.config_path = Path(config_path)
         self.config: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_defaults(cls) -> "ConfigManager":
+        """
+        Create a ConfigManager pre-pointed at the bundled default configuration.
+
+        Searches for the first existing candidate under
+        ``<repo-root>/eval-pipeline/config/`` in the order defined by
+        ``_DEFAULT_CONFIG_CANDIDATES``.
+
+        Returns:
+            ConfigManager instance (``load_config()`` still needs to be called).
+
+        Raises:
+            FileNotFoundError: If none of the candidate config files exist.
+        """
+        config_dir = Path(__file__).resolve().parent.parent.parent / "config"
+        for candidate in cls._DEFAULT_CONFIG_CANDIDATES:
+            candidate_path = config_dir / candidate
+            if candidate_path.exists():
+                logger.debug("from_defaults(): using %s", candidate_path)
+                return cls(str(candidate_path))
+        raise FileNotFoundError(
+            f"No default configuration found in {config_dir}. "
+            f"Tried: {list(cls._DEFAULT_CONFIG_CANDIDATES)}"
+        )
 
     def load_config(self) -> Dict[str, Any]:
         """
