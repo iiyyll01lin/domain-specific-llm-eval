@@ -199,6 +199,7 @@ def _make_eval_orchestrator(tmp_path: Path) -> PipelineOrchestrator:
     orchestrator.federated_client = MagicMock()
     orchestrator.federated_client  # silence "unused" warning
     orchestrator.hardware_acceleration_client = None
+    orchestrator.evaluation_dispatcher = MagicMock()
     return orchestrator
 
 
@@ -218,8 +219,7 @@ def test_run_evaluation_success_contract_shape(tmp_path: Path) -> None:
         "feedback_metrics": {"requests": 1},
         "output_file": "eval_out.json",
     }
-    orchestrator.rag_evaluator = MagicMock()
-    orchestrator.rag_evaluator.evaluate_testsets.return_value = mock_eval_result
+    orchestrator.evaluation_dispatcher.evaluate_testsets.return_value = mock_eval_result
 
     result = orchestrator._run_evaluation()
 
@@ -250,8 +250,7 @@ def test_run_evaluation_evaluator_raises_contract_shape(tmp_path: Path) -> None:
     testset_file = orchestrator.output_dirs["testsets"] / "testset.xlsx"
     testset_file.write_bytes(b"fake-xlsx")
 
-    orchestrator.rag_evaluator = MagicMock()
-    orchestrator.rag_evaluator.evaluate_testsets.side_effect = RuntimeError("eval-boom")
+    orchestrator.evaluation_dispatcher.evaluate_testsets.side_effect = RuntimeError("eval-boom")
 
     result = orchestrator._run_evaluation()
 
@@ -398,8 +397,7 @@ def test_run_evaluation_writes_hardware_observability_artifact(tmp_path: Path) -
         "feedback_metrics": {"requests": 0},
         "output_file": "eval_out.json",
     }
-    orchestrator.rag_evaluator = MagicMock()
-    orchestrator.rag_evaluator.evaluate_testsets.return_value = mock_eval_result
+    orchestrator.evaluation_dispatcher.evaluate_testsets.return_value = mock_eval_result
 
     result = orchestrator._run_evaluation()
 
