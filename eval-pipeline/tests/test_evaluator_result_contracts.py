@@ -3,17 +3,9 @@ import types
 
 import pandas as pd
 
-from src.evaluation.comprehensive_rag_evaluator_fixed import \
-    ComprehensiveRAGEvaluatorFixed
-from src.evaluation.comprehensive_rag_evaluator import \
-    ComprehensiveRAGEvaluator
-from src.evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
-from src.evaluation.gates_system import GatesSystem
-from src.evaluation.rag_evaluator import RAGEvaluator
-from src.pipeline.orchestrator import PipelineOrchestrator
-
 
 def test_gates_result_exposes_normalized_contract_fields() -> None:
+    from src.evaluation.gates_system import GatesSystem  # lazy
     system = GatesSystem({"evaluation": {"gates": {}}})
     result = system.evaluate_gates(
         {
@@ -96,6 +88,7 @@ def test_hybrid_evaluator_result_includes_contract_fields(monkeypatch) -> None:
 
 
 def test_contextual_keyword_evaluator_aggregate_result_includes_contract_fields(monkeypatch) -> None:
+    from src.evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator  # lazy
     evaluator = object.__new__(ContextualKeywordEvaluator)
     evaluator.evaluate_batch = lambda evaluations: {
         "aggregate_stats": {
@@ -127,6 +120,7 @@ def test_contextual_keyword_evaluator_aggregate_result_includes_contract_fields(
 
 
 def test_rag_evaluator_success_result_includes_contract_fields(tmp_path) -> None:
+    from src.evaluation.rag_evaluator import RAGEvaluator  # lazy
     evaluator = object.__new__(RAGEvaluator)
     testset_path = tmp_path / "testset.csv"
     testset_path.write_text("question,ground_truth\nWhat changed?,Answer\n", encoding="utf-8")
@@ -146,6 +140,7 @@ def test_rag_evaluator_success_result_includes_contract_fields(tmp_path) -> None
 
 
 def test_comprehensive_rag_evaluator_missing_columns_result_includes_contract_fields(tmp_path) -> None:
+    from src.evaluation.comprehensive_rag_evaluator_fixed import ComprehensiveRAGEvaluatorFixed  # lazy: avoids torch load at collection
     evaluator = object.__new__(ComprehensiveRAGEvaluatorFixed)
     evaluator.keyword_evaluator = None
     evaluator.ragas_evaluator = None
@@ -167,6 +162,7 @@ def test_comprehensive_rag_evaluator_missing_columns_result_includes_contract_fi
 
 
 def test_comprehensive_rag_evaluator_contextual_result_includes_contract_fields() -> None:
+    from src.evaluation.comprehensive_rag_evaluator import ComprehensiveRAGEvaluator  # lazy
     evaluator = object.__new__(ComprehensiveRAGEvaluator)
     evaluator.contextual_functions = {
         "weighted_keyword_score": lambda mandatory, answer, weights, optional: (0.8, 0.75, 0.2, [answer]),
@@ -186,6 +182,7 @@ def test_comprehensive_rag_evaluator_contextual_result_includes_contract_fields(
 
 
 def test_pipeline_orchestrator_stage_result_includes_contract_fields(tmp_path) -> None:
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy: avoids importlib hang at collection
     orchestrator = object.__new__(PipelineOrchestrator)
     orchestrator.run_id = "run-test"
     orchestrator.output_dirs = {

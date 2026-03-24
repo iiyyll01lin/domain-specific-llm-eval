@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
 
-
-def _build_evaluator(monkeypatch) -> ContextualKeywordEvaluator:
+def _build_evaluator(monkeypatch):
+    from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator  # lazy: avoids sentence_transformers load at collection time
     monkeypatch.setattr(
         "evaluation.contextual_keyword_evaluator.OFFLINE_MANAGER_AVAILABLE", False
     )
@@ -14,7 +13,7 @@ def _build_evaluator(monkeypatch) -> ContextualKeywordEvaluator:
     monkeypatch.setattr(
         "evaluation.contextual_keyword_evaluator.SPACY_AVAILABLE", False
     )
-    return ContextualKeywordEvaluator(
+    return ContextualKeywordEvaluator(  # noqa: F821 – imported above
         {
             "threshold": 0.6,
             "weights": {"mandatory": 0.8, "optional": 0.2},

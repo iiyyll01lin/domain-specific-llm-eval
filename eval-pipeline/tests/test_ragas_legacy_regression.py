@@ -7,7 +7,7 @@ import pandas as pd
 import yaml
 
 from src.pipeline.config_manager import ConfigManager
-from src.pipeline.orchestrator import PipelineOrchestrator
+# PipelineOrchestrator is imported lazily inside tests to avoid importlib hang at collection time
 
 
 def test_field_mapping_fix_normalizes_ragas_columns() -> None:
@@ -105,6 +105,7 @@ def test_pure_ragas_components_and_csv_loading_smoke() -> None:
 
 
 def test_orchestrator_hyperparameter_helper_runs_when_enabled(tmp_path: Path) -> None:
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy: avoids importlib hang at collection
     from src.optimization.hyperparam_search import OptunaOptimizer
 
     orchestrator = object.__new__(PipelineOrchestrator)

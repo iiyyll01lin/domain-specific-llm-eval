@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
 from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    from src.pipeline.orchestrator import PipelineOrchestrator
 
 from src.evaluation.evaluation_result_contract import (
     EVALUATION_RESULT_CONTRACT_VERSION,
     attach_result_contract,
     evaluation_error_result,
 )
-from src.pipeline.orchestrator import PipelineOrchestrator
-from src.ui.app_store_marketplace import UnifiedAppStore
-from src.ui.force_graph_viewer import ForceGraphVisualizer
 
 # ---------------------------------------------------------------------------
 # Contract assertion helpers
@@ -77,6 +77,9 @@ class _HardwareSession:
 
 
 def test_orchestrator_taxonomy_topology_appstore_and_federated_helpers(tmp_path: Path) -> None:
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy: avoids importlib hang at collection time
+    from src.ui.app_store_marketplace import UnifiedAppStore
+    from src.ui.force_graph_viewer import ForceGraphVisualizer
     manifest_dir = tmp_path / "manifests"
     manifest_dir.mkdir()
     (manifest_dir / "demo.json").write_text(
@@ -150,6 +153,7 @@ def test_orchestrator_taxonomy_topology_appstore_and_federated_helpers(tmp_path:
 
 
 def test_orchestrator_collects_hardware_acceleration_telemetry() -> None:
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy
     orchestrator = object.__new__(PipelineOrchestrator)
     orchestrator.config = {
         "inference": {
@@ -179,6 +183,7 @@ def test_orchestrator_collects_hardware_acceleration_telemetry() -> None:
 
 def _make_eval_orchestrator(tmp_path: Path) -> PipelineOrchestrator:
     """Build a minimal PipelineOrchestrator stub for evaluation-stage tests."""
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy
     orchestrator = object.__new__(PipelineOrchestrator)
     orchestrator.run_id = "run-eval-contract"
     orchestrator.config = {}
@@ -261,6 +266,8 @@ def test_run_evaluation_evaluator_raises_contract_shape(tmp_path: Path) -> None:
 
 def _make_report_orchestrator(tmp_path: Path) -> PipelineOrchestrator:
     """Build a minimal PipelineOrchestrator stub for reporting-stage tests."""
+    from src.pipeline.orchestrator import PipelineOrchestrator  # lazy
+    from src.ui.force_graph_viewer import ForceGraphVisualizer  # lazy
     orchestrator = object.__new__(PipelineOrchestrator)
     orchestrator.run_id = "run-report-contract"
     orchestrator.config = {}
