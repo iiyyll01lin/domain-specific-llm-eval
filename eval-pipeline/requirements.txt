@@ -87,6 +87,7 @@ watchdog>=2.1.9           # File system monitoring
 # Testing and validation
 pytest>=7.1.0             # Testing framework
 pytest-cov>=3.0.0         # Coverage reporting
+pytest-xdist>=3.5.0       # Parallel test execution
 jsonschema>=4.7.0         # JSON schema validation
 
 # ============================================================================
