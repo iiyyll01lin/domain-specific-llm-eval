@@ -2,12 +2,11 @@
 
 import os
 import numpy as np
-from sentence_transformers import SentenceTransformer, util
-import spacy
 import pandas as pd
 
 
 def get_contextual_segments(text):
+    import spacy  # lazy: avoids ~0.4 s penalty at module import time
     # Load the English language model
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(text.lower())
@@ -38,6 +37,8 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
     """
     Computes a weighted keyword score using contextual segments
     """
+    from sentence_transformers import SentenceTransformer, util  # lazy: avoids ~1.5 s + torch load at import time
+
     if optional_keywords is None:
         optional_keywords = []
 

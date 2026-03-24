@@ -12,15 +12,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from data.document_processor import DocumentProcessor
+try:
+    from data.document_processor import DocumentProcessor
+except ImportError:
+    DocumentProcessor = None  # type: ignore[assignment,misc]
 from data.hybrid_testset_generator import HybridTestsetGenerator
-from distributed.federated_learning import FederatedLearningClient
+try:
+    from distributed.federated_learning import FederatedLearningClient
+except ImportError:
+    FederatedLearningClient = None  # type: ignore[assignment,misc]
 from evaluation.contextual_keyword_evaluator import ContextualKeywordEvaluator
 from evaluation.human_feedback_manager import HumanFeedbackManager
 from evaluation.rag_evaluator import RAGEvaluator
 from evaluation.ragas_evaluator import RagasEvaluator
 from interfaces.rag_interface import RAGInterface
-from inference.vllm_client import vLLMInferenceClient
+try:
+    from inference.vllm_client import vLLMInferenceClient
+except ImportError:
+    vLLMInferenceClient = None  # type: ignore[assignment,misc]
 from loaders.taxonomy_discovery import ZeroShotTaxonomyDiscoverer
 from optimization.hyperparam_search import OptunaOptimizer
 from pipeline.logger import (MemoryTracker, PerformanceTimer, log_stage_end,
