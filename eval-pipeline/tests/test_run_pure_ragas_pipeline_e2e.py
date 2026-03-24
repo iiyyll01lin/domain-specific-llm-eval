@@ -35,10 +35,17 @@ def test_main_completes_with_configured_generation_settings(monkeypatch, tmp_pat
         lambda cfg: (object(), object()),
     )
 
-    async def fake_create_kg(documents, embeddings_model, async_settings=None):
+    async def fake_create_kg(documents, embeddings_model, async_settings=None, graph_store=None):
         return SimpleNamespace(nodes=[SimpleNamespace(properties={"content": "x", "title": "Doc"})], relationships=[])
 
     monkeypatch.setattr(pipeline, "create_knowledge_graph_from_documents", fake_create_kg)
+    # Stub SQLiteGraphStore so main() doesn't touch the filesystem for the KG store
+    monkeypatch.setattr(pipeline, "SQLiteGraphStore", lambda *_a, **_kw: SimpleNamespace(
+        filter_new_hashes=lambda hashes: hashes,
+        get_all_nodes=lambda: [],
+        upsert_node=lambda **kw: True,
+        add_relationship=lambda **kw: None,
+    ))
     monkeypatch.setattr(pipeline, "save_knowledge_graph", lambda kg, output_dir: str(output_dir / "kg.json"))
     monkeypatch.setattr(
         pipeline,
