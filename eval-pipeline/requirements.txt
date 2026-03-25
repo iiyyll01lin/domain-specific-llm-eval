@@ -28,6 +28,8 @@ transformers>=4.21.0      # Hugging Face transformers
 -e ../ragas/ragas          # Local RAGAS submodule with patched graph builders
 datasets>=2.5.0           # Dataset handling for RAGAS
 appdirs>=1.4,<2.0        # RAGAS analytics runtime dependency
+sacrebleu>=2.3.1          # BLEU score metric (required by BleuScore)
+rouge_score>=0.1.2        # ROUGE score metric (required by RougeScore)
 langchain>=0.0.200        # LangChain for document processing
 langchain-community>=0.0.20  # Community components
 langchain-openai>=0.1.0   # OpenAI-compatible chat wrapper used by run_pipeline.py

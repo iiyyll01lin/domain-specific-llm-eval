@@ -282,117 +282,136 @@ class RAGASEvaluatorWithFallbacks:
             self.embeddings = None
 
     def _setup_metric_fallbacks(self):
-        """Setup comprehensive metric fallback strategy with working RAG metrics."""
+        """Setup offline deterministic metrics as primary tier; LLM metrics as opt-in enrichment."""
         if not RAGAS_AVAILABLE:
             logger.error("RAGAS not available - no metrics can be configured")
             return
 
-        # 1. Setup RAG evaluation metrics (primary) - Focus on what actually works
         self.llm_metrics = []
         self.nonllm_metrics = []
         self.legacy_metrics = []
 
-        if self.llm:
-            logger.info("🎯 Setting up RAG evaluation metrics...")
-            try:
-                # Import the exact metrics from our available set
-                from ragas.metrics import (AnswerRelevancy, ContextPrecision,
-                                           ContextRecall, Faithfulness)
-
-                # Setup each metric individually with proper error handling
-                # 1. ContextPrecision - measures precision of retrieved contexts
-                try:
-                    context_precision = ContextPrecision(llm=self.llm)
-                    if self.embeddings:
-                        context_precision.embeddings = self.embeddings
-                    self.llm_metrics.append(context_precision)
-                    logger.info("✅ ContextPrecision configured for RAG evaluation")
-                except Exception as e:
-                    logger.warning(f"⚠️ ContextPrecision setup failed: {e}")
-
-                # 2. ContextRecall - measures recall of retrieved contexts
-                try:
-                    context_recall = ContextRecall(llm=self.llm)
-                    if self.embeddings:
-                        context_recall.embeddings = self.embeddings
-                    self.llm_metrics.append(context_recall)
-                    logger.info("✅ ContextRecall configured for RAG evaluation")
-                except Exception as e:
-                    logger.warning(f"⚠️ ContextRecall setup failed: {e}")
-
-                # 3. Faithfulness - measures factual consistency with contexts
-                try:
-                    faithfulness = Faithfulness(llm=self.llm)
-                    if self.embeddings:
-                        faithfulness.embeddings = self.embeddings
-                    self.llm_metrics.append(faithfulness)
-                    logger.info("✅ Faithfulness configured for RAG evaluation")
-                except Exception as e:
-                    logger.warning(f"⚠️ Faithfulness setup failed: {e}")
-
-                # 4. AnswerRelevancy - measures relevance of answer to question
-                try:
-                    answer_relevancy = AnswerRelevancy(llm=self.llm)
-                    if self.embeddings:
-                        answer_relevancy.embeddings = self.embeddings
-                    self.llm_metrics.append(answer_relevancy)
-                    logger.info("✅ AnswerRelevancy configured for RAG evaluation")
-                except Exception as e:
-                    logger.warning(f"⚠️ AnswerRelevancy setup failed: {e}")
-
-                logger.info(
-                    f"🎯 Successfully configured {len(self.llm_metrics)} RAG evaluation metrics"
-                )
-
-            except Exception as e:
-                logger.error(f"❌ Failed to setup RAG metrics: {e}")
-                self.llm_metrics = []
-        else:
-            logger.warning("⚠️ No LLM configured - RAG metrics will not be available")
-            self.llm_metrics = []
-
-        # 2. Setup Non-LLM fallback metrics for basic similarity measures
-        self.nonllm_metrics = []
+        # ---------------------------------------------------------------
+        # PRIMARY TIER: Offline deterministic metrics (no LLM required).
+        # These run unconditionally on every CI/offline evaluation run.
+        # ---------------------------------------------------------------
+        logger.info("🔧 Setting up offline deterministic metrics (primary tier)...")
         try:
-            logger.info("🔧 Setting up Non-LLM fallback metrics...")
-
-            # Basic similarity metrics that don't require reference_contexts
-            from ragas.metrics import AnswerSimilarity
-
-            # Only add metrics that work with standard columns
-            try:
-                answer_similarity = AnswerSimilarity()
-                # Override embeddings if available
-                if self.embeddings:
-                    answer_similarity.embeddings = self.embeddings
-                self.nonllm_metrics.append(answer_similarity)
-                logger.info("✅ AnswerSimilarity configured as Non-LLM fallback")
-            except Exception as e:
-                logger.warning(f"⚠️ AnswerSimilarity setup failed: {e}")
-
-            logger.info(
-                f"🔄 Configured {len(self.nonllm_metrics)} Non-LLM fallback metrics"
+            from ragas.metrics import (
+                NonLLMContextPrecisionWithReference,
+                NonLLMContextRecall,
+                BleuScore,
+                RougeScore,
             )
 
-        except Exception as e:
-            logger.warning(f"⚠️ Non-LLM metrics setup failed: {e}")
-            self.nonllm_metrics = []
+            try:
+                ncp = NonLLMContextPrecisionWithReference()
+                self.nonllm_metrics.append(ncp)
+                logger.info("✅ NonLLMContextPrecisionWithReference configured (offline)")
+            except Exception as e:
+                logger.warning(f"⚠️ NonLLMContextPrecisionWithReference setup failed: {e}")
 
-        # 3. Setup basic legacy metrics as final fallback
+            try:
+                ncr = NonLLMContextRecall()
+                self.nonllm_metrics.append(ncr)
+                logger.info("✅ NonLLMContextRecall configured (offline)")
+            except Exception as e:
+                logger.warning(f"⚠️ NonLLMContextRecall setup failed: {e}")
+
+            try:
+                bleu = BleuScore()
+                self.nonllm_metrics.append(bleu)
+                logger.info("✅ BleuScore configured (offline)")
+            except Exception as e:
+                logger.warning(f"⚠️ BleuScore setup failed: {e}")
+
+            try:
+                rouge = RougeScore()
+                self.nonllm_metrics.append(rouge)
+                logger.info("✅ RougeScore configured (offline)")
+            except Exception as e:
+                logger.warning(f"⚠️ RougeScore setup failed: {e}")
+
+            logger.info(
+                f"🎯 Offline primary tier: {len(self.nonllm_metrics)} deterministic metrics configured"
+            )
+
+        except ImportError as e:
+            logger.warning(f"⚠️ Could not import offline RAGAS metrics: {e}")
+
+        # ---------------------------------------------------------------
+        # ENRICHMENT TIER: LLM-based metrics — only if endpoint is configured.
+        # No network calls are made unless self.llm is explicitly set.
+        # ---------------------------------------------------------------
+        if self.llm:
+            logger.info("🎯 LLM endpoint configured — setting up LLM enrichment metrics...")
+            try:
+                from ragas.metrics import (AnswerRelevancy, Faithfulness,
+                                           LLMContextPrecisionWithoutReference,
+                                           LLMContextPrecisionWithReference,
+                                           LLMContextRecall, ResponseRelevancy)
+
+                for metric_cls, metric_name in [
+                    (Faithfulness, "Faithfulness"),
+                    (AnswerRelevancy, "AnswerRelevancy"),
+                    (LLMContextPrecisionWithReference, "LLMContextPrecisionWithReference"),
+                    (LLMContextRecall, "LLMContextRecall"),
+                ]:
+                    try:
+                        m = metric_cls(llm=self.llm)
+                        if self.embeddings:
+                            m.embeddings = self.embeddings
+                        self.llm_metrics.append(m)
+                        logger.info(f"✅ {metric_name} configured (LLM enrichment)")
+                    except Exception as e:
+                        logger.warning(f"⚠️ {metric_name} setup failed: {e}")
+
+            except ImportError:
+                # Try legacy imports
+                try:
+                    from ragas.metrics import (AnswerRelevancy, ContextPrecision,
+                                               ContextRecall, Faithfulness)
+
+                    for metric_cls, metric_name in [
+                        (Faithfulness, "Faithfulness"),
+                        (AnswerRelevancy, "AnswerRelevancy"),
+                        (ContextPrecision, "ContextPrecision"),
+                        (ContextRecall, "ContextRecall"),
+                    ]:
+                        try:
+                            m = metric_cls(llm=self.llm)
+                            if self.embeddings:
+                                m.embeddings = self.embeddings
+                            self.llm_metrics.append(m)
+                            logger.info(f"✅ {metric_name} (legacy) configured (LLM enrichment)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ {metric_name} setup failed: {e}")
+
+                except ImportError as e:
+                    logger.warning(f"⚠️ LLM-based RAGAS metrics not available: {e}")
+
+            logger.info(
+                f"🔧 LLM enrichment tier: {len(self.llm_metrics)} metrics configured"
+            )
+        else:
+            logger.info(
+                "💡 No LLM endpoint configured — skipping LLM enrichment metrics "
+                "(set endpoint_url + api_key to enable)"
+            )
+
+        # Legacy metrics are disabled; offline tier covers the CI use-case
         self.legacy_metrics = []
-        logger.info("⚠️ Legacy metrics disabled to focus on working RAG metrics")
+        logger.info("⚠️ Legacy metrics disabled — offline tier covers CI use-case")
 
-        # Log total available metrics
-        total_metrics = (
-            len(self.llm_metrics) + len(self.nonllm_metrics) + len(self.legacy_metrics)
-        )
-        logger.info(f"📊 Total RAG evaluation metrics configured: {total_metrics}")
+        total_metrics = len(self.llm_metrics) + len(self.nonllm_metrics)
+        logger.info(f"📊 Total metrics configured: {total_metrics} "
+                    f"(offline={len(self.nonllm_metrics)}, llm={len(self.llm_metrics)})")
 
         if total_metrics == 0:
             logger.warning(
                 "⚠️ No RAGAS metrics available - will use simplified evaluation mode"
             )
-            # Don't raise exception, allow pipeline to continue
+
 
     def _prepare_ragas_dataset(
         self,
