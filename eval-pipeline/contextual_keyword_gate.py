@@ -33,6 +33,10 @@ def get_contextual_segments(text):
     return segments
 
 
+# Module-level cache for SentenceTransformer model (loaded once, reused across calls)
+_sentence_model_cache = None
+
+
 def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keywords=None):
     """
     Computes a weighted keyword score using contextual segments
@@ -48,7 +52,29 @@ def weighted_keyword_score(mandatory_keywords, answer, weights, optional_keyword
     if not answer_segments:
         answer_segments = [answer.strip()] if answer.strip() else [""]
 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    global _sentence_model_cache
+    if _sentence_model_cache is None:
+        try:
+            _sentence_model_cache = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
+        except Exception:
+            try:
+                _sentence_model_cache = SentenceTransformer("all-MiniLM-L6-v2")
+            except Exception:
+                # Model unavailable: return simple token-overlap scores
+                answer_lower = answer.lower()
+                mandatory_scores = [
+                    1.0 if kw.lower() in answer_lower else 0.0
+                    for kw in mandatory_keywords
+                ]
+                optional_scores = (
+                    [1.0 if kw.lower() in answer_lower else 0.0 for kw in optional_keywords]
+                    if optional_keywords else []
+                )
+                mandatory_score = (sum(mandatory_scores) / len(mandatory_scores) if mandatory_scores else 0.0) * weights["mandatory"]
+                optional_score = (sum(optional_scores) / len(optional_scores) if optional_scores else 1.0) * weights["optional"]
+                total_score = mandatory_score + optional_score
+                return total_score, mandatory_score, optional_score, answer_segments
+    model = _sentence_model_cache
 
     answer_embeddings = model.encode(answer_segments, convert_to_tensor=True)
 

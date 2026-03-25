@@ -156,7 +156,7 @@ class ContextualKeywordEvaluator:
                 try:
                     device = "cuda:0" if torch.cuda.is_available() else "cpu"
                     self.similarity_model = SentenceTransformer(
-                        self.similarity_model_name, device=device
+                        self.similarity_model_name, device=device, local_files_only=True
                     )
                     logger.info(
                         f"✅ Loaded sentence transformer: {self.similarity_model_name} on {device}"
@@ -192,8 +192,9 @@ class ContextualKeywordEvaluator:
         if SENTENCE_TRANSFORMERS_AVAILABLE and self.similarity_model is None:
             try:
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+                # local_files_only=True prevents network I/O; falls back to None
                 self.similarity_model = SentenceTransformer(
-                    self.similarity_model_name, device=device
+                    self.similarity_model_name, device=device, local_files_only=True
                 )
                 logger.info(
                     f"✅ Loaded sentence transformer: {self.similarity_model_name} on {device}"

@@ -160,7 +160,7 @@ class EnhancedContextualKeywordEvaluator:
             try:
                 device = "cuda:0" if torch.cuda.is_available() else "cpu"
                 self.sentence_model = SentenceTransformer(
-                    self.sentence_model_name, device=device
+                    self.sentence_model_name, device=device, local_files_only=True
                 )
                 logger.info(
                     f"✅ Sentence transformer loaded: {self.sentence_model_name} on {device}"
