@@ -177,7 +177,12 @@ def test_extended_partial_metrics_wire_into_main_evaluator_helpers() -> None:
     assert temporal_metrics["temporal_causality_score"]["mean"] > 0.5
 
 
-def test_ragas_evaluator_fallback_marks_result_source(monkeypatch) -> None:
+def test_ragas_evaluator_safe_evaluate_none_yields_error_not_mock(monkeypatch) -> None:
+    """
+    When safe_ragas_evaluate returns None (e.g. all offline metrics fail),
+    the result must be a real error: mock_data=False, success=False.
+    Regression guard: this path must NEVER silently return mock_data=True.
+    """
     evaluator = object.__new__(RagasEvaluator)
     evaluator.ragas_available = True
     evaluator.metrics = []
@@ -200,15 +205,12 @@ def test_ragas_evaluator_fallback_marks_result_source(monkeypatch) -> None:
         "src.evaluation.ragas_evaluator.RagasModelDumpFix.safe_ragas_evaluate",
         lambda dataset, metrics: None,
     )
-    monkeypatch.setattr(
-        "src.evaluation.ragas_evaluator.RagasModelDumpFix.convert_to_mock_results",
-        lambda data, metrics: {"context_precision": [0.2]},
-    )
 
     result = evaluator.evaluate({"questions": ["Q1"]}, [{"answer": "A1"}])
 
-    assert result["mock_data"] is True
-    assert result["result_source"] == "ragas_model_dump_fix_mock"
+    assert result["mock_data"] is False
+    assert result["success"] is False
+    assert result["result_source"] == "ragas_safe_evaluate_failed"
     assert result["error_stage"] == "ragas_safe_evaluate"
     assert result["contract_version"]
 
