@@ -5,7 +5,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.ingestion.main:app --host 0.0.0.0 --port 8000 --reload
@@ -14,7 +14,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.processing.main:app --host 0.0.0.0 --port 8000 --reload
@@ -23,7 +23,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.testset.main:app --host 0.0.0.0 --port 8000 --reload
@@ -32,7 +32,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.eval.main:app --host 0.0.0.0 --port 8000 --reload
@@ -41,7 +41,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.reporting.main:app --host 0.0.0.0 --port 8000 --reload
@@ -50,7 +50,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.adapter.main:app --host 0.0.0.0 --port 8000 --reload
@@ -59,7 +59,7 @@ services:
       - ./:/app
       - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
       - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
-    - ./.cache:/app/.cache
+      - ./.cache:/app/.cache
     environment:
       UVICORN_RELOAD: '1'
     command: uvicorn services.kg.main:app --host 0.0.0.0 --port 8000 --reload
