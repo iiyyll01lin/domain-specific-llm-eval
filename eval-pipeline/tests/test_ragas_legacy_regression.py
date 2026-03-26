@@ -35,8 +35,11 @@ def test_field_mapping_fix_normalizes_ragas_columns() -> None:
     assert normalized.iloc[0]["contexts"] == "ML is a subset of AI"
 
 
+_EVAL_PIPE_ROOT = Path(__file__).resolve().parent.parent
+
+
 def test_pipeline_config_and_secrets_smoke() -> None:
-    config_path = "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+    config_path = str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     manager = ConfigManager(config_path)
     config = manager.load_config()
 
@@ -44,9 +47,7 @@ def test_pipeline_config_and_secrets_smoke() -> None:
     assert "rag_system" in config
     assert config["testset_generation"]["ragas_config"]["custom_llm"]["endpoint"]
 
-    secrets_path = Path(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/secrets.yaml"
-    )
+    secrets_path = _EVAL_PIPE_ROOT / "config" / "secrets.yaml"
     secrets = yaml.safe_load(secrets_path.read_text(encoding="utf-8"))
     api_key = str(secrets["inventec_llm"]["api_key"])
 
@@ -85,9 +86,7 @@ def test_pure_ragas_components_and_csv_loading_smoke() -> None:
     from ragas.llms import LangchainLLMWrapper
     from ragas.testset.graph import KnowledgeGraph, Node, NodeType
 
-    csv_path = Path(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/data/csv/pre-training-data.csv"
-    )
+    csv_path = _EVAL_PIPE_ROOT / "data" / "csv" / "pre-training-data.csv"
     df = pd.read_csv(csv_path)
     content = json.loads(str(df.iloc[0]["content"]))
 

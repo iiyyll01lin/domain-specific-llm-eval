@@ -10,7 +10,9 @@ from src.data.csv_data_processor import CSVDataProcessor
 from src.ui.dashboard_job_runner import DashboardJobRunner
 
 
-DOCUMENT_LOADER_PATH = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/document_loader.py")
+# Resolve relative to this test file so the path works in any environment
+# (local checkout, Docker container, GitHub Actions, …).
+DOCUMENT_LOADER_PATH = Path(__file__).resolve().parent.parent / "document_loader.py"
 DOCUMENT_LOADER_SPEC = importlib.util.spec_from_file_location(
     "legacy_eval_pipeline_document_loader",
     DOCUMENT_LOADER_PATH,

@@ -12,7 +12,8 @@ from reports.report_generator import ReportGenerator
 from src.pipeline.config_manager import ConfigManager
 
 
-SCRIPT_DIR = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/scripts")
+SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_EVAL_PIPE_ROOT = Path(__file__).resolve().parent.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -125,13 +126,13 @@ def test_legacy_tiktoken_patch_behaviour_is_covered(monkeypatch) -> None:
 
 
 def test_legacy_full_ragas_implementation_config_smoke_is_covered() -> None:
-    config_file = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config_file = _EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml"
     manager = ConfigManager(str(config_file))
     config = manager.load_config()
 
     testset_config = config.get("testset_generation", {})
     ragas_config = testset_config.get("ragas_config", {})
-    csv_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/data/csv/pre-training-data.csv")
+    csv_path = _EVAL_PIPE_ROOT / "data" / "csv" / "pre-training-data.csv"
     df = pd.read_csv(csv_path)
 
     assert config_file.exists()
@@ -164,7 +165,7 @@ def test_legacy_custom_documents_behaviour_is_covered(tmp_path: Path, monkeypatc
 
 
 def test_legacy_comprehensive_fixes_behaviour_is_covered() -> None:
-    config_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config_path = _EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml"
     config = ConfigManager(str(config_path)).load_config()
     ragas_config = config.get("testset_generation", {}).get("ragas_config", {})
     service_boundary = config.get("evaluation", {}).get("human_feedback", {}).get("service_boundary", {})
@@ -177,7 +178,7 @@ def test_legacy_comprehensive_fixes_behaviour_is_covered() -> None:
 def test_legacy_config_check_behaviour_is_covered() -> None:
     # check_config_duplication() in the deleted test_config_check.py loaded the
     # pipeline config and verified there were no duplicate top-level keys.
-    config_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config_path = _EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml"
     config = ConfigManager(str(config_path)).load_config()
     # Duplicate detection: all required top-level keys are unique strings.
     top_level_keys = list(config.keys())

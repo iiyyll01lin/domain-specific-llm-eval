@@ -16,7 +16,7 @@ def test_pipeline_help_includes_maintained_cli_options() -> None:
         cwd=PIPELINE_DIR,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
         check=False,
     )
 

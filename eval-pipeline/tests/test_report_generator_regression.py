@@ -9,6 +9,9 @@ from data.configurable_testset_builder import ConfigurableTestsetBuilder
 from pipeline.config_manager import ConfigManager
 
 
+_EVAL_PIPE_ROOT = Path(__file__).resolve().parent.parent
+
+
 def test_report_generator_maps_required_columns_without_crashing(tmp_path: Path) -> None:
     generator = ReportGenerator({"reporting": {"enabled": True}})
     results_df = pd.DataFrame(
@@ -45,20 +48,20 @@ def test_generate_reports_uses_workspace_relative_output_dir(tmp_path: Path, mon
     monkeypatch.chdir(tmp_path)
     reports = generator.generate_reports([eval_file], "path-check")
 
-    expected_dir = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/outputs/reports/run_path-check")
+    expected_dir = _EVAL_PIPE_ROOT / "outputs" / "reports" / "run_path-check"
 
     assert Path(reports["detailed_results"]).parent == expected_dir
 
 
 def test_configurable_builder_and_config_manager_smoke() -> None:
     builder = ConfigurableTestsetBuilder(
-        config_path="/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+        config_path=str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     )
     assert "synthetic_llm" in builder.available_strategies
     assert "factual" in builder.question_types
 
     manager = ConfigManager(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+        str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     )
     config = manager.load_config()
     assert "testset_generation" in config

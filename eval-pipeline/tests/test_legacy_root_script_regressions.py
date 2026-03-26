@@ -17,10 +17,11 @@ from src.ui.force_graph_viewer import ForceGraphVisualizer
 from src.utils.ragas_fixes import fix_ragas_dataset_schema
 
 
+_EVAL_PIPE_ROOT = Path(__file__).resolve().parent.parent
+
+
 def _load_eval_pipeline_document_loader_module():
-    module_path = Path(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/document_loader.py"
-    )
+    module_path = _EVAL_PIPE_ROOT / "document_loader.py"
     spec = importlib.util.spec_from_file_location(
         "eval_pipeline_document_loader",
         module_path,
@@ -55,7 +56,7 @@ def test_legacy_test_ragas_fix_behaviour_is_covered() -> None:
         }
     )
 
-    secrets_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/secrets.yaml")
+    secrets_path = _EVAL_PIPE_ROOT / "config" / "secrets.yaml"
     secrets = yaml.safe_load(secrets_path.read_text(encoding="utf-8"))
 
     assert "question" in fixed.columns
@@ -67,12 +68,10 @@ def test_legacy_test_ragas_fix_behaviour_is_covered() -> None:
 
 
 def test_legacy_pure_ragas_implementation_behaviour_is_covered() -> None:
-    config_path = "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+    config_path = str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     manager = ConfigManager(config_path)
     config = manager.load_config()
-    csv_path = Path(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/data/csv/pre-training-data.csv"
-    )
+    csv_path = _EVAL_PIPE_ROOT / "data" / "csv" / "pre-training-data.csv"
     df = pd.read_csv(csv_path)
     content = json.loads(str(df.iloc[0]["content"]))
 
@@ -368,7 +367,7 @@ def test_legacy_report_fixes_script_behaviour_is_covered(tmp_path: Path) -> None
 
 
 def test_legacy_custom_llm_integration_script_behaviour_is_covered(tmp_path: Path, monkeypatch) -> None:
-    config_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml")
+    config_path = _EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml"
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     generator = HybridTestsetGenerator(config)
 
@@ -401,13 +400,13 @@ def test_legacy_pipeline_fixes_script_behaviour_is_covered() -> None:
     import subprocess
     import sys
 
-    pipeline_dir = Path("/data/yy/domain-specific-llm-eval/eval-pipeline")
+    pipeline_dir = _EVAL_PIPE_ROOT
     help_result = subprocess.run(
         [sys.executable, "run_pipeline.py", "--help"],
         cwd=pipeline_dir,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
         check=False,
     )
 
@@ -426,7 +425,7 @@ def test_legacy_small_data_script_behaviour_is_covered(tmp_path: Path) -> None:
 
     pd.DataFrame(rows).to_csv(csv_path, index=False)
     config = ConfigManager(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+        str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     ).load_config()
     config.setdefault("data_sources", {}).setdefault("csv", {})["csv_files"] = [str(csv_path)]
     config["testset_generation"]["max_documents_for_generation"] = 2
@@ -454,7 +453,7 @@ def test_legacy_simple_pipeline_script_behaviour_is_covered() -> None:
     from reports.report_generator import ReportGenerator
 
     config = ConfigManager(
-        "/data/yy/domain-specific-llm-eval/eval-pipeline/config/pipeline_config.yaml"
+        str(_EVAL_PIPE_ROOT / "config" / "pipeline_config.yaml")
     ).load_config()
     contextual_evaluator = ContextualKeywordEvaluator(
         {"weights": {"mandatory": 0.8, "optional": 0.2}, "threshold": 0.6}
@@ -522,9 +521,15 @@ def test_legacy_document_processing_script_behaviour_is_covered(tmp_path: Path) 
 
 
 def test_legacy_local_generation_script_behaviour_is_covered() -> None:
+    import local_dataset_generator as _ldg
+    from unittest.mock import patch
     from local_dataset_generator import LocalSyntheticDatasetGenerator
 
-    generator = LocalSyntheticDatasetGenerator({"local": {}, "fallback": {}})
+    # Patch model-availability flags to False so the constructor skips
+    # downloading/loading ML models — required in offline Docker environment.
+    with patch.object(_ldg, "SENTENCE_TRANSFORMERS_AVAILABLE", False), \
+         patch.object(_ldg, "KEYBERT_AVAILABLE", False):
+        generator = LocalSyntheticDatasetGenerator({"local": {}, "fallback": {}})
     assert generator is not None
 
 

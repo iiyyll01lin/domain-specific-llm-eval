@@ -31,9 +31,9 @@ datasets>=2.5.0           # Dataset handling for RAGAS
 appdirs>=1.4,<2.0        # RAGAS analytics runtime dependency
 sacrebleu>=2.3.1          # BLEU score metric (required by BleuScore)
 rouge_score>=0.1.2        # ROUGE score metric (required by RougeScore)
-langchain>=0.0.200        # LangChain for document processing
-langchain-community>=0.0.20  # Community components
-langchain-openai>=0.1.0   # OpenAI-compatible chat wrapper used by run_pipeline.py
+langchain>=0.3,<1.0       # LangChain for document processing; <1.0 retains langchain.schema API
+langchain-community>=0.3,<0.4  # Community components; 0.4+ requires langchain>=1.0 + pydantic-settings>=2.10
+langchain-openai>=0.2,<1.0   # OpenAI-compatible chat wrapper used by run_pipeline.py
 
 # Keyword extraction
 keybert>=0.7.0            # KeyBERT for automatic keyword extraction

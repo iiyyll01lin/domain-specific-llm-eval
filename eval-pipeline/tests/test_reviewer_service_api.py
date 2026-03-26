@@ -60,7 +60,7 @@ def test_reviewer_service_api_health_and_queue_flow(tmp_path: Path) -> None:
 
 
 def test_reviewer_service_contract_file_exists() -> None:
-    contract_path = Path("/data/yy/domain-specific-llm-eval/eval-pipeline/contracts/reviewer_service_contract.yaml")
+    contract_path = Path(__file__).resolve().parent.parent / "contracts" / "reviewer_service_contract.yaml"
     content = contract_path.read_text(encoding="utf-8")
 
     assert contract_path.exists()
