@@ -128,6 +128,61 @@ services:
     ports:
       - "8007:8000"
 
+  # ── Webhook Daemon ────────────────────────────────────────────────────────
+  # Listens for CI push events (GitHub webhooks, GitLab webhooks, or manual
+  # triggers) and launches the RAGAS evaluation pipeline in a background task.
+  #
+  #   POST http://localhost:8008/webhook
+  #   GET  http://localhost:8008/health
+  #
+  # Event log is written to outputs/webhook_events.jsonl.
+  # To disable in a lightweight stack, comment out this service.
+  webhook:
+    <<: *service-base
+    container_name: rag-eval-webhook
+    working_dir: /app/eval-pipeline
+    environment:
+      SERVICE: webhook
+      SERVICE_NAME: webhook-daemon
+      PYTHONPATH: /app:/app/eval-pipeline:/app/eval-pipeline/src:/app/ragas/ragas/src
+    ports:
+      - "8008:8000"
+    volumes:
+      - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
+      - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
+      - ./.cache:/app/.cache
+      # eval-pipeline source: webhook_daemon.py + pipeline runner scripts
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./config:/app/config:ro
+      - ./outputs:/app/outputs
+    command: >
+      uvicorn webhook_daemon:app
+        --host 0.0.0.0
+        --port 8000
+        --log-level info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  insights-portal:
+    build:
+      context: ./insights-portal
+      dockerfile: Dockerfile
+    container_name: rag-eval-insights-portal
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    depends_on:
+      - ingestion
+      - eval
+      - reporting
+    logging: *default-logging
+    networks:
+      - rag-eval-net
+
 networks:
   rag-eval-net:
     name: rag-eval-net

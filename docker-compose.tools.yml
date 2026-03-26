@@ -1,0 +1,410 @@
+# =============================================================================
+# docker-compose.tools.yml — Ad-hoc Developer CLI Tools
+# =============================================================================
+#
+# All services are tagged with profiles: ["tools"] so they NEVER start
+# automatically with `docker compose up -d`.
+#
+# General invocation pattern (from repo root):
+#
+#   docker compose \
+#       -f docker-compose.services.yml \
+#       -f docker-compose.tools.yml \
+#       run --rm <service-name> [-- <extra args>]
+#
+# Shorthand when only inspecting files (no live service deps):
+#   docker compose -f docker-compose.tools.yml run --rm <service-name>
+#
+# =============================================================================
+#
+# PIPELINE RUNNERS (need live LLM endpoint — set in .env.compose)
+# ----------------------------------------------------------------
+#   ragas-pipeline   Full RAGAS testset generation from CSV
+#   run-pipeline     Simplified KG + testset pipeline runner
+#   evaluate-testset Evaluate an existing testset against a RAG endpoint
+#   rag-cli          Testset manager utility (list / validate / evaluate)
+#
+# KG & SCORING TOOLS
+# ------------------
+#   kg-tune          Grid-search KG similarity thresholds; writes threshold_report.json
+#   perf-baseline    Benchmark extraction + relationship latency; writes benchmarks/baseline.json
+#
+# CODE / SCHEMA VALIDATORS (fully offline, fast)
+# -----------------------------------------------
+#   validate-events     Validate event JSON schemas against schema_registry.json
+#   validate-telemetry  Validate telemetry_taxonomy.json structure
+#   validate-tasks      Validate tasks.md governance blocks and parity
+#   validate-compose    Validate docker-compose.services.yml service list
+#                       ⚠ Requires Docker CLI: mount /var/run/docker.sock (see service def)
+#
+# ARTIFACT GENERATORS
+# -------------------
+#   gen-openapi      Generate OpenAPI spec stubs for each FastAPI service
+#   gen-supplychain  Build SBOM diff + SLSA provenance JSON artifacts
+#   task-timeline    Parse tasks.md → task_timeline.json + task_timeline.csv
+#   gen-dashboard    Render sprint dashboard.html from task_timeline.json
+#   check-bundle     Enforce gzip size budget on the KG panel JS chunk
+#                    ⚠ Requires `npm run build` output (mount insights-portal/dist)
+#
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Shared anchors
+# ---------------------------------------------------------------------------
+
+# Base for scripts in eval-pipeline/ (working_dir = /app/eval-pipeline)
+x-eval-tools-base: &eval-tools-base
+  image: ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}
+  user: "0"
+  restart: "no"
+  healthcheck:
+    disable: true
+  working_dir: /app/eval-pipeline
+  environment: &eval-env
+    PYTHONPATH: /app:/app/eval-pipeline:/app/eval-pipeline/src:/app/ragas/ragas/src
+    PYTHONUNBUFFERED: "1"
+    MPLBACKEND: Agg
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+  volumes: &eval-vols
+    - ./eval-pipeline:/app/eval-pipeline
+    - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+    - ./services:/app/services:ro
+    - ./config:/app/config:ro
+    - ./outputs:/app/outputs
+    - ./.cache:/app/.cache
+  networks:
+    - rag-eval-net
+
+# Base for scripts in root scripts/ (working_dir = /app)
+x-scripts-tools-base: &scripts-tools-base
+  image: ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}
+  user: "0"
+  restart: "no"
+  healthcheck:
+    disable: true
+  working_dir: /app
+  environment: &scripts-env
+    PYTHONPATH: /app:/app/eval-pipeline:/app/eval-pipeline/src:/app/ragas/ragas/src
+    PYTHONUNBUFFERED: "1"
+    MPLBACKEND: Agg
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+  volumes: &scripts-vols
+    - ./eval-pipeline:/app/eval-pipeline
+    - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+    - ./services:/app/services
+    - ./config:/app/config:ro
+    - ./scripts:/app/scripts:ro
+    - ./outputs:/app/outputs
+    - ./benchmarks:/app/benchmarks
+    - ./.cache:/app/.cache
+  networks:
+    - rag-eval-net
+
+services:
+  # ===========================================================================
+  # PIPELINE RUNNERS
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # ragas-pipeline
+  # Full RAGAS testset generation: CSV → Knowledge Graph → testset artifacts.
+  # Requires a running LLM endpoint (configured in .env.compose or config/).
+  #
+  # Usage:
+  #   docker compose -f docker-compose.services.yml -f docker-compose.tools.yml \
+  #     run --rm ragas-pipeline
+  #
+  # Pass extra args after --:
+  #   docker compose ... run --rm ragas-pipeline -- \
+  #     --config config/pipeline_config.yaml --max-docs 50 --max-samples 200
+  # ---------------------------------------------------------------------------
+  ragas-pipeline:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-ragas-pipeline
+    profiles: ["tools"]
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    command: python run_pure_ragas_pipeline.py
+
+  # ---------------------------------------------------------------------------
+  # run-pipeline
+  # Simplified pipeline: TXT/CSV → KG nodes → testset (fallback synthesizer).
+  #
+  # Usage:
+  #   docker compose ... run --rm run-pipeline -- \
+  #     --config config/pipeline_config.yaml
+  # ---------------------------------------------------------------------------
+  run-pipeline:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-run-pipeline
+    profiles: ["tools"]
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    command: python run_pipeline.py
+
+  # ---------------------------------------------------------------------------
+  # evaluate-testset
+  # Re-evaluate a pre-generated testset against a live RAG endpoint.
+  #
+  # Usage:
+  #   docker compose ... run --rm evaluate-testset -- \
+  #     --testset outputs/<run>/testsets/<file>.json
+  # ---------------------------------------------------------------------------
+  evaluate-testset:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-evaluate-testset
+    profiles: ["tools"]
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    command: python evaluate_existing_testset.py
+
+  # ---------------------------------------------------------------------------
+  # rag-cli
+  # Testset manager CLI: list / validate / run evaluation.
+  #
+  # Usage:
+  #   docker compose ... run --rm rag-cli -- list
+  #   docker compose ... run --rm rag-cli -- validate outputs/<run>/testsets/<file>.json
+  #   docker compose ... run --rm rag-cli -- evaluate --max-questions 20
+  # ---------------------------------------------------------------------------
+  rag-cli:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-rag-cli
+    profiles: ["tools"]
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env.compose}
+    entrypoint: ["python", "rag_cli.py"]
+    command: ["--help"]
+
+  # ===========================================================================
+  # KG & SCORING TOOLS
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # kg-tune
+  # Sweep Jaccard / Overlap / Cosine similarity thresholds; outputs a JSON report.
+  #
+  # Usage:
+  #   docker compose ... run --rm kg-tune -- \
+  #     --input outputs/<run>/testsets/knowledge_graphs/<kg>.json \
+  #     --output outputs/threshold_report.json
+  # ---------------------------------------------------------------------------
+  kg-tune:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-kg-tune
+    profiles: ["tools"]
+    entrypoint: ["python", "scripts/kg_threshold_tune.py"]
+    command: ["--help"]
+
+  # ---------------------------------------------------------------------------
+  # perf-baseline
+  # Benchmark extraction + relationship-building latency on synthetic data.
+  # Writes results to benchmarks/baseline.json.
+  #
+  # Usage:
+  #   docker compose ... run --rm perf-baseline -- --docs 20
+  # ---------------------------------------------------------------------------
+  perf-baseline:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-perf-baseline
+    profiles: ["tools"]
+    entrypoint: ["python", "scripts/capture_perf_baseline.py"]
+    command: ["--docs", "10", "--output", "benchmarks/baseline.json"]
+
+  # ===========================================================================
+  # CODE / SCHEMA VALIDATORS
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # validate-events
+  # Validates all event JSON schemas against schema_registry.json hashes.
+  # Exits 0 on success, 1 on validation failure.
+  #
+  # Usage:
+  #   docker compose ... run --rm validate-events
+  # ---------------------------------------------------------------------------
+  validate-events:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-validate-events
+    profiles: ["tools"]
+    command: python scripts/validate_event_schemas.py
+
+  # ---------------------------------------------------------------------------
+  # validate-telemetry
+  # Validates telemetry/telemetry_taxonomy.json structure, key names, and levels.
+  #
+  # Usage:
+  #   docker compose ... run --rm validate-telemetry
+  # ---------------------------------------------------------------------------
+  validate-telemetry:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-validate-telemetry
+    profiles: ["tools"]
+    command: python scripts/validate_telemetry_taxonomy.py
+
+  # ---------------------------------------------------------------------------
+  # validate-tasks
+  # Validates docs/tasks/tasks.md governance blocks and EN/ZH parity.
+  # Writes parity_matrix.json and governance_gaps.json to eval-pipeline/scripts/.
+  #
+  # Usage:
+  #   docker compose ... run --rm validate-tasks
+  # ---------------------------------------------------------------------------
+  validate-tasks:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-validate-tasks
+    profiles: ["tools"]
+    command: python scripts/validate_tasks.py
+
+  # ---------------------------------------------------------------------------
+  # validate-compose
+  # Sanity-checks docker-compose.services.yml for expected service names.
+  # ⚠ Requires docker CLI access: mounts /var/run/docker.sock.
+  #
+  # Usage:
+  #   docker compose ... run --rm validate-compose
+  # ---------------------------------------------------------------------------
+  validate-compose:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-validate-compose
+    profiles: ["tools"]
+    volumes:
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./services:/app/services
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
+      - ./outputs:/app/outputs
+      - ./benchmarks:/app/benchmarks
+      - ./.cache:/app/.cache
+      # Docker socket so the script can call `docker compose config --services`
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: ["python", "scripts/validate_compose.py"]
+    command: []
+
+  # ===========================================================================
+  # ARTIFACT GENERATORS
+  # ===========================================================================
+
+  # ---------------------------------------------------------------------------
+  # gen-openapi
+  # Generates OpenAPI spec stubs for each FastAPI service and writes them to
+  # services/<svc>/openapi.json.
+  #
+  # Usage:
+  #   docker compose ... run --rm gen-openapi
+  # ---------------------------------------------------------------------------
+  gen-openapi:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-gen-openapi
+    profiles: ["tools"]
+    volumes:
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./services:/app/services           # writable: writes openapi.json files
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
+      - ./outputs:/app/outputs
+      - ./benchmarks:/app/benchmarks
+      - ./.cache:/app/.cache
+    command: python scripts/generate_openapi_specs.py
+
+  # ---------------------------------------------------------------------------
+  # gen-supplychain
+  # Generates an SBOM diff and SLSA provenance JSON from two SBOM files.
+  #
+  # Usage:
+  #   docker compose ... run --rm gen-supplychain -- \
+  #     --sbom sbom-current.json \
+  #     --baseline-sbom sbom-baseline.json \
+  #     --diff outputs/sbom_diff.json \
+  #     --provenance outputs/provenance.json
+  # ---------------------------------------------------------------------------
+  gen-supplychain:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-gen-supplychain
+    profiles: ["tools"]
+    entrypoint: ["python", "scripts/generate_supplychain_artifacts.py"]
+    command: ["--help"]
+
+  # ---------------------------------------------------------------------------
+  # task-timeline
+  # Parses docs/tasks/tasks.md and writes task_timeline.json + .csv reports.
+  #
+  # Usage:
+  #   docker compose ... run --rm task-timeline -- \
+  #     --input eval-pipeline/docs/tasks/tasks.md \
+  #     --output-format json csv \
+  #     --out-dir eval-pipeline/reports
+  # ---------------------------------------------------------------------------
+  task-timeline:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-task-timeline
+    profiles: ["tools"]
+    entrypoint: ["python", "scripts/extract_task_timeline.py"]
+    command: [
+      "--input", "docs/tasks/tasks.md",
+      "--output-format", "json", "csv",
+      "--out-dir", "reports"
+    ]
+
+  # ---------------------------------------------------------------------------
+  # gen-dashboard
+  # Generates eval-pipeline/reports/dashboard.html from sprint JSON summaries.
+  # Run after task-timeline has produced task_timeline.json.
+  #
+  # Usage:
+  #   docker compose ... run --rm gen-dashboard
+  # ---------------------------------------------------------------------------
+  gen-dashboard:
+    <<: *eval-tools-base
+    container_name: rag-eval-tool-gen-dashboard
+    profiles: ["tools"]
+    command: >
+      python scripts/generate_dashboard.py
+        --task-json reports/task_timeline.json
+        --sprint-json reports/sprint_summary.json
+        --out-file reports/dashboard.html
+
+  # ---------------------------------------------------------------------------
+  # check-bundle
+  # Enforces the 300 KB gzip budget on the KG panel JS chunk.
+  # ⚠ Requires the Vite production build to exist first:
+  #   docker compose -f docker-compose.services.yml build insights-portal
+  #   (or npm run build inside insights-portal/)
+  #
+  # Usage:
+  #   docker compose ... run --rm check-bundle
+  # ---------------------------------------------------------------------------
+  check-bundle:
+    <<: *scripts-tools-base
+    container_name: rag-eval-tool-check-bundle
+    profiles: ["tools"]
+    volumes:
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./services:/app/services
+      - ./config:/app/config:ro
+      - ./scripts:/app/scripts:ro
+      - ./outputs:/app/outputs
+      - ./benchmarks:/app/benchmarks
+      - ./.cache:/app/.cache
+      # Mount built frontend assets (run `npm run build` or build insights-portal image first)
+      - ./insights-portal/dist:/app/insights-portal/dist:ro
+    command: >
+      python scripts/check_bundle_size.py
+        --build-dir insights-portal/dist/assets
+        --budget-kb 300
+
+networks:
+  rag-eval-net:
+    external: true
+    name: rag-eval-net
+
+volumes:
+  models-cache:
+    external: true

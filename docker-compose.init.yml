@@ -1,0 +1,114 @@
+# =============================================================================
+# docker-compose.init.yml — One-shot Init / Migration Containers
+# =============================================================================
+#
+# These containers run ONCE (restart: "no") to prepare the environment before
+# the main service stack starts.  All services are tagged with
+# profiles: ["init"] so they NEVER start automatically with `docker compose up`.
+#
+# Usage (from repo root).
+#
+#   Download sentence-transformer model to shared cache (first deploy only):
+#     docker compose -f docker-compose.services.yml -f docker-compose.init.yml \
+#         run --rm model-preload
+#
+#   Run reviewer-state DB migration (after schema changes):
+#     docker compose -f docker-compose.services.yml -f docker-compose.init.yml \
+#         run --rm db-migrate
+#
+#   Recompute SHA-256 hashes after editing any event JSON schema:
+#     docker compose -f docker-compose.services.yml -f docker-compose.init.yml \
+#         run --rm hash-schemas
+#
+# NOTE: The rag-eval-net network is created by docker-compose.services.yml.
+#       Always include that file with -f when running init containers.
+# =============================================================================
+
+x-init-base: &init-base
+  image: ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}
+  user: "0"            # run as root so volume-created dirs get correct ownership
+  restart: "no"
+  healthcheck:
+    disable: true
+  environment: &init-env
+    PYTHONPATH: /app:/app/eval-pipeline:/app/eval-pipeline/src:/app/ragas/ragas/src
+    PYTHONUNBUFFERED: "1"
+    MPLBACKEND: Agg
+    HTTP_PROXY: ${HTTP_PROXY:-}
+    HTTPS_PROXY: ${HTTPS_PROXY:-}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+  volumes: &init-vols
+    - ./eval-pipeline:/app/eval-pipeline
+    - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+    - ./services:/app/services:ro
+    - ./config:/app/config:ro
+    - ./outputs:/app/outputs
+    - ./.cache:/app/.cache
+  networks:
+    - rag-eval-net
+
+services:
+  # ---------------------------------------------------------------------------
+  # db-migrate
+  # Runs reviewer-state storage migrations (SQLite or Postgres).
+  # Idempotent – safe to re-run on every deploy; exits 0 when healthy.
+  #
+  # Override the backend with:
+  #   docker compose ... run --rm db-migrate \
+  #       python scripts/reviewer_state_migrate.py \
+  #       --backend postgres --state-store-dsn postgresql://user:pass@host/db
+  # ---------------------------------------------------------------------------
+  db-migrate:
+    <<: *init-base
+    container_name: rag-eval-db-migrate
+    working_dir: /app/eval-pipeline
+    profiles: ["init"]
+    command: >
+      python scripts/reviewer_state_migrate.py
+        --backend sqlite
+        --state-store-path /app/outputs/human_feedback/reviewer_state.db
+        --review-queue-snapshot /app/outputs/human_feedback/review_queue.jsonl
+        --reviewer-results-snapshot /app/outputs/human_feedback/reviewer_results.jsonl
+
+  # ---------------------------------------------------------------------------
+  # model-preload
+  # Downloads the sentence-transformers model (all-MiniLM-L6-v2) to the shared
+  # models-cache volume so all other services can operate offline afterwards.
+  # Requires outbound HTTPS; set HTTP_PROXY / HTTPS_PROXY if behind a firewall.
+  # ---------------------------------------------------------------------------
+  model-preload:
+    <<: *init-base
+    container_name: rag-eval-model-preload
+    working_dir: /app/eval-pipeline
+    profiles: ["init"]
+    volumes:
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./services:/app/services:ro
+      - ./config:/app/config:ro
+      - ./outputs:/app/outputs
+      - ./.cache:/app/.cache
+      - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
+    command: bash download_models.sh
+
+  # ---------------------------------------------------------------------------
+  # hash-schemas
+  # Recomputes SHA-256 hashes for all event JSON schema files and writes them
+  # back into eval-pipeline/events/schema_registry.json.
+  # Run this whenever an event schema file is added or modified.
+  # ---------------------------------------------------------------------------
+  hash-schemas:
+    <<: *init-base
+    container_name: rag-eval-hash-schemas
+    working_dir: /app/eval-pipeline
+    profiles: ["init"]
+    command: python scripts/compute_event_schema_hashes.py
+
+networks:
+  rag-eval-net:
+    external: true
+    name: rag-eval-net
+
+volumes:
+  models-cache:
+    external: true

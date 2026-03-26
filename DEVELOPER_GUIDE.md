@@ -23,6 +23,12 @@
    - 5.3 [GraphStore Backends](#53-graphstore-backends)
 6. [GCR Metric Glossary](#6-gcr-metric-glossary)
 7. [Project Structure Quick-Reference](#7-project-structure-quick-reference)
+8. [Dockerized CLI Tools & Tasks](#8-dockerized-cli-tools--tasks)
+   - 8.1 [Architecture: Three-File Compose Strategy](#81-architecture-three-file-compose-strategy)
+   - 8.2 [Init Containers (docker-compose.init.yml)](#82-init-containers-docker-composeinityml)
+   - 8.3 [Ad-hoc CLI Tools (docker-compose.tools.yml)](#83-ad-hoc-cli-tools-docker-composetoolsyml)
+   - 8.4 [Webhook Daemon (always-on)](#84-webhook-daemon-always-on)
+   - 8.5 [Makefile Shortcuts](#85-makefile-shortcuts)
 
 ---
 
@@ -68,7 +74,7 @@ Key source directories:
 |------|----------------|-------|
 | Docker | 24.x | With BuildKit enabled |
 | Docker Compose V2 | 2.20 | `docker compose` (not `docker-compose`) |
-| Node.js | 18.x LTS | For the insights-portal only |
+| Node.js | 18.x LTS | Only for local `npm run dev` (not needed for Docker) |
 | Python | 3.10 | Only needed for local (non-Docker) runs |
 
 Copy and populate the environment file:
@@ -196,20 +202,43 @@ MPLBACKEND: Agg        # prevents matplotlib from opening display windows
 
 ### 4.1 Starting the Insights Portal
 
+#### Option A — Full-Stack Docker (recommended)
+
+The `insights-portal` is now a first-class service in the production compose
+stack. Build and start the entire frontend + backend with a single command:
+
+```bash
+docker compose -f docker-compose.services.yml up -d --build
+```
+
+| Service | URL |
+|---|---|
+| Insights Portal (Nginx) | `http://localhost:5173` |
+| Ingestion API | `http://localhost:8001` |
+| Eval API | `http://localhost:8004` |
+| Reporting API | `http://localhost:8005` |
+| MinIO console | `http://localhost:9001` |
+
+To rebuild only the frontend after UI changes:
+
+```bash
+docker compose -f docker-compose.services.yml build insights-portal
+docker compose -f docker-compose.services.yml up -d insights-portal
+```
+
+#### Option B — Local dev server (hot-reload)
+
+Use this during active frontend development to get instant HMR feedback:
+
 ```bash
 cd insights-portal
 npm install          # first time only
-npm run dev          # starts Vite dev server
+npm run dev          # starts Vite dev server on port 5173
 ```
 
-The dev server binds to **all interfaces** (`host: true` in `vite.config.ts`)
-on port **5173**.
+The dev server binds to all interfaces (`host: true` in `vite.config.ts`).
 
-Access the portal at:
-- `http://localhost:5173` (from the same machine)
-- `http://<HOST_IP>:5173` (from a browser on another machine, if port 5173 is open)
-
-For a production preview build:
+For a local production preview build:
 
 ```bash
 npm run build        # outputs to dist/
@@ -563,6 +592,284 @@ domain-specific-llm-eval/
 ├── services/                                # FastAPI microservice sources
 ├── config/                                  # Shared pipeline config
 └── docs/                                    # Architecture diagrams
+```
+
+---
+
+---
+
+## 8. Dockerized CLI Tools & Tasks
+
+This project follows a **Zero Host Dependency** architecture — no `python3 …` or
+`bash …` commands are ever needed on the developer's host machine.  Every script
+is accessible via `docker compose run`.
+
+Three Compose files cover the complete surface:
+
+| File | Purpose | Profile |
+|------|---------|--------|
+| `docker-compose.services.yml` | Always-on production services (incl. `webhook`) | _(none — always up)_ |
+| `docker-compose.init.yml` | One-shot init / migration containers | `init` |
+| `docker-compose.tools.yml` | Ad-hoc developer CLI tools | `tools` |
+
+---
+
+### 8.1 Architecture: Three-File Compose Strategy
+
+```
+docker compose up -d
+  └─ docker-compose.services.yml   ← 10 always-on services (+ webhook daemon)
+
+docker compose … run --rm <service>   ← triggered manually, never auto-starts
+  ├─ docker-compose.init.yml          (profiles: ["init"])
+  └─ docker-compose.tools.yml         (profiles: ["tools"])
+```
+
+All tool and init containers share the **same `rag-eval:dev` image** as the
+production services — no extra build steps or separate Dockerfiles required.
+Source code is bind-mounted read-only so your local edits are immediately
+reflected without rebuilding.
+
+**Common flags:**
+
+| Flag | Meaning |
+|------|--------|
+| `--rm` | Delete the container after it exits (keeps things clean) |
+| `--` | Separator between Compose args and the script's own CLI args |
+| `-f A -f B` | Merge two Compose files (B overrides A for duplicate keys) |
+
+---
+
+### 8.2 Init Containers (`docker-compose.init.yml`)
+
+Init containers are **idempotent, one-shot** tasks that prepare the environment.
+Run them before the first `docker compose up`, or after the indicated trigger.
+
+#### `model-preload` — Download sentence-transformer model (first deploy)
+
+Required for offline embedding-based relationship building.  Needs outbound
+HTTPS; set `HTTP_PROXY` / `HTTPS_PROXY` in your shell if behind a firewall.
+
+```bash
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.init.yml \
+  run --rm model-preload
+```
+
+#### `db-migrate` — Reviewer-state DB migration (after schema changes)
+
+Creates or migrates the SQLite reviewer-state database.  Always exits 0 when
+the schema is healthy; exits 1 on failure.
+
+```bash
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.init.yml \
+  run --rm db-migrate
+```
+
+To migrate to **Postgres** instead of SQLite:
+
+```bash
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.init.yml \
+  run --rm db-migrate \
+  python scripts/reviewer_state_migrate.py \
+    --backend postgres \
+    --state-store-dsn postgresql://user:pass@host:5432/rageval
+```
+
+#### `hash-schemas` — Recompute event schema hashes
+
+Run after adding or modifying any file under `eval-pipeline/events/schemas/`.
+Updates the SHA-256 entries in `eval-pipeline/events/schema_registry.json`.
+
+```bash
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.init.yml \
+  run --rm hash-schemas
+```
+
+---
+
+### 8.3 Ad-hoc CLI Tools (`docker-compose.tools.yml`)
+
+All tool services carry `profiles: ["tools"]`, so `docker compose up -d` never
+starts them automatically.
+
+#### Pipeline Runners
+
+```bash
+# Generate a full RAGAS testset from CSV (needs LLM endpoint in .env.compose)
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm ragas-pipeline -- \
+    --config config/pipeline_config.yaml --max-docs 50
+
+# Simplified KG + testset pipeline
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm run-pipeline -- --config config/pipeline_config.yaml
+
+# Re-evaluate an existing testset against a live RAG endpoint
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm evaluate-testset -- \
+    --testset outputs/<run>/testsets/<file>.json
+
+# Testset manager CLI
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm rag-cli -- list
+
+docker compose ... run --rm rag-cli -- \
+  validate outputs/<run>/testsets/<file>.json
+```
+
+#### KG & Scoring Tools
+
+```bash
+# Grid-search KG similarity thresholds
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm kg-tune -- \
+    --input outputs/<run>/testsets/knowledge_graphs/<kg>.json \
+    --output outputs/threshold_report.json
+
+# Benchmark ingestion + relationship latency
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm perf-baseline -- --docs 20
+```
+
+Results land at `benchmarks/baseline.json` on the host (bind-mounted).
+
+#### Code / Schema Validators (offline, fast)
+
+```bash
+# Validate event JSON schemas vs registry hashes (exit code 0 = pass)
+docker compose -f docker-compose.tools.yml run --rm validate-events
+
+# Validate telemetry taxonomy structure
+docker compose -f docker-compose.tools.yml run --rm validate-telemetry
+
+# Validate tasks.md governance blocks + EN/ZH parity
+docker compose -f docker-compose.tools.yml run --rm validate-tasks
+
+# Sanity-check docker-compose.services.yml service list
+# ⚠ Requires Docker socket access; Docker daemon must be running on the host.
+docker compose \
+  -f docker-compose.services.yml \
+  -f docker-compose.tools.yml \
+  run --rm validate-compose
+```
+
+#### Artifact Generators
+
+```bash
+# Generate OpenAPI spec stubs for each FastAPI service
+docker compose -f docker-compose.tools.yml run --rm gen-openapi
+
+# Build SBOM diff + SLSA provenance artifacts
+docker compose -f docker-compose.tools.yml run --rm gen-supplychain -- \
+  --sbom sbom-current.json \
+  --baseline-sbom sbom-baseline.json \
+  --diff outputs/sbom_diff.json \
+  --provenance outputs/provenance.json
+
+# Parse tasks.md → task_timeline.json + .csv
+docker compose -f docker-compose.tools.yml run --rm task-timeline
+
+# Render sprint dashboard.html (run after task-timeline)
+docker compose -f docker-compose.tools.yml run --rm gen-dashboard
+
+# Enforce 300 KB gzip budget on KG panel JS chunk
+# ⚠ Requires npm run build output inside insights-portal/dist/
+docker compose -f docker-compose.tools.yml run --rm check-bundle
+```
+
+---
+
+### 8.4 Webhook Daemon (always-on)
+
+The `webhook` service is part of the **production stack** and runs 24/7 alongside
+the other microservices.  It is a FastAPI application that listens for CI push
+events and triggers the RAGAS evaluation pipeline as a background task.
+
+| Service | URL | Log file |
+|---------|-----|----------|
+| `rag-eval-webhook` | `http://localhost:8008` | `outputs/webhook_events.jsonl` |
+
+**Start with the main stack:**
+
+```bash
+docker compose -f docker-compose.services.yml up -d
+# Webhook daemon starts automatically along with all other services.
+```
+
+**Health check:**
+
+```bash
+curl http://localhost:8008/health
+# Expected: {"status": "ok"}
+```
+
+**Trigger a pipeline run manually:**
+
+```bash
+curl -X POST http://localhost:8008/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"event_type": "manual", "ref": "refs/heads/main", "docs": 10, "samples": 50}'
+```
+
+**Inspect the event log:**
+
+```bash
+tail -f outputs/webhook_events.jsonl | python3 -m json.tool
+```
+
+---
+
+### 8.5 Makefile Shortcuts
+
+Add these targets to your `Makefile` for convenience:
+
+```makefile
+# Init
+model-preload:
+	docker compose -f docker-compose.services.yml -f docker-compose.init.yml run --rm model-preload
+
+db-migrate:
+	docker compose -f docker-compose.services.yml -f docker-compose.init.yml run --rm db-migrate
+
+hash-schemas:
+	docker compose -f docker-compose.services.yml -f docker-compose.init.yml run --rm hash-schemas
+
+# Validation (CI-friendly, fully offline)
+validate-events:
+	docker compose -f docker-compose.tools.yml run --rm validate-events
+
+validate-telemetry:
+	docker compose -f docker-compose.tools.yml run --rm validate-telemetry
+
+validate-tasks:
+	docker compose -f docker-compose.tools.yml run --rm validate-tasks
+
+# Artifact generation
+task-timeline:
+	docker compose -f docker-compose.tools.yml run --rm task-timeline
+
+gen-dashboard: task-timeline
+	docker compose -f docker-compose.tools.yml run --rm gen-dashboard
 ```
 
 ---
