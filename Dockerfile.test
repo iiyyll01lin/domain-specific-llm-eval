@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.6
 # =============================================================================
 # Dockerfile.test  —  Clean-room isolated test image
 # Project: domain-specific-llm-eval

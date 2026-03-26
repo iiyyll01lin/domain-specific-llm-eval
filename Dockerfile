@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 FROM python:3.11-slim-bookworm AS builder
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
