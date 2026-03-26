@@ -1,3 +1,5 @@
+** This is the v1.0.0 stable release. To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** **
+
 # Domain-Specific LLM Agents Evaluation with RAGAS Integration & Custom LLM
 
 ![base-metric](base-metric.png)
@@ -5,8 +7,6 @@
 ![contextual-keyword-gate](contextual-keyword-gate.png)
 
 ![dynamic-metric](dynamic-metric.png)
-
-To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)**
 
 # Intro
 
