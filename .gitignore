@@ -232,6 +232,7 @@ sample_documents/
 *_STATUS.md
 *_SUMMARY.md
 *_GUIDE.md
+!DEVELOPER_GUIDE.md
 *_FIXES_*.md
 *_IMPLEMENTATION*.md
 *_INTEGRATION*.md
