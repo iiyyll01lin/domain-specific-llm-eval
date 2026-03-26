@@ -20,10 +20,11 @@ x-service-base: &service-base
     - ${COMPOSE_ENV_FILE:-.env.compose}
   restart: unless-stopped
   healthcheck: &default-healthcheck
-    test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+    test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\" || exit 1"]
     interval: 30s
     timeout: 5s
     retries: 3
+    start_period: 15s
   logging: &default-logging
     driver: json-file
     options:
@@ -162,10 +163,11 @@ services:
         --port 8000
         --log-level info
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 15s
 
   insights-portal:
     build:

@@ -35,10 +35,6 @@ from document_loader import DocumentLoader
 # Import your existing systems
 from generate_dataset_configurable import ConfigurableDatasetGenerator
 
-# Import CSV processing components - Use existing DocumentLoader instead
-# from data.csv_document_processor import CSVDocumentProcessor
-# from data.csv_testset_generator import CSVTestsetGenerator
-
 # Import RAGAS components
 try:
     # Note: evolutions module no longer exists in current RAGAS version
@@ -724,19 +720,12 @@ class HybridTestsetGenerator:
         generation_strategy = ragas_config.get('generation_strategy', '')
         csv_to_ragas_mode = self.generation_config.get('csv_to_ragas_mode', False)
         use_full_kg_pipeline = ragas_config.get('use_full_knowledge_graph_pipeline', False)
-        
-        print(f"🎯 DEBUG: RAGAS generation strategy: '{generation_strategy}'")
-        print(f"🎯 DEBUG: Use full KG pipeline: {use_full_kg_pipeline}")
-        print(f"🎯 DEBUG: CSV to RAGAS mode: {csv_to_ragas_mode}")
-        print(f"🎯 DEBUG: Available config keys: {list(self.generation_config.keys())}")
-        print(f"🎯 DEBUG: Available ragas_config keys: {list(ragas_config.keys())}")
-        
+
         self.logger.info(f"🎯 RAGAS generation strategy: {generation_strategy}")
         self.logger.info(f"🎯 Use full KG pipeline: {use_full_kg_pipeline}")
-        
+
         # Choose implementation based on configuration
         if generation_strategy == "full_ragas_with_knowledge_graph" or use_full_kg_pipeline:
-            print("🔄 DEBUG: Using Full RAGAS Knowledge Graph Pipeline")
             self.logger.info("🔄 Using Full RAGAS Knowledge Graph Pipeline")
             return self._generate_with_full_ragas_implementation(processed_docs, output_dir)
         
@@ -1159,53 +1148,41 @@ class HybridTestsetGenerator:
                                                output_dir: Path) -> Dict[str, Any]:
         """Generate testset using Full RAGAS Knowledge Graph implementation with multi-hop support"""
         try:
-            print("🚀 DEBUG: Starting Full RAGAS Knowledge Graph Pipeline with Multi-Hop Support...")
             self.logger.info("🚀 Starting Full RAGAS Knowledge Graph Pipeline with Multi-Hop Support...")
-            
+
             # STEP 1: Aggregate documents for better clustering
-            print("📋 DEBUG: Step 1: Aggregating documents for improved multi-hop relationships...")
             self.logger.info("📋 Step 1: Aggregating documents for improved multi-hop relationships...")
-            print(f"📋 DEBUG: Input documents count: {len(processed_docs)}")
             self.logger.info(f"📋 Input documents count: {len(processed_docs)}")
-            
+
             try:
                 if processed_docs:
                     sample_doc = processed_docs[0]
-                    print(f"📋 DEBUG: Sample input document keys: {list(sample_doc.keys())}")
-                    print(f"📋 DEBUG: Sample content preview: {str(sample_doc.get('content', ''))[:100]}...")
                     self.logger.info(f"📋 Sample input document keys: {list(sample_doc.keys())}")
                     self.logger.info(f"📋 Sample content preview: {str(sample_doc.get('content', ''))[:100]}...")
-                
-                print("📋 DEBUG: About to call aggregation function...")
+
                 aggregated_docs = self._aggregate_documents_for_better_clusters(
                     processed_docs
                     # target_token_count now comes from configuration
                 )
-                print(f"📋 DEBUG: Aggregation completed, got {len(aggregated_docs) if aggregated_docs else 0} docs")
-                
+
             except Exception as e:
-                print(f"❌ DEBUG: Aggregation failed with error: {e}")
-                print(f"❌ DEBUG: Error type: {type(e).__name__}")
-                import traceback
-                print(f"❌ DEBUG: Traceback: {traceback.format_exc()}")
-                aggregated_docs = processed_docs  # Fallback to original docs            
-            print(f"📋 DEBUG: Output aggregated documents count: {len(aggregated_docs)}")
+                self.logger.error(f"❌ Aggregation failed: {e}", exc_info=True)
+                aggregated_docs = processed_docs  # Fallback to original docs
+
             self.logger.info(f"📋 Output aggregated documents count: {len(aggregated_docs)}")
             if aggregated_docs:
                 sample_agg_doc = aggregated_docs[0]
-                print(f"📋 DEBUG: Sample aggregated document keys: {list(sample_agg_doc.keys())}")
-                print(f"📋 DEBUG: Sample aggregated content preview: {str(sample_agg_doc.get('content', ''))[:100]}...")
                 self.logger.info(f"📋 Sample aggregated document keys: {list(sample_agg_doc.keys())}")
                 self.logger.info(f"📋 Sample aggregated content preview: {str(sample_agg_doc.get('content', ''))[:100]}...")
 
             # Convert processed documents to LangChain format for multi-hop KG
-            print("📋 DEBUG: Converting aggregated docs to LangChain format...")
+            self.logger.info("📋 Converting aggregated docs to LangChain format...")
             langchain_docs = self._convert_to_langchain_docs(aggregated_docs)
-            print(f"📋 DEBUG: LangChain conversion completed, got {len(langchain_docs)} docs")
-            
+            self.logger.info(f"📋 LangChain conversion completed, got {len(langchain_docs)} docs")
+
             if not langchain_docs:
                 raise ValueError("No valid documents for multi-hop knowledge graph creation")
-            
+
             # Create multi-hop compatible knowledge graph using the fixed implementation
             multi_hop_kg = self._create_multi_hop_compatible_knowledge_graph(
                 langchain_docs, 

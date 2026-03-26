@@ -1,4 +1,4 @@
-** This is the v1.0.0 stable release. To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** **
+** This is the v1.1.0 Enterprise MLOps release. To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** **
 
 # Domain-Specific LLM Agents Evaluation with RAGAS Integration & Custom LLM
 
@@ -16,7 +16,73 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 This project provides a comprehensive solution for domain-specific LLM agents' response evaluation that cannot be solely solved by standard LLM-based metrics. **NEW: Complete RAGAS Integration with Custom LLM API** provides professional-grade testset generation and evaluation using your own LLM endpoints.
 
-## Use This Repo
+## System Architecture & MLOps Feedback Loop
+
+The diagram below shows how data flows from raw CSV documents through the evaluation pipeline and back into the operational monitoring layer.
+
+```mermaid
+flowchart TD
+    subgraph Input ["📄 Data Ingestion"]
+        CSV["CSV Domain Documents\n(SMT / Manufacturing)"]
+    end
+
+    subgraph KG ["🧠 Knowledge Graph Construction"]
+        Nodes["KG Nodes\n(entities, keyphrases, embeddings)"]
+        Edges["Relationship Building\nJaccard · Overlap · Cosine"]
+        CSV --> Nodes --> Edges
+    end
+
+    subgraph Testset ["📋 RAGAS Testset Generation"]
+        RAGAS["RAGAS TestsetGenerator\n(custom LLM endpoint)"]
+        Questions["Q&A Pairs\n+ Context chunks"]
+        Edges --> RAGAS --> Questions
+    end
+
+    subgraph Eval ["⚖️ GCR Evaluation"]
+        Dispatcher["EvaluationDispatcher"]
+        Se["Sₑ · Entity Overlap\nJaccard similarity"]
+        Sc["Sᶜ · Structural Connectivity\nLCC / |V_R|"]
+        Ph["Pₕ · Hub Noise Penalty\nhub fraction"]
+        GCR["GCR Composite Score\nclip(0.4·Sₑ + 0.4·Sᶜ − 0.2·Pₕ, 0, 1)"]
+        Questions --> Dispatcher --> Se & Sc & Ph --> GCR
+    end
+
+    subgraph Artifacts ["🗄️ Artifacts"]
+        KPIS["kpis.json\n(per-run averages)"]
+        Reports["XLSX / CSV / HTML Reports"]
+        GCR --> KPIS & Reports
+    end
+
+    subgraph Portal ["🖥️ Insights Portal  :5173"]
+        Dashboard["Executive Overview\n(GCR gauges + trend charts)"]
+        AiCard["AI Auto-Insights\n(LLM health report)"]
+        DriftBanner["DriftMonitorBanner\n(polls every 5 min)"]
+        Reports --> Dashboard
+        Dashboard --> AiCard
+    end
+
+    subgraph MLOps ["🔄 MLOps Feedback Loop"]
+        Webhook["Webhook Daemon  :8008\n(FastAPI + APScheduler)"]
+        DriftStore["DriftStore\n(scans outputs/*/kpis.json)"]
+        DriftDetector["DriftDetector\n(Welch Z-test per metric)"]
+        SlackAlert["Slack Alert\n(WARNING / DRIFTING)"]
+        DriftStatus["GET /api/v1/drift-status"]
+        KPIS --> DriftStore --> DriftDetector
+        DriftDetector -- WARNING/DRIFTING --> SlackAlert
+        DriftDetector --> DriftStatus --> DriftBanner
+        Webhook -- "lifespan: start scheduler" --> DriftStore
+    end
+
+    subgraph CI ["🔁 CI Trigger"]
+        CIEvent["GitHub / GitLab push event\nor manual POST /webhook"]
+        CIEvent --> Webhook
+        Webhook -- "background task" --> CSV
+    end
+```
+
+---
+
+
 
 This repository currently has two practical entry points:
 
@@ -161,6 +227,9 @@ Service ports:
 - `8005` reporting
 - `8006` adapter
 - `8007` kg
+- `8008` webhook daemon (CI trigger + drift monitor)
+- `5173` insights-portal (React dashboard)
+- `9000/9001` MinIO (API / console)
 
 Validate the compose definition before starting:
 
@@ -241,6 +310,45 @@ bash scripts/e2e_smoke.sh
 - `docs/runbooks/compose_e2e_operator_checklist.md`: GHCR login, mirror setup, Node runtime, and compose-backed smoke checklist.
 - `docs/security.md`: secrets scan, SBOM, signing, and provenance flow.
 - `eval-pipeline/docs/tasks/tasks.md`: implementation and governance status.
+
+## 🤖 v1.1.0 — Enterprise MLOps Expansion
+
+Version 1.1.0 adds a production-grade MLOps feedback loop on top of the v1.0 GCR evaluation core.
+
+### Webhook Daemon & CI Integration
+
+A FastAPI **webhook daemon** (`rag-eval-webhook`, port 8008) listens for GitHub/GitLab push events and spawns the RAGAS evaluation pipeline as a background task:
+
+```bash
+# Trigger a pipeline run from any CI step or manually:
+curl -X POST http://localhost:8008/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"event_type": "manual", "ref": "refs/heads/main", "docs": 10, "samples": 50}'
+```
+
+### Data Drift Monitoring (AIOps)
+
+The webhook daemon runs an **APScheduler** background job (every 6 hours by default) that:
+
+1. Scans `outputs/*/kpis.json` for historical GCR metric averages.
+2. Applies a **Welch Z-test** to detect statistical drift in $S_e$, $S_c$, and $P_h$.
+3. Exposes the result via `GET http://localhost:8008/api/v1/drift-status`.
+4. Posts a **Slack alert** when status is `WARNING` or `DRIFTING`.
+
+The `DriftMonitorBanner` React component in the insights-portal polls this endpoint every 5 minutes and auto-expands with an amber/red banner when drift is detected.
+
+### AI Auto-Insights
+
+The **reporting service** (`port 8005`) now exposes `POST /api/v1/insights/generate` which forwards KPI summaries to an LLM (GPT-4o-mini by default, configurable) and returns a human-readable **System Health Report** rendered inline in the dashboard.
+
+Set `OPENAI_API_KEY` in `.env` to enable. Compatible with Azure OpenAI, Ollama, and any OpenAI-compatible proxy.
+
+### QA Debugger & Graph-Based Evaluators
+
+- **Graph Context Relevance (GCR)** suite: $S_e$ (entity overlap), $S_c$ (structural connectivity), $P_h$ (hub-noise penalty) — routed through the `EvaluationDispatcher`.
+- **Graph-based QA debugger**: interactive trace of which KG nodes contributed to each evaluation score.
+
+---
 
 ## 🎯 Key Features
 

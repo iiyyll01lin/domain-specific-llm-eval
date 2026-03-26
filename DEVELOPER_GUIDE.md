@@ -126,7 +126,7 @@ This internally executes:
 python -m pytest eval-pipeline/tests/ -n auto --timeout=120 -q
 ```
 
-Expected output: `733 passed, 0 failed` in approximately 230 seconds.
+Expected output: `732 passed, 1 skipped` in approximately 230 seconds.
 
 **Run a specific test file:**
 
@@ -280,7 +280,7 @@ outputs/<run_timestamp>/evaluations/*.json # Full pipeline runs
 3. Select a `evaluation_result.json` or `rag_evaluation_results_*.json` file.
 4. The dashboard populates with:
    - GCR composite score gauge
-   - Per-metric breakdown (Sₑ, Sc, Ph)
+   - Per-metric breakdown (Sₑ, Sᶜ, Pₕ)
    - Retrieved node graph topology visualisation
    - Question/answer pairs with highlighted context
 
@@ -357,6 +357,8 @@ The production service stack (`docker-compose.services.yml`) runs eight containe
 | `rag-eval-reporting` | XLSX/CSV/HTML report generation | 8005 |
 | `rag-eval-adapter` | External LLM proxy adapter | 8006 |
 | `rag-eval-kg` | Knowledge Graph query API | 8007 |
+| `rag-eval-webhook` | Webhook daemon + APScheduler drift monitor | 8008 |
+| `rag-eval-insights-portal` | React evaluation dashboard (Nginx) | 5173 |
 | `rag-eval-minio` | S3-compatible artifact store | 9000/9001 |
 
 **Health check all services:**
@@ -472,7 +474,7 @@ characters are treated as individual tokens, which is correct for entity matchin
 
 ---
 
-### Sc — Structural Connectivity (Coherence)
+### Sᶜ — Structural Connectivity (Coherence)
 
 | Property | Value |
 |----------|-------|
@@ -501,7 +503,7 @@ node-N) gives `Sc = 0.5` if the middle nodes are absent.
 
 ---
 
-### Ph — Hub Noise Penalty (Anti-Hub)
+### Pₕ — Hub Noise Penalty (Anti-Hub)
 
 | Property | Value |
 |----------|-------|
@@ -576,7 +578,7 @@ domain-specific-llm-eval/
 ├── eval-pipeline/
 │   ├── src/
 │   │   ├── evaluation/
-│   │   │   ├── graph_context_relevance.py   # GCR: Sₑ, Sc, Ph
+│   │   │   ├── graph_context_relevance.py   # GCR: Sₑ, Sᶜ, Pₕ
 │   │   │   ├── evaluation_dispatcher.py     # Unified routing (TestsetSpec)
 │   │   │   └── ...
 │   │   └── utils/

@@ -28,7 +28,11 @@ from src.ui.reviewer_actions import _build_service
 # ---------------------------------------------------------------------------
 
 def _drift_outputs_root() -> str:
-    return str(eval_pipeline_dir / "outputs")
+    # The top-level outputs/ directory is mounted at /app/outputs in the
+    # container (see docker-compose.services.yml webhook volume mapping).
+    # Go up from eval-pipeline/ to the workspace root so kpis.json files
+    # written by the pipeline runner are visible to the DriftStore.
+    return str(eval_pipeline_dir.parent / "outputs")
 
 
 @contextlib.asynccontextmanager

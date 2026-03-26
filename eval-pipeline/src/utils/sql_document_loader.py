@@ -2,8 +2,6 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-# from .document_loader import Document
-
 
 class SQLDocumentLoader:
     """
