@@ -1,0 +1,4 @@
+# Security - Do not commit secrets
+config/secrets.yaml
+*.secret
+*.key

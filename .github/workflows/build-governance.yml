@@ -1,0 +1,237 @@
+name: build-governance
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'scripts/**'
+      - 'services/**'
+      - 'eval-pipeline/docs/tasks/**'
+      - '.github/workflows/build-governance.yml'
+      - 'docs/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'scripts/**'
+      - 'services/**'
+      - 'eval-pipeline/docs/tasks/**'
+      - '.github/workflows/build-governance.yml'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  IMAGE_LOCAL_NAME: rag-eval
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_REMOTE_NAME: ghcr.io/${{ github.repository_owner }}/rag-eval
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate docker compose topology
+        run: python3 scripts/validate_compose.py
+
+      - name: Compile service modules (schema sanity)
+        run: python3 -m compileall services
+
+      - name: Validate task governance snapshots
+        run: python3 scripts/validate_task_status.py
+
+      - name: Validate event schema registry
+        run: python3 scripts/validate_event_schemas.py
+
+      - name: Validate telemetry taxonomy
+        run: python3 scripts/validate_telemetry_taxonomy.py
+
+      - name: Validate dev/CI parity snapshot
+        run: python3 scripts/validate_dev_parity.py --skip-installed-packages --python-drift-severity error --report-json parity-report.json --report-md parity-report.md
+
+      - name: Set up OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+
+      - name: Validate OPA governance policies
+        run: bash scripts/validate_policies.sh
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks secrets scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
+  security-scan:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          format: sarif
+          output: trivy-fs.sarif
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+
+      - name: Upload Trivy SARIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-sarif
+          path: trivy-fs.sarif
+
+  build-and-push:
+    needs: [validate, security-scan, secrets-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare metadata
+        id: meta
+        run: |
+          echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build base image
+        run: docker build -t ${{ env.IMAGE_LOCAL_NAME }}:dev .
+
+      - name: Generate SBOM (CycloneDX v1.5)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_LOCAL_NAME }}:dev
+          format: cyclonedx-json
+          output-file: sbom/sbom-main.json
+          artifact-name: sbom-cyclonedx
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom/sbom-main.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Tag local variants
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          IMAGE_NAME=${{ env.IMAGE_LOCAL_NAME }} BASE_TAG=dev VERSION=${VERSION} bash scripts/tag_image.sh
+
+      - name: Tag remote variants
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          docker tag ${{ env.IMAGE_LOCAL_NAME }}:dev ${{ env.IMAGE_REMOTE_NAME }}:dev
+          docker tag ${{ env.IMAGE_LOCAL_NAME }}:v${VERSION} ${{ env.IMAGE_REMOTE_NAME }}:v${VERSION}
+          docker tag ${{ env.IMAGE_LOCAL_NAME }}:git-${SHA} ${{ env.IMAGE_REMOTE_NAME }}:git-${SHA}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.IMAGE_LOCAL_NAME }}:dev
+          format: sarif
+          output: trivy-image.sarif
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+
+      - name: Upload image scan SARIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-sarif
+          path: trivy-image.sarif
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push images
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          docker image ls ${{ env.IMAGE_LOCAL_NAME }}
+          docker image ls ${{ env.IMAGE_REMOTE_NAME }}
+          docker push ${{ env.IMAGE_REMOTE_NAME }}:dev
+          docker push ${{ env.IMAGE_REMOTE_NAME }}:v${VERSION}
+          docker push ${{ env.IMAGE_REMOTE_NAME }}:git-${SHA}
+
+      - name: Sign images when cosign key is available
+        if: ${{ secrets.COSIGN_PRIVATE_KEY != '' }}
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          SHA: ${{ steps.meta.outputs.sha }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          mkdir -p attest
+          printf '%s' "$COSIGN_PRIVATE_KEY" > cosign.key
+          cosign sign --yes --key cosign.key ${{ env.IMAGE_REMOTE_NAME }}:v${VERSION}
+          cosign sign --yes --key cosign.key ${{ env.IMAGE_REMOTE_NAME }}:git-${SHA}
+          rm -f cosign.key
+
+      - name: Warn when signing is skipped
+        if: ${{ secrets.COSIGN_PRIVATE_KEY == '' }}
+        run: |
+          mkdir -p attest
+          printf '{"status":"unsigned","reason":"COSIGN_PRIVATE_KEY not configured"}\n' > attest/unsigned.intoto.jsonl
+          echo "::warning::COSIGN_PRIVATE_KEY not configured; image signing skipped"
+
+      - name: Generate supply-chain diff and provenance
+        env:
+          GIT_SHA: ${{ steps.meta.outputs.sha }}
+          BUILD_VERSION: ${{ steps.meta.outputs.version }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: |
+          python3 scripts/generate_supplychain_artifacts.py \
+            --sbom sbom/sbom-main.json \
+            --diff sbom/sbom-diff.json \
+            --provenance attest/provenance.intoto.jsonl \
+            --retain 5
+
+      - name: Upload supply-chain artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-artifacts
+          if-no-files-found: ignore
+          path: |
+            sbom/sbom-main.json
+            sbom/sbom-diff.json
+            attest/provenance.intoto.jsonl
+            attest/unsigned.intoto.jsonl

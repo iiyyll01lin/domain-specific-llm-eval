@@ -1,0 +1,176 @@
+# docker-compose.test.yml
+# =============================================================================
+# Clean-room test runner for domain-specific-llm-eval
+#
+# Usage
+# ─────────────────────────────────────────────────────────────────────────────
+#   Build image (only needed once, or after requirements change):
+#     docker compose -f docker-compose.test.yml build
+#
+#   Run full suite (parallel, offline):
+#     docker compose -f docker-compose.test.yml run --rm test
+#
+#   Run a single test file interactively:
+#     docker compose -f docker-compose.test.yml run --rm test \
+#         pytest eval-pipeline/tests/test_graph_context_relevance.py -v -s
+#
+#   Run with coverage:
+#     docker compose -f docker-compose.test.yml run --rm test \
+#         pytest -n auto --cov=eval-pipeline/src --cov-report=term-missing
+#
+# Volume mounts enable live code iteration: edit a source file locally and
+# re-run without rebuilding the image (the deps layer is already cached).
+# =============================================================================
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      # Target the test stage; the deps stage is its cached base.
+      target: test
+      # Use the host network during the BUILD phase so pip/apt can reach
+      # the corporate proxy (10.6.254.210:3128) at build time.
+      # Runtime containers remain isolated via the offline env-var gates.
+      network: host
+      # Pass corporate proxy env vars from the host into the build so that
+      # apt-get and pip can reach external package sources.
+      # Falls back to empty string if the host has no proxy configured.
+      args:
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+        NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1}"
+
+    image: domain-specific-llm-eval-test:latest
+
+    # ── Strict offline environment ─────────────────────────────────────────
+    # These vars are set in the image ENV too, but declaring them here makes
+    # the intent explicit and overrides any compose-project defaults.
+    environment:
+      # --- Offline gates ---------------------------------------------------
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
+      # --- Headless display ------------------------------------------------
+      - MPLBACKEND=Agg
+      # --- Python runtime --------------------------------------------------
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace:/workspace/eval-pipeline:/workspace/eval-pipeline/src:/workspace/ragas/ragas/src
+      # --- Stub secrets consumed by services/tests and conftest.py ---------
+      - OBJECT_STORE_ENDPOINT=http://localhost:9000
+      - OBJECT_STORE_REGION=us-east-1
+      - OBJECT_STORE_ACCESS_KEY=test-access-key
+      - OBJECT_STORE_SECRET_KEY=test-secret-key
+      - OBJECT_STORE_BUCKET=test-bucket
+      - OBJECT_STORE_USE_SSL=false
+      # --- tiktoken offline cache (matches global_tiktoken_patch.py) --------
+      - TIKTOKEN_CACHE_ONLY=1
+      - TIKTOKEN_DISABLE_DOWNLOAD=1
+
+    # ── Volume mounts ──────────────────────────────────────────────────────
+    # Bind-mount source directories so edits are immediately reflected on the
+    # next test run — no image rebuild required.
+    # The Dockerfile.test COPY layers act as a fallback for CI environments
+    # where no host directory is available to mount.
+    volumes:
+      # Application source
+      - ./eval-pipeline/src:/workspace/eval-pipeline/src:ro
+      - ./eval-pipeline/tests:/workspace/eval-pipeline/tests:ro
+      - ./eval-pipeline/config:/workspace/eval-pipeline/config:ro
+      # Runner scripts (golden_path_runner.py + legacy scripts)
+      - ./eval-pipeline/scripts:/workspace/eval-pipeline/scripts:ro
+      # Root-level conftest + pytest config
+      - ./conftest.py:/workspace/conftest.py:ro
+      - ./pytest.ini:/workspace/pytest.ini:ro
+      # Tiktoken patch helper (imported by root conftest.py)
+      - ./eval-pipeline/global_tiktoken_patch.py:/workspace/eval-pipeline/global_tiktoken_patch.py:ro
+      # RAGAS submodule source (editable install resolves against this path)
+      - ./ragas/ragas/src:/workspace/ragas/ragas/src:ro
+      # Services tests (testpath declared in pytest.ini)
+      - ./services:/workspace/services:ro
+      # Writable scratch space for test artefacts (avoids polluting host outputs/)
+      - test-outputs:/workspace/outputs
+      - test-logs:/workspace/logs
+
+    working_dir: /workspace
+
+    # ── Parallel test execution ────────────────────────────────────────────
+    # Override CMD to pass extra pytest flags on the command line.
+    # Default (from Dockerfile.test): pytest -n auto --tb=short -q
+    # Uncomment to add coverage:
+    # command: >
+    #   python -m pytest -n auto --tb=short -q
+    #   --cov=eval-pipeline/src --cov-report=term-missing
+
+    # ── Interactive support ────────────────────────────────────────────────
+    # Allows `pytest -s` and pdb breakpoints when running interactively.
+    stdin_open: true
+    tty: true
+
+  # ---------------------------------------------------------------------------
+  # e2e-smoke-test: isolated service that runs ONLY the golden-path E2E suite.
+  #
+  # Usage:
+  #   docker compose -f docker-compose.test.yml run --rm e2e-smoke-test
+  #
+  # After the run, inspect artifacts on the host:
+  #   docker volume inspect domain-specific-llm-eval_e2e-outputs
+  #   docker run --rm -v domain-specific-llm-eval_e2e-outputs:/data alpine ls /data
+  # ---------------------------------------------------------------------------
+  e2e-smoke-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test
+      network: host
+      args:
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+        NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1}"
+
+    image: domain-specific-llm-eval-test:latest
+
+    environment:
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
+      - MPLBACKEND=Agg
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace:/workspace/eval-pipeline:/workspace/eval-pipeline/src:/workspace/ragas/ragas/src
+      - OBJECT_STORE_ENDPOINT=http://localhost:9000
+      - OBJECT_STORE_REGION=us-east-1
+      - OBJECT_STORE_ACCESS_KEY=test-access-key
+      - OBJECT_STORE_SECRET_KEY=test-secret-key
+      - OBJECT_STORE_BUCKET=test-bucket
+      - OBJECT_STORE_USE_SSL=false
+      - TIKTOKEN_CACHE_ONLY=1
+      - TIKTOKEN_DISABLE_DOWNLOAD=1
+
+    volumes:
+      # Live-edit bind-mounts (identical to the "test" service)
+      - ./eval-pipeline/src:/workspace/eval-pipeline/src:ro
+      - ./eval-pipeline/tests:/workspace/eval-pipeline/tests:ro
+      - ./eval-pipeline/scripts:/workspace/eval-pipeline/scripts:ro
+      - ./eval-pipeline/config:/workspace/eval-pipeline/config:ro
+      - ./conftest.py:/workspace/conftest.py:ro
+      - ./pytest.ini:/workspace/pytest.ini:ro
+      - ./eval-pipeline/global_tiktoken_patch.py:/workspace/eval-pipeline/global_tiktoken_patch.py:ro
+      - ./ragas/ragas/src:/workspace/ragas/ragas/src:ro
+      # Named volume: outputs are written here and remain on the host after
+      # the container exits so artifacts can be inspected without docker exec.
+      - e2e-outputs:/workspace/outputs
+
+    working_dir: /workspace
+
+    # Run only the golden-path E2E tests (verbose, no parallelism needed).
+    command: ["python", "-m", "pytest", "eval-pipeline/tests/e2e_golden_path.py", "-v", "--tb=short"]
+
+    stdin_open: true
+    tty: true
+
+# Named volumes for test run artefacts — isolated from the host filesystem.
+volumes:
+  test-outputs:
+  test-logs:
+  # Holds golden-path E2E artifacts; persists after container exit for inspection.
+  e2e-outputs:

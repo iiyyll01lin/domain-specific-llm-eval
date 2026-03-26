@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "testset-service",
+    "version": "0.1.0",
+    "description": "Testset generation using RAGAS synthesizers."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics",
+        "operationId": "metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/testset-jobs": {
+      "post": {
+        "summary": "Create testset generation job",
+        "operationId": "create_testset_job",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestsetJobRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "List testset jobs",
+        "operationId": "list_testset_jobs",
+        "responses": {
+          "200": {
+            "description": "Job list"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TestsetJobRequest": {
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "num_questions": {
+            "type": "integer",
+            "default": 10
+          },
+          "persona": {
+            "type": "string",
+            "default": "expert"
+          }
+        }
+      }
+    }
+  }
+}

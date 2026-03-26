@@ -1,0 +1,196 @@
+x-service-base: &service-base
+  image: ${SERVICE_IMAGE_NAME:-rag-eval}:${SERVICE_IMAGE_TAG:-dev}
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+      PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+      PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
+      PIP_NETWORK_CHECK_URL: ${PIP_NETWORK_CHECK_URL:-https://pypi.org/simple/}
+      PIP_NETWORK_TIMEOUT: ${PIP_NETWORK_TIMEOUT:-5}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+      SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS: "0.2.15"
+      ENABLE_GPU: ${ENABLE_GPU:-false}
+      MODELS_CACHE: ${MODELS_CACHE_PATH:-/var/cache/rag-models}
+      EXTENSIONS_DIR: ${EXTENSIONS_DIR:-/extensions}
+  env_file:
+    - ${COMPOSE_ENV_FILE:-.env.compose}
+  restart: unless-stopped
+  healthcheck: &default-healthcheck
+    test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+  logging: &default-logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+  networks:
+    - rag-eval-net
+  volumes:
+    - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
+    - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
+    - ./.cache:/app/.cache
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-02-18T16-25-55Z
+    container_name: rag-eval-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: unless-stopped
+    networks:
+      - rag-eval-net
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-02-15T10-36-16Z
+    container_name: rag-eval-minio-init
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rag-eval-dev}
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done
+        mc mb -p "local/$$MINIO_BUCKET" || true
+    networks:
+      - rag-eval-net
+
+  ingestion:
+    <<: *service-base
+    container_name: rag-eval-ingestion
+    environment:
+      SERVICE: ingestion
+      SERVICE_NAME: ingestion-service
+    ports:
+      - "8001:8000"
+  processing:
+    <<: *service-base
+    container_name: rag-eval-processing
+    environment:
+      SERVICE: processing
+      SERVICE_NAME: processing-service
+    ports:
+      - "8002:8000"
+  testset:
+    <<: *service-base
+    container_name: rag-eval-testset
+    environment:
+      SERVICE: testset
+      SERVICE_NAME: testset-service
+    ports:
+      - "8003:8000"
+  eval:
+    <<: *service-base
+    container_name: rag-eval-eval
+    environment:
+      SERVICE: eval
+      SERVICE_NAME: eval-service
+    ports:
+      - "8004:8000"
+  reporting:
+    <<: *service-base
+    container_name: rag-eval-reporting
+    environment:
+      SERVICE: reporting
+      SERVICE_NAME: reporting-service
+    ports:
+      - "8005:8000"
+  adapter:
+    <<: *service-base
+    container_name: rag-eval-adapter
+    environment:
+      SERVICE: adapter
+      SERVICE_NAME: adapter-service
+    ports:
+      - "8006:8000"
+  kg:
+    <<: *service-base
+    container_name: rag-eval-kg
+    environment:
+      SERVICE: kg
+      SERVICE_NAME: kg-service
+    ports:
+      - "8007:8000"
+
+  # ── Webhook Daemon ────────────────────────────────────────────────────────
+  # Listens for CI push events (GitHub webhooks, GitLab webhooks, or manual
+  # triggers) and launches the RAGAS evaluation pipeline in a background task.
+  #
+  #   POST http://localhost:8008/webhook
+  #   GET  http://localhost:8008/health
+  #
+  # Event log is written to outputs/webhook_events.jsonl.
+  # To disable in a lightweight stack, comment out this service.
+  webhook:
+    <<: *service-base
+    container_name: rag-eval-webhook
+    working_dir: /app/eval-pipeline
+    environment:
+      SERVICE: webhook
+      SERVICE_NAME: webhook-daemon
+      PYTHONPATH: /app:/app/eval-pipeline:/app/eval-pipeline/src:/app/ragas/ragas/src
+    ports:
+      - "8008:8000"
+    volumes:
+      - models-cache:${MODELS_CACHE_PATH:-/var/cache/rag-models}
+      - ./extensions:${EXTENSIONS_DIR:-/extensions}:ro
+      - ./.cache:/app/.cache
+      # eval-pipeline source: webhook_daemon.py + pipeline runner scripts
+      - ./eval-pipeline:/app/eval-pipeline
+      - ./ragas/ragas/src:/app/ragas/ragas/src:ro
+      - ./config:/app/config:ro
+      - ./outputs:/app/outputs
+    command: >
+      uvicorn webhook_daemon:app
+        --host 0.0.0.0
+        --port 8000
+        --log-level info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  insights-portal:
+    build:
+      context: ./insights-portal
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+    container_name: rag-eval-insights-portal
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    depends_on:
+      - ingestion
+      - eval
+      - reporting
+    logging: *default-logging
+    networks:
+      - rag-eval-net
+
+networks:
+  rag-eval-net:
+    name: rag-eval-net
+
+volumes:
+  models-cache:
+  minio-data:

@@ -1,0 +1,20 @@
+{{/* ConfigMap for shared non-secret configuration */}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  RATE_LIMIT_RPM: {{ .Values.config.rateLimitRpm | quote }}
+  RATE_LIMIT_ENABLED: {{ .Values.config.rateLimitEnabled | quote }}
+  WS_SCHEMA_VALIDATION: {{ .Values.config.wsSchemaValidation | quote }}
+  HEARTBEAT_INTERVAL_SEC: {{ .Values.ws.env.HEARTBEAT_INTERVAL_SEC | default "15" | quote }}
+  HEARTBEAT_MISS_THRESHOLD: {{ .Values.ws.env.HEARTBEAT_MISS_THRESHOLD | default "2" | quote }}
+  {{- if .Values.objectStore.enabled }}
+  OBJECT_STORE_BUCKET: {{ .Values.objectStore.bucketName | quote }}
+  {{- end }}

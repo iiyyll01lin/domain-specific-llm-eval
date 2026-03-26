@@ -1,0 +1,10 @@
+Cloud Computing Architecture
+        
+        Cloud computing is the delivery of computing services including servers, storage, databases, networking, software, analytics, and intelligence over the Internet ("the cloud") to offer faster innovation, flexible resources, and economies of scale.
+        
+        Main service models:
+        - Infrastructure as a Service (IaaS): Provides virtualized computing resources
+        - Platform as a Service (PaaS): Provides a platform for developing applications
+        - Software as a Service (SaaS): Provides access to software applications
+        
+        Deployment models include public cloud, private cloud, hybrid cloud, and multi-cloud environments. Key benefits include cost reduction, scalability, reliability, and global accessibility.

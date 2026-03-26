@@ -1,0 +1,23 @@
+# Minimal configuration for the Golden-Path E2E smoke test.
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is consumed by scripts/golden_path_runner.py ONLY.
+# It is intentionally tiny: no LLM endpoints, no network, no model downloads.
+
+golden_corpus:
+  # The query / expected-answer pair used for both GraphSpec dispatch and output CSV.
+  query: "What defects appear on the steel surface?"
+  expected_answer: "Scratches and pits are detected on the steel surface."
+
+  # Directed edges to be added between corpus nodes (0-indexed row order).
+  # Format: [src_index, tgt_index, relationship_type, similarity_score]
+  # This creates a chain topology A→B→C→D→E with monotonically decreasing scores.
+  relationships:
+    - [0, 1, "jaccard_similarity", 0.80]
+    - [1, 2, "jaccard_similarity", 0.75]
+    - [2, 3, "jaccard_similarity", 0.70]
+    - [3, 4, "jaccard_similarity", 0.65]
+
+evaluation:
+  alpha: 0.4   # weight for entity overlap (Sₑ)
+  beta:  0.4   # weight for structural connectivity (Sc)
+  gamma: 0.2   # weight for hub-noise penalty (Ph)

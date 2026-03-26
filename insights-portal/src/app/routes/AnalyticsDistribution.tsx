@@ -1,0 +1,471 @@
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import * as echarts from 'echarts'
+import { usePortalStore } from '@/app/store/usePortalStore'
+import { applyFilters } from '@/core/analysis/filters'
+import { exportTableToCSV, exportMultipleSheetsXLSX } from '@/core/exporter'
+
+export const AnalyticsDistribution: React.FC = () => {
+  const { t } = useTranslation()
+  const run = usePortalStore((s) => s.run)
+  const runs = usePortalStore((s) => s.runs || {})
+  const selectedRuns = usePortalStore((s) => s.selectedRuns || [])
+  // Legend toggles per run id
+  const [hidden, setHidden] = React.useState<Record<string, boolean>>({})
+  const [showLegend, setShowLegend] = React.useState(false)
+  const setFilters = usePortalStore((s) => s.setFilters)
+  const ref = React.useRef<HTMLDivElement | null>(null)
+  // Persistent chart instance — avoids dispose/recreate on every filter change
+  const chartRef = React.useRef<echarts.ECharts | null>(null)
+  const [metric, setMetric] = React.useState('Faithfulness')
+  const [mode, setMode] = React.useState<'hist'|'box'|'scatter'>('hist')
+  const [scatterY, setScatterY] = React.useState('AnswerRelevancy')
+  const thresholds = usePortalStore((s) => s.thresholds)
+  const [cohort, setCohort] = React.useState<'language'|'success'|'failingMetric'>('language')
+  const [seriesInfo, setSeriesInfo] = React.useState<{ names: string[]; count: number; outliers: boolean }>({ names: [], count: 0, outliers: false })
+
+  // Recompute and draw chart when inputs change
+  const stableFilters = usePortalStore((s) => s.filters)
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      const m = e?.detail?.metric
+      if (typeof m === 'string' && m) setMetric(m)
+    }
+    window.addEventListener('portal:set-analytics-metric', handler as any)
+    return () => window.removeEventListener('portal:set-analytics-metric', handler as any)
+  }, [])
+
+  // ── Chart mount / unmount lifecycle ──────────────────────────────────────
+  React.useEffect(() => {
+    if (!ref.current) return
+    const chart = echarts.init(ref.current, undefined, { renderer: 'canvas' })
+    chartRef.current = chart
+    // ResizeObserver is container-aware; handles panel resizes & sidebar toggles
+    const ro = new ResizeObserver(() => chart.resize())
+    ro.observe(ref.current)
+    return () => {
+      ro.disconnect()
+      chart.off('brushselected')
+      chart.dispose()
+      chartRef.current = null
+    }
+  }, []) // mount/unmount only
+
+  // ── Chart option update — reruns whenever data or display settings change ──
+  React.useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+
+    // Color-blind-safe Okabe-Ito palette
+    const palette = ['#56b4e9', '#e69f00', '#009e73', '#cc79a7', '#0072b2', '#d55e00', '#f0e442']
+
+    const datasetEntries: Array<{ id: string; label: string; items: any[]; color?: string }> = []
+    if (selectedRuns.length >= 2) {
+      selectedRuns.forEach((rid) => {
+        const r = runs[rid]
+        if (!r) return
+        const colorIdx = Math.max(0, selectedRuns.indexOf(rid)) % palette.length
+        datasetEntries.push({ id: rid, label: rid.split('/').slice(-1)[0], items: applyFilters(r.items || [], stableFilters), color: palette[colorIdx] })
+      })
+    } else {
+      datasetEntries.push({ id: 'current', label: 'current', items: applyFilters(run?.items || [], stableFilters), color: palette[0] })
+    }
+
+    const xValsSingle = datasetEntries[0]?.items
+      .map((it) => (it.metrics as any)?.[metric])
+      .filter((v) => typeof v === 'number') as number[]
+
+    // Empty state: overlay text graphic when no data points exist
+    if (!xValsSingle.length && datasetEntries.every((d) => !d.items.length)) {
+      chart.setOption({
+        series: [],
+        graphic: [{
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: 'No data — load a run from the Executive Overview',
+            fill: 'var(--text-muted, #8b949e)',
+            font: '14px Inter, system-ui, sans-serif',
+          },
+        }],
+      }, { notMerge: true })
+      return
+    }
+
+    const th = (thresholds as any)[metric]
+
+    // ── Histogram ──
+    if (mode === 'hist') {
+      const bins = 20
+      const xCats = Array.from({ length: bins }, (_, i) => (i / bins).toFixed(2))
+      const series: any[] = []
+      datasetEntries.forEach((ds) => {
+        if (hidden[ds.id]) return
+        const hist = new Array(bins).fill(0)
+        const vals = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+        for (const v of vals) {
+          const bi = Math.min(bins - 1, Math.max(0, Math.floor((v as number) * bins)))
+          hist[bi]++
+        }
+        series.push({ name: ds.label, type: 'bar', data: hist, itemStyle: { color: ds.color } })
+      })
+      chart.setOption({
+        graphic: [],
+        grid: { left: 40, right: 20, top: 30, bottom: 30 },
+        xAxis: { type: 'category', data: xCats },
+        yAxis: { type: 'value' },
+        series,
+        legend: showLegend ? {} : undefined,
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params: any) => {
+            if (!Array.isArray(params)) params = [params]
+            const idx: number = params[0]?.dataIndex ?? 0
+            const binStart = (idx / bins).toFixed(2)
+            const binEnd   = ((idx + 1) / bins).toFixed(2)
+            const thInfo = th
+              ? `<div style="opacity:.7;font-size:11px;margin-top:4px">warn ≥ ${th.warning.toFixed(2)} &middot; crit ≥ ${th.critical.toFixed(2)}</div>`
+              : ''
+            const rows = params
+              .map((p: any) => `<div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px"></span><b>${p.seriesName}</b>: <b>${p.value}</b> items</div>`)
+              .join('')
+            return `<div style="font-size:12px;line-height:1.7"><div style="margin-bottom:2px;opacity:.8">Range [${binStart},&nbsp;${binEnd})</div>${rows}${thInfo}</div>`
+          },
+        },
+      }, { notMerge: true })
+      setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
+
+    // ── Box plot ──
+    } else if (mode === 'box') {
+      if (datasetEntries.length >= 2) {
+        const xs = datasetEntries.filter((ds) => !hidden[ds.id]).map((ds) => ds.label)
+        const boxData: Array<[number | null, number | null, number | null, number | null, number | null]> = []
+        const outlierData: Array<[number, number]> = []
+        datasetEntries.forEach((ds, idx) => {
+          if (hidden[ds.id]) return
+          const arr = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number').sort((a, b) => a - b) as number[]
+          const pick = (p: number) => arr.length ? arr[Math.max(0, Math.min(arr.length - 1, Math.floor(p * (arr.length - 1))))] : null
+          const min = arr[0] ?? null, q1 = pick(0.25), med = pick(0.5), q3 = pick(0.75), max = arr[arr.length - 1] ?? null
+          boxData.push([min, q1, med, q3, max])
+          const iqr = (q3 != null && q1 != null) ? (q3 as number) - (q1 as number) : null
+          if (iqr != null) {
+            const lowerFence = (q1 as number) - 1.5 * iqr
+            const upperFence = (q3 as number) + 1.5 * iqr
+            for (const v of arr) {
+              if (v < lowerFence || v > upperFence) outlierData.push([idx, v])
+            }
+          }
+        })
+        chart.setOption({
+          graphic: [],
+          xAxis: { type: 'category', data: xs },
+          yAxis: { type: 'value', min: 0, max: 1 },
+          legend: showLegend ? {} : undefined,
+          series: [
+            { type: 'boxplot', data: boxData },
+            { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
+          ],
+          tooltip: { trigger: 'item' },
+        }, { notMerge: true })
+        setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
+      } else {
+        const items = datasetEntries[0]?.items || []
+        const groups: Record<string, number[]> = {}
+        if (items.length) {
+          for (const it of items) {
+            const v = (it.metrics as any)?.[metric]
+            if (typeof v !== 'number') continue
+            let key = 'N/A'
+            if (cohort === 'language') key = (it.language || 'N/A') as string
+            else if (cohort === 'success') {
+              const ok = Object.entries((it.metrics as any) || {}).every(([k, vv]) => {
+                const t2 = (thresholds as any)?.[k]
+                return t2 ? (typeof vv === 'number' ? vv >= t2.warning : false) : true
+              })
+              key = ok ? 'success' : 'failure'
+            } else if (cohort === 'failingMetric') {
+              let placed = false
+              for (const [mk, vv] of Object.entries((it.metrics as any) || {})) {
+                const t2 = (thresholds as any)?.[mk]
+                if (t2 && typeof vv === 'number' && vv < t2.warning) {
+                  (groups[mk] = groups[mk] || []).push(v)
+                  placed = true
+                }
+              }
+              if (!placed) (groups['none'] = groups['none'] || []).push(v)
+              continue
+            }
+            ;(groups[key] = groups[key] || []).push(v)
+          }
+        }
+        const groupKeys = Object.keys(groups)
+        const isGrouped = groupKeys.length > 0
+        const vals = isGrouped ? [] : xValsSingle.slice().sort((a, b) => a - b)
+        const q = (p: number) => vals.length ? vals[Math.max(0, Math.min(vals.length - 1, Math.floor(p * (vals.length - 1))))] : null
+        if (!isGrouped) {
+          const min = vals[0] ?? null, q1 = q(0.25), med = q(0.5), q3 = q(0.75), max = vals[vals.length - 1] ?? null
+          const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
+          const lf = iqr != null ? (q1 as number) - 1.5 * iqr : null
+          const uf = iqr != null ? (q3 as number) + 1.5 * iqr : null
+          const outliers = (iqr != null) ? (vals as number[]).filter((v) => v < (lf as number) || v > (uf as number)).map((v) => [0, v]) : []
+          chart.setOption({
+            graphic: [],
+            xAxis: { type: 'category', data: [metric] },
+            yAxis: { type: 'value', min: 0, max: 1 },
+            series: [
+              { type: 'boxplot', data: [[min, q1, med, q3, max]] },
+              { type: 'scatter', data: outliers, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
+            ],
+            tooltip: { trigger: 'item' },
+          }, { notMerge: true })
+          setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outliers.length > 0 })
+        } else {
+          const xs = groupKeys
+          const boxData: Array<[number | null, number | null, number | null, number | null, number | null]> = []
+          const outlierData: Array<[number, number]> = []
+          xs.forEach((gk, i) => {
+            const arr = (groups[gk] || []).slice().sort((a, b) => a - b)
+            const pick = (p: number) => arr.length ? arr[Math.max(0, Math.min(arr.length - 1, Math.floor(p * (arr.length - 1))))] : null
+            const min = arr[0] ?? null, q1 = pick(0.25), med = pick(0.5), q3 = pick(0.75), max = arr[arr.length - 1] ?? null
+            boxData.push([min, q1, med, q3, max])
+            const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
+            const lf = iqr != null ? (q1 as number) - 1.5 * iqr : null
+            const uf = iqr != null ? (q3 as number) + 1.5 * iqr : null
+            if (iqr != null) {
+              for (const v of arr) {
+                if (v < (lf as number) || v > (uf as number)) outlierData.push([i, v])
+              }
+            }
+          })
+          chart.setOption({
+            graphic: [],
+            xAxis: { type: 'category', data: xs },
+            yAxis: { type: 'value', min: 0, max: 1 },
+            series: [
+              { type: 'boxplot', data: boxData },
+              { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
+            ],
+            tooltip: { trigger: 'item' },
+          }, { notMerge: true })
+          setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
+        }
+      }
+
+    // ── Scatter ──
+    } else if (mode === 'scatter') {
+      const mr = (stableFilters as any)?.metricRanges || {}
+      const xr = (mr as any)[metric] as [number|null, number|null] | undefined
+      const yr = (mr as any)[scatterY] as [number|null, number|null] | undefined
+      const series: any[] = []
+      datasetEntries.forEach((ds) => {
+        if (hidden[ds.id]) return
+        const xs2 = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+        const ys2 = ds.items.map((it) => (it.metrics as any)?.[scatterY]).filter((v) => typeof v === 'number') as number[]
+        const data = xs2.map((x, i) => [x, ys2[i] ?? null]).filter((p) => typeof p[1] === 'number')
+        series.push({ type: 'scatter', name: ds.label, data, itemStyle: { color: ds.color }, symbolSize: 6, opacity: 0.75 })
+      })
+      chart.off('brushselected')
+      chart.on('brushselected', (params: any) => {
+        const batch = params.batch?.[0]
+        if (!batch) return
+        const areas = Array.isArray(batch.areas) ? batch.areas : []
+        let xMin: number | null = null, xMax: number | null = null
+        let yMin: number | null = null, yMax: number | null = null
+        for (const a of areas) {
+          const rx = a?.range?.[0]; const ry = a?.range?.[1]
+          if (rx) { xMin = xMin == null ? rx[0] : Math.min(xMin, rx[0]); xMax = xMax == null ? rx[1] : Math.max(xMax, rx[1]) }
+          if (ry) { yMin = yMin == null ? ry[0] : Math.min(yMin, ry[0]); yMax = yMax == null ? ry[1] : Math.max(yMax, ry[1]) }
+        }
+        if (xMin == null || xMax == null || yMin == null || yMax == null) return
+        setFilters({ metricRanges: { [metric]: [xMin, xMax], [scatterY]: [yMin, yMax] } })
+      })
+      chart.setOption({
+        graphic: [],
+        xAxis: { type: 'value', min: (xr?.[0] ?? 0), max: (xr?.[1] ?? 1), name: metric, nameLocation: 'middle', nameGap: 26 },
+        yAxis: { type: 'value', min: (yr?.[0] ?? 0), max: (yr?.[1] ?? 1), name: scatterY, nameLocation: 'middle', nameGap: 40 },
+        series,
+        legend: showLegend ? {} : undefined,
+        tooltip: {
+          trigger: 'item',
+          formatter: (p: any) => {
+            const [xv, yv] = Array.isArray(p?.value) ? p.value : [null, null]
+            const fmtBand = (v: number | null, key: string) => {
+              const t2 = (thresholds as any)[key]
+              if (!t2 || v == null) return ''
+              if (v >= t2.warning) return ' <span style="color:#3fb950">✓ Pass</span>'
+              if (v >= t2.critical) return ' <span style="color:#d29922">⚠ Warn</span>'
+              return ' <span style="color:#f85149">✗ Crit</span>'
+            }
+            return `<div style="font-size:12px;line-height:1.7"><b>${p.seriesName}</b><br/>${metric}: <b>${typeof xv === 'number' ? xv.toFixed(3) : '—'}</b>${fmtBand(xv, metric)}<br/>${scatterY}: <b>${typeof yv === 'number' ? yv.toFixed(3) : '—'}</b>${fmtBand(yv, scatterY)}</div>`
+          },
+        },
+        brush: { toolbox: ['rect', 'polygon', 'clear'], xAxisIndex: 'all', yAxisIndex: 'all' },
+        toolbox: { feature: { brush: {} } },
+      }, { notMerge: true })
+      setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
+    }
+  }, [run, runs, selectedRuns, hidden, metric, scatterY, mode, stableFilters, setFilters, cohort, thresholds, showLegend])
+
+  React.useEffect(() => {
+    if (mode !== 'scatter') return
+    const metricRanges = (usePortalStore.getState().filters as any)?.metricRanges || {}
+    const nextRanges: Record<string, [number | null, number | null]> = {}
+    if (metricRanges[metric] == null) nextRanges[metric] = [0, 1]
+    if (metricRanges[scatterY] == null) nextRanges[scatterY] = [0, 1]
+    if (Object.keys(nextRanges).length > 0) {
+      setFilters({ metricRanges: nextRanges })
+    }
+  }, [metric, mode, scatterY, setFilters])
+
+  const onExportCsv = () => {
+    const filtered = applyFilters(run?.items || [], stableFilters)
+    const rows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
+    exportTableToCSV(`analytics_${mode}_${metric}.csv`, rows, {
+      timestamp: new Date().toISOString(),
+      filters: stableFilters as any,
+      branding: { brand: 'Insights Portal', title: 'Analytics Export', footer: 'Generated locally — offline mode' }
+    })
+  }
+  const onExportXlsx = async () => {
+    const filtered = applyFilters(run?.items || [], stableFilters)
+    const detailRows = filtered.map((it) => ({ id: it.id, metric, value: (it.metrics as any)?.[metric] ?? null }))
+    const overview = [
+      { metric, n: detailRows.length, mode }
+    ]
+    await exportMultipleSheetsXLSX(
+      `analytics_${mode}_${metric}.xlsx`,
+      [
+        { name: 'data', rows: detailRows },
+        { name: 'overview', rows: overview },
+      ],
+      {
+        timestamp: new Date().toISOString(),
+        filters: stableFilters as any,
+        branding: { brand: 'Insights Portal', title: 'Analytics Export', footer: 'Generated locally — offline mode' }
+      }
+    )
+  }
+  const onExportPng = () => {
+    const inst = echarts.getInstanceByDom(ref.current!)
+    if (!inst) return
+    const url = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' })
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `analytics_${mode}_${metric}.png`
+    a.click()
+  }
+
+  return (
+    <section aria-labelledby="analytics-title">
+      <h2 id="analytics-title">{t('analytics.title')}</h2>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <label>
+          {t('analytics.mode')}
+          <select aria-label="analytics-mode" value={mode} onChange={(e) => setMode(e.target.value as any)} style={{ marginLeft: 6 }}>
+            <option value="hist">Histogram</option>
+            <option value="box">Box</option>
+            <option value="scatter">Scatter</option>
+          </select>
+        </label>
+  {mode === 'box' && (
+          <label>
+      {t('analytics.cohort')}
+            <select aria-label="analytics-cohort" value={cohort} onChange={(e) => setCohort(e.target.value as any)} style={{ marginLeft: 6 }}>
+              <option value="language">Language</option>
+              <option value="success">Success/Failure</option>
+      <option value="failingMetric">Failing Metric</option>
+            </select>
+          </label>
+        )}
+        <label>
+          {t('analytics.metric')}
+          <select aria-label="analytics-metric-x" value={metric} onChange={(e) => setMetric(e.target.value)} style={{ marginLeft: 6 }}>
+            {Object.keys(run?.kpis || {}).map((k) => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+        </label>
+        {mode === 'scatter' && (
+          <label>
+            Y
+            <select aria-label="analytics-metric-y" value={scatterY} onChange={(e) => setScatterY(e.target.value)} style={{ marginLeft: 6 }}>
+              {Object.keys(run?.kpis || {}).map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+          </label>
+        )}
+  <button onClick={onExportCsv} aria-label="export-analytics-csv">{t('analytics.exportCsv')}</button>
+  <button onClick={onExportXlsx} aria-label="export-analytics-xlsx">{t('analytics.exportXlsx')}</button>
+  <button onClick={onExportPng} aria-label="export-analytics-png">{t('analytics.exportPng')}</button>
+        <label style={{ marginLeft: 8 }}>
+          <input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} data-testid="analytics-legend-toggle" /> {t('analytics.legend')}
+        </label>
+        {showLegend && (selectedRuns.length >= 2) && (
+          <div style={{ display: 'inline-flex', gap: 8, marginLeft: 8 }}>
+            {selectedRuns.map((rid) => (
+              <label key={rid} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={!hidden[rid]}
+                  onChange={(e) => setHidden((h) => ({ ...h, [rid]: !e.target.checked }))}
+                  data-testid={`legend-run-${rid.split('/').slice(-1)[0]}`}
+                />
+                {rid.split('/').slice(-1)[0]}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+  <div ref={ref} style={{ height: 320, marginTop: 12 }} aria-label="histogram" role="img" />
+      {/* Test-only diagnostics to support E2E assertions without poking into ECharts internals */}
+      <div style={{ display: 'none' }}>
+        <span data-testid="analytics-series-count">{seriesInfo.count}</span>
+        <span data-testid="analytics-outliers-present">{String(seriesInfo.outliers)}</span>
+        <span data-testid="analytics-metric-ranges">{JSON.stringify((usePortalStore.getState().filters as any)?.metricRanges || {})}</span>
+      </div>
+      {selectedRuns.length >= 2 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('analytics.compareTable', { metric })}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(120px, 1fr))', gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>Run</div>
+            <div style={{ fontWeight: 600 }}>Mean</div>
+            <div style={{ fontWeight: 600 }}>Std</div>
+            <div style={{ fontWeight: 600 }}>Delta (abs)</div>
+            <div style={{ fontWeight: 600 }}>Delta (%)</div>
+            {(() => {
+              // Compute simple mean/std per run and deltas vs first selected as baseline
+              const rows: React.ReactNode[] = []
+              const baseId = selectedRuns[0]
+              const baseRun = runs[baseId]
+              const baseVals = applyFilters(baseRun?.items || [], stableFilters).map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+              const mean = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0
+              const std = (arr: number[], m: number) => arr.length ? Math.sqrt(arr.reduce((s, v) => s + (v - m) * (v - m), 0) / arr.length) : 0
+              const baseMean = mean(baseVals)
+              selectedRuns.forEach((rid) => {
+                const r = runs[rid]
+                if (!r) return
+                const vals = applyFilters(r.items || [], stableFilters).map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+                const m = mean(vals)
+                const sd = std(vals, m)
+                const d = m - baseMean
+                const pct = baseMean ? (d / baseMean) * 100 : 0
+                rows.push(
+                  <React.Fragment key={rid}>
+                    <div>{rid.split('/').slice(-1)[0]}</div>
+                    <div>{m.toFixed(3)}</div>
+                    <div>{sd.toFixed(3)}</div>
+                    <div style={{ color: d < 0 ? '#e57373' : '#81c784' }}>{d >= 0 ? '+' : ''}{d.toFixed(3)}</div>
+                    <div style={{ color: d < 0 ? '#e57373' : '#81c784' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</div>
+                  </React.Fragment>
+                )
+              })
+              return rows
+            })()}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}

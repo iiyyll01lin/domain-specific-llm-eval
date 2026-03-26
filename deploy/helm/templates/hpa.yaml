@@ -1,0 +1,34 @@
+{{/* HPA for services with autoscaling enabled */}}
+{{- $services := list "ingestion" "processing" "testset" "eval" "reporting" "adapter" "kg" "ws" }}
+{{- range $svcName := $services }}
+{{- $svc := index $.Values $svcName }}
+{{- $defaults := $.Values.defaults }}
+{{- $hpa := mergeOverwrite (deepCopy $defaults.autoscaling) (($svc.autoscaling) | default dict) }}
+{{- if $hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Release.Name }}-{{ $svcName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $svcName }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Release.Name }}-{{ $svcName }}
+  minReplicas: {{ $hpa.minReplicas }}
+  maxReplicas: {{ $hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

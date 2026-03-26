@@ -1,0 +1,16 @@
+data_sources:
+  documents:
+    document_files:
+      - "../sample_documents/ai_machine_learning.txt"
+      - "../sample_documents/cloud_computing.txt"
+      - "../sample_documents/cybersecurity.txt"
+
+testset_generation:
+  max_total_samples: 6
+
+output:
+  base_dir: ./outputs
+  use_timestamps: true
+
+logging:
+  level: INFO

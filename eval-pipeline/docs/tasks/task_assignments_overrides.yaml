@@ -1,0 +1,97 @@
+# Manual override assignments for tasks lacking distribution
+# Rationale categories:
+# - Core backend infra & ingestion/eval persistence/security: E1
+# - Evaluation logic, metrics, generation, reporting: E2
+# - UI panels, realtime, telemetry, KG visual & client utilities: E3
+# Sprint heuristics:
+#   * 1: Foundational ingestion/processing & immediate UI shell
+#   * 2: Testset & evaluation spine completion
+#   * 3: Reporting + metric aggregation & early outputs
+#   * 4: Optional/flagged KG & related exports
+#   * 5: Realtime + perf + broader infra baselines
+#   * 6: Advanced telemetry, security hardening, policy & supply chain
+
+# Ingestion / Processing remaining governance gaps
+TASK-011: {status: Planned, engineer: E1, target_sprint: 1}
+TASK-012: {status: Planned, engineer: E1, target_sprint: 1}
+TASK-013: {status: Planned, engineer: E1, target_sprint: 1}
+TASK-014: {status: Planned, engineer: E1, target_sprint: 1}
+TASK-016: {status: Planned, engineer: E1, target_sprint: 1}
+TASK-017: {status: Planned, engineer: E3, target_sprint: 1}
+
+# Testset / Generation gaps
+TASK-021: {status: Planned, engineer: E2, target_sprint: 2}
+TASK-022: {status: Planned, engineer: E2, target_sprint: 2}
+TASK-023: {status: Planned, engineer: E2, target_sprint: 2}
+TASK-024: {status: Planned, engineer: E2, target_sprint: 2}
+TASK-025: {status: Planned, engineer: E3, target_sprint: 2}
+
+# Evaluation runner persisting & aggregation supporting items
+TASK-033: {status: Planned, engineer: E2, target_sprint: 3}
+TASK-034: {status: Planned, engineer: E2, target_sprint: 3}
+TASK-035: {status: Planned, engineer: E2, target_sprint: 3}
+TASK-036: {status: Planned, engineer: E3, target_sprint: 3}
+
+# KG optional feature set (flagged for sprint 4)
+TASK-060: {status: Planned, engineer: E3, target_sprint: 4}
+TASK-061: {status: Planned, engineer: E3, target_sprint: 4}
+TASK-062: {status: Planned, engineer: E3, target_sprint: 4}
+TASK-063: {status: Planned, engineer: E3, target_sprint: 4}
+TASK-064: {status: Planned, engineer: E3, target_sprint: 4}
+TASK-066: {status: Planned, engineer: E3, target_sprint: 4}
+
+# Realtime sequence & downgrade path
+TASK-071: {status: Planned, engineer: E3, target_sprint: 5}
+TASK-072: {status: Planned, engineer: E3, target_sprint: 5}
+TASK-073: {status: Planned, engineer: E3, target_sprint: 5}
+
+# Telemetry & schema validation
+TASK-081: {status: Planned, engineer: E3, target_sprint: 6}
+TASK-084: {status: Planned, engineer: E3, target_sprint: 6}
+
+# Security / Infra / CI & Ops (phase 5–6 sequencing)
+TASK-090: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-091: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-092: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-100: {status: Planned, engineer: E2, target_sprint: 5}
+TASK-101: {status: Planned, engineer: E2, target_sprint: 5}
+TASK-102: {status: Planned, engineer: E2, target_sprint: 5}
+TASK-103: {status: Planned, engineer: E2, target_sprint: 5}
+TASK-104: {status: Planned, engineer: E2, target_sprint: 5}
+TASK-110: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-111: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-112: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-113: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-114: {status: Planned, engineer: E3, target_sprint: 6}
+TASK-115: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-116: {status: Planned, engineer: E3, target_sprint: 6}
+TASK-117: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-118: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-119: {status: Planned, engineer: E3, target_sprint: 6}
+TASK-121: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-122: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-123: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-124: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-125: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-126: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-127: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-128: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-129: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-131: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-132: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-133: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-134: {status: Planned, engineer: E1, target_sprint: 6}
+
+# Extension / plugin & SBOM subtasks (inherit parent sprint)
+TASK-126a: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-126b: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-126c: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-126d: {status: Planned, engineer: E1, target_sprint: 5}
+TASK-130a: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-130b: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-130c: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-130d: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-132a: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-132b: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-132c: {status: Planned, engineer: E1, target_sprint: 6}
+TASK-132d: {status: Planned, engineer: E1, target_sprint: 6}

@@ -1,0 +1,32 @@
+# We can represent pipeline steps as a CronJob or a standard Job later.
+# For now, just a placeholder structure.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-eval-run
+spec:
+  template:
+    metadata:
+      labels:
+        app: eval-pipeline
+    spec:
+      containers:
+        - name: eval-pipeline
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["python3", "/app/eval-pipeline/run_pure_ragas_pipeline.py"]
+          env:
+            - name: OPENAI_API_KEY
+              value: {{ .Values.env.openAIApiKey }}
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.minio.rootUser }}
+            - name: MINIO_ROOT_PASSWORD
+              value: {{ .Values.minio.rootPassword }}
+            - name: LANGCHAIN_TRACING_V2
+              value: {{ .Values.env.langchainTracingV2 | quote }}
+            - name: LANGCHAIN_ENDPOINT
+              value: {{ .Values.env.langchainEndpoint }}
+            - name: LANGCHAIN_API_KEY
+              value: {{ .Values.env.langchainApiKey }}
+            - name: LANGCHAIN_PROJECT
+              value: {{ .Values.env.langchainProject }}
+      restartPolicy: Never

@@ -1,0 +1,47 @@
+# Docker Compose Override for Production Mode
+# Use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+version: '3.8'
+
+services:
+  rag-eval-pipeline:
+    # Override build target for production
+    build:
+      target: production  # Use production stage instead of application
+    
+    # Production environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PIPELINE_ENV=production
+      - LOG_LEVEL=INFO
+      - CACHE_DIR=/app/cache
+      - TEMP_DIR=/app/temp
+    
+    # Production volumes (read-only source code)
+    volumes:
+      # Remove source code mounting for production
+      - ./data:/app/data:ro                   # Input documents
+      - ./outputs:/app/outputs:rw             # Output results
+      - ./config:/app/config:ro               # Configuration (read-only)
+      - pipeline-cache:/app/cache:rw          # Model cache
+      - pipeline-logs:/app/logs:rw            # Logs
+    
+    # Remove port mapping for production security
+    ports: []
+    
+    # Disable interactive mode for production
+    stdin_open: false
+    tty: false
+    
+    # Production resource limits (optimized)
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    
+    # Production command
+    command: ["python", "run_pipeline.py", "--config", "config/pipeline_config.yaml", "--log-level", "INFO"]

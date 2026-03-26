@@ -1,0 +1,30 @@
+{
+  "$schema": "https://example.org/schemas/thresholds.schema.json",
+  "version": "1.0.0",
+  "id": "standard",
+  "name": "Standard Thresholds",
+  "gates": {
+    "ContextPrecision": { "warning": 0.95, "critical": 0.90 },
+    "ContextRecall": { "warning": 0.95, "critical": 0.90 },
+    "Faithfulness": { "warning": 0.35, "critical": 0.30 },
+    "AnswerRelevancy": { "warning": 0.70, "critical": 0.60 },
+    "ContextualKeywordMean": { "warning": 0.55, "critical": 0.50 }
+  },
+  "verdictRules": [
+    {
+      "id": "blocked-critical-gate",
+      "when": "any(metric < critical)",
+      "verdict": "Blocked"
+    },
+    {
+      "id": "at-risk-warning-gate",
+      "when": "any(metric < warning)",
+      "verdict": "At Risk"
+    },
+    {
+      "id": "ready-all-pass",
+      "when": "all(metric >= warning)",
+      "verdict": "Ready"
+    }
+  ]
+}

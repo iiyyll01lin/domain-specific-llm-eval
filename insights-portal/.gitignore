@@ -1,0 +1,13 @@
+# TypeScript build info (do not commit)
+tsconfig.tsbuildinfo
+
+# Build output and dependencies
+dist/
+node_modules/
+
+# Test and tooling artifacts
+coverage/
+.vscode/
+.DS_Store
+
+.github/

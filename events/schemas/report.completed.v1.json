@@ -1,0 +1,22 @@
+{
+  "$id": "report.completed.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["event", "seq", "timestamp", "payload"],
+  "properties": {
+    "event": {"const": "report.completed"},
+    "seq": {"type": "integer", "minimum": 0},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "payload": {
+      "type": "object",
+      "required": ["report_id", "run_id"],
+      "properties": {
+        "report_id": {"type": "string"},
+        "run_id": {"type": "string"},
+        "format": {"type": "string", "enum": ["html", "pdf"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

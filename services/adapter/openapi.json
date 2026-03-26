@@ -1,0 +1,98 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "adapter-service",
+    "version": "0.1.0",
+    "description": "Knowledge-map normalization and summary injection adapter."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "health_get",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Service info",
+        "operationId": "root_get",
+        "responses": {
+          "200": {
+            "description": "Service metadata"
+          }
+        }
+      }
+    },
+    "/normalize": {
+      "post": {
+        "summary": "Normalize KM document",
+        "operationId": "normalize_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Normalized document"
+          }
+        }
+      }
+    },
+    "/km-summaries/testset": {
+      "post": {
+        "summary": "Inject KM summaries for testset",
+        "operationId": "km_summaries_testset",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Injected testset payload"
+          }
+        }
+      }
+    },
+    "/km-summaries/kg": {
+      "post": {
+        "summary": "Inject KM summaries for KG",
+        "operationId": "km_summaries_kg",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Injected KG payload"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {}
+  }
+}

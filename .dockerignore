@@ -1,0 +1,115 @@
+# .dockerignore — root-level, used by Dockerfile and Dockerfile.test
+# =============================================================================
+# Controls what is sent to the Docker build daemon as build context.
+# Keeping this tight dramatically reduces context size and build time,
+# since the COPY . /workspace/ instruction in Dockerfile.test would otherwise
+# include all generated artefacts (model files, logs, outputs …).
+# =============================================================================
+
+# ── Python bytecode and caches ────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.coverage
+**/.tox/
+**/.mypy_cache/
+
+# ── Virtual environments ──────────────────────────────────────────────────
+**/.venv/
+**/venv/
+**/env/
+**/.env/
+**/.eggs/
+**/*.egg-info/
+
+# ── Git internals (never needed in build context) ─────────────────────────
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+ragas/.git/
+ragas/**/.git/
+insights-portal/.git/
+
+# ── IDE and editor artefacts ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Large generated / runtime output directories ─────────────────────────
+# Use **/ prefix so these match at ANY depth (not just root level).
+# eval-pipeline/outputs/ alone is 37 GB and destroyed the first build attempt.
+**/outputs/
+**/logs/
+**/cache/
+**/temp/
+**/*.log
+**/*.tmp
+
+# Explicit extra-large eval-pipeline artefact dirs (belt-and-suspenders)
+eval-pipeline/debug_test_output/
+eval-pipeline/test_outputs/
+eval-pipeline/test_output/
+eval-pipeline/reports/
+
+# Root-level test artefact directories
+test_cache/
+test_evaluation_output/
+test_output/
+
+# ── Trained model weights and checkpoints ────────────────────────────────
+# These are never required for running tests.
+**/*.bin
+**/*.safetensors
+**/*.h5
+**/*.ckpt
+**/*.pt
+**/*.pth
+models/
+model_cache/
+
+# ── Documentation (not required at test time) ─────────────────────────────
+docs/
+ragas/docs/
+ragas/ragas/docs/
+*.md
+!README.md
+
+# ── Jupyter artefacts ────────────────────────────────────────────────────
+**/.ipynb_checkpoints/
+**/*.ipynb
+
+# ── Components not included in pytest.ini testpaths ──────────────────────
+# insights-portal has its own Dockerfile; excluded here to keep context lean.
+insights-portal/
+
+# ── Ragas submodule — include src/, exclude test/docs/benchmarks ──────────
+# (The src/ tree is needed for the editable install.)
+ragas/ragas/tests/
+ragas/ragas/docs/
+ragas/.github/
+ragas/ragas/experimental/
+ragas/ragas/benchmarks/
+
+# ── CI/CD and tooling configs ─────────────────────────────────────────────
+.github/
+.circleci/
+.travis.yml
+.pre-commit-config.yaml
+tox.ini
+
+# ── Shell scripts (not needed inside container) ────────────────────────────
+**/*.sh
+
+# ── Secrets and local overrides ───────────────────────────────────────────
+.env
+.env.*
+**/*.pem
+**/*.key
+**/*.crt

@@ -1,4 +1,4 @@
-# Domain-Specific LLM Agents Evaluation Dynamic Keyword Metric with Human Feedback
+# Domain-Specific LLM Agents Evaluation with RAGAS Integration & Custom LLM
 
 ![base-metric](base-metric.png)
 
@@ -14,18 +14,308 @@ This metric is part of my auto-eval framework Romantic-Rush:
 
 ![auto-eval-framework](auto-eval-framework.png)
 
-This project aims to deal with the real domain-specific LLM agents' response evaluation problem, which cannot be solely solved by the LLM-based Multi-turn metrics (see Ref. Fig1) like RAGAS Metrics. There are 2 main designs to address the specific bottleneck:
+This project provides a comprehensive solution for domain-specific LLM agents' response evaluation that cannot be solely solved by standard LLM-based metrics. **NEW: Complete RAGAS Integration with Custom LLM API** provides professional-grade testset generation and evaluation using your own LLM endpoints.
 
-1. LLM-based metrics tend to neglect keyword correctness which means even if the score is high enough, the response is still unbearable.
-2. Multi-turn metrics like RAGAS though tend to use pre-sys prompts for LLM agents for multiple rounds of evaluation, which do not allow dynamic adjustments through human feedback.
+## Use This Repo
 
-I design customized metrics for domain-specific LLM agent evaluation combining independent contextual keyword & metric gates, reference-based method scoring & reference-free metric alignment; the dynamic approach uses human feedback to fine-tune each gate & their confidence threshold, applying the active learning method using uncertainty sampling compliance. 
+This repository currently has two practical entry points:
 
-The goal is to:
+1. `eval-pipeline/`
+    Use this when you want to generate testsets from CSV data and run offline evaluation with RAGAS.
+2. `services/`
+    Use this when you want the microservice-style API surface, reporting layer, KG endpoints, metrics, compose deployment, and governance checks.
 
-1. Independent gates for keyword & reference-based metrics, which do not allow key information loss.
-2. Contextual keyword gate decoupled "keyword extraction evaluation" & "response keyword coverage".
-3. Dynamically adjust the gates using human feedback both ensure a stable iteration.
+If you only want the fastest path to value, start with `eval-pipeline/`. If you want something closer to a deployable platform, use the service layer plus compose/Helm.
+
+## What You Can Get From It
+
+- Generate domain-specific evaluation datasets from CSV or curated document inputs.
+- Run RAGAS-based evaluation against your own LLM or RAG endpoint.
+- Produce structured outputs such as evaluation items, KPI summaries, HTML reports, PDF reports, and KG summaries.
+- Validate governance controls: schema checks, telemetry taxonomy checks, policy checks, secrets scans, SBOM/provenance generation, and parity validation.
+- Run a local service stack for ingestion, processing, testset generation, evaluation, reporting, adapter, and KG APIs.
+
+## Quick Start
+
+### Path A: Batch Evaluation Pipeline
+
+Use this if your goal is testset generation and evaluation rather than service deployment.
+
+```bash
+cd eval-pipeline
+python3 -m pip install -r requirements.minimal.txt
+python3 test_ragas_integration.py
+python3 run_pipeline.py --stage testset-generation
+python3 run_pipeline.py --stage evaluation
+```
+
+Use this path when you already have CSV inputs and a target LLM or RAG endpoint and want to benefit from the repo quickly.
+
+`eval-pipeline/requirements.minimal.txt` now installs the local `ragas/` submodule as an editable dependency, so the batch path uses the patched in-repo RAGAS implementation rather than a mismatched PyPI package.
+
+By default, `python3 run_pipeline.py --stage testset-generation` uses `config/simple_config.yaml`, and `python3 run_pipeline.py --stage evaluation` uses `config/evaluation_smoke_config.yaml` with the latest generated testset plus a built-in mock RAG endpoint. Pass `--config` explicitly whenever you want a real external endpoint instead.
+
+### Path B: Service Layer Smoke Validation
+
+Use this if you want to verify the current service architecture and artifact chain locally.
+
+```bash
+python3 e2e_smoke.py
+bash scripts/e2e_smoke.sh
+```
+
+Use `python3 e2e_smoke.py` when you want the fastest in-process integration check.
+
+Use `bash scripts/e2e_smoke.sh` when you want the real compose-backed path. It starts MinIO plus the service containers, submits work over HTTP, and then advances the queued jobs inside the deployed containers so the smoke still reflects the current submission-oriented API design.
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.11 is the expected runtime for the containerized stack.
+- Docker and Docker Compose are required for the service deployment path.
+- Node.js 18.18+ / 20.x LTS is required for `insights-portal/` builds and tests.
+- `requirements.txt` contains the Python dependencies used by the service layer.
+- `eval-pipeline/requirements.minimal.txt` contains the additional packages required by the batch pipeline path.
+- Both dependency files install the local `ragas/` submodule from this repository.
+
+Install local dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+If you also want the batch evaluation pipeline in the same environment:
+
+```bash
+pip install -r eval-pipeline/requirements.minimal.txt
+```
+
+### Important Runtime Configuration
+
+The microservice layer expects object storage configuration. Before running the real service stack, provide these environment variables through `.env`, a compose env file, or exported shell variables:
+
+- `OBJECT_STORE_ENDPOINT`
+- `OBJECT_STORE_ACCESS_KEY`
+- `OBJECT_STORE_SECRET_KEY`
+- `OBJECT_STORE_BUCKET`
+- `OBJECT_STORE_USE_SSL`
+
+For local MinIO-style deployments, an HTTP endpoint plus a development bucket is sufficient.
+
+Minimal example:
+
+```dotenv
+PYTHONPATH=/app
+LOG_LEVEL=INFO
+OBJECT_STORE_ENDPOINT=http://minio:9000
+OBJECT_STORE_REGION=us-east-1
+OBJECT_STORE_ACCESS_KEY=minioadmin
+OBJECT_STORE_SECRET_KEY=minioadmin123
+OBJECT_STORE_BUCKET=rag-eval-dev
+OBJECT_STORE_USE_SSL=false
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+MINIO_BUCKET=rag-eval-dev
+```
+
+`.env.compose` now includes a working local MinIO-based default profile for development.
+
+## Deploy The Service Stack
+
+### Compose
+
+Baseline multi-service startup:
+
+```bash
+make compose
+```
+
+This path now expects either:
+
+- network access to install Python dependencies during the Docker build, or
+- prebuilt service images from a connected CI/build environment, or
+- an internal package mirror that the Docker build can reach.
+
+Mirror/prebuilt knobs:
+
+- set `PIP_INDEX_URL`, `PIP_EXTRA_INDEX_URL`, and `PIP_TRUSTED_HOST` in your compose env file to route Docker builds through an internal PyPI mirror;
+- or set `SERVICE_IMAGE_NAME`, `SERVICE_IMAGE_TAG`, and `SMOKE_USE_PREBUILT_IMAGE=1` to skip local image builds and reuse a prebuilt image.
+
+For a complete prebuilt-image flow, including GHCR login, tag selection, `.env.prebuilt` setup, `--no-build` compose startup, and smoke-test reuse, see [docs/prebuilt_image_workflow.md](docs/prebuilt_image_workflow.md). The smoke script now accepts either `COMPOSE_ENV_FILE=.env.prebuilt` or `SMOKE_ENV_FILE=.env.prebuilt` and loads that file before starting the stack.
+
+Hot-reload development mode:
+
+```bash
+make dev
+```
+
+Service ports:
+
+- `8001` ingestion
+- `8002` processing
+- `8003` testset
+- `8004` eval
+- `8005` reporting
+- `8006` adapter
+- `8007` kg
+
+Validate the compose definition before starting:
+
+```bash
+make validate-compose
+```
+
+### First Successful Deployment
+
+For the first real local deployment, use this sequence:
+
+```bash
+cp .env.compose .env.local
+$EDITOR .env.local
+COMPOSE_ENV_FILE=.env.local docker compose --env-file .env.local -f docker-compose.services.yml up -d --build
+curl http://localhost:8001/health
+curl http://localhost:8005/health
+bash scripts/e2e_smoke.sh
+```
+
+What success looks like:
+
+- MinIO is reachable on `9000` and its console on `9001`
+- service health endpoints on `8001` through `8007` return `{"status": ...}`
+- `bash scripts/e2e_smoke.sh` prints the submitted ingestion, processing, testset, eval, and reporting IDs
+
+If the compose build fails because PyPI is unreachable, the Dockerfile now exits immediately with `PyPI unreachable during image build`. Add your internal mirror via `PIP_INDEX_URL` / `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST`, or pull a prebuilt image and rerun with `SMOKE_USE_PREBUILT_IMAGE=1`.
+
+You can bootstrap the prebuilt path with `.env.prebuilt.example`.
+
+### Image Build And Tagging
+
+```bash
+make build
+make build-tag
+DRY_RUN=1 make tag
+```
+
+This produces `dev`, semantic version, and `git-<sha>` tags using the repository `VERSION` file.
+
+### Helm / Kubernetes
+
+The repo includes Helm manifests under `deploy/helm/` for the service stack. Start with a dry run:
+
+```bash
+helm template rag-eval deploy/helm
+```
+
+Use Helm when you want toggles for services such as KG and GPU-related runtime wiring for `processing` and `kg`.
+
+## Recommended Workflow
+
+If you are evaluating a domain model or RAG system for the first time:
+
+1. Start in `eval-pipeline/` and confirm the RAGAS integration works with your LLM endpoint.
+2. Generate a small testset and run evaluation end-to-end.
+3. Use the service layer only after you need API endpoints, observability, report delivery, or deployment packaging.
+4. Before CI or deployment, run the validators and smoke flow locally.
+
+Suggested validation commands:
+
+```bash
+python3 scripts/validate_event_schemas.py
+python3 scripts/validate_telemetry_taxonomy.py
+python3 scripts/validate_dev_parity.py --skip-installed-packages
+bash scripts/validate_policies.sh
+bash scripts/e2e_smoke.sh
+```
+
+`scripts/validate_policies.sh` no longer requires a host-installed `opa` binary. If `opa` is missing, it falls back to `docker run openpolicyagent/opa` automatically.
+
+`scripts/validate_dev_parity.py` treats host Python drift as a local warning by default and remains a hard failure in CI when invoked with `--python-drift-severity error`.
+
+## Where To Read Next
+
+- `eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`: detailed RAGAS setup and pipeline usage.
+- `docs/deployment_guide.md`: compose, image, GPU, parity, and deployment notes.
+- `docs/runbooks/compose_e2e_operator_checklist.md`: GHCR login, mirror setup, Node runtime, and compose-backed smoke checklist.
+- `docs/security.md`: secrets scan, SBOM, signing, and provenance flow.
+- `eval-pipeline/docs/tasks/tasks.md`: implementation and governance status.
+
+## 🎯 Key Features
+
+### **✅ RAGAS Integration (NEW)**
+- **Complete RAGAS Library Integration**: Uses actual RAGAS `TestsetGenerator` and evaluation metrics
+- **Custom LLM Support**: Integrate your own LLM API endpoints (tested with `gpt-4o` via custom proxy)
+- **CSV-to-RAGAS Conversion**: Transform your CSV data into sophisticated Q&A testsets
+- **Professional Evaluation**: `context_precision`, `context_recall`, `faithfulness`, `answer_relevancy`
+
+### **✅ Advanced Dynamic Metrics**
+- **Independent Gates**: Keyword & reference-based metrics with no key information loss
+- **Contextual Keyword Gate**: Decoupled "keyword extraction evaluation" & "response keyword coverage"
+- **Human Feedback Integration**: Dynamic threshold adjustment using active learning
+- **Uncertainty Sampling**: Intelligent selection of cases requiring human review
+
+## 📋 Quick Start with RAGAS
+
+### **Option 1: RAGAS with Custom LLM (Recommended)**
+```bash
+cd eval-pipeline
+python test_ragas_integration.py  # Test your setup
+python run_pipeline.py --stage testset-generation  # Generate testsets
+python run_pipeline.py --stage evaluation  # Run evaluation
+```
+
+### **Option 2: Traditional Pipeline**
+```bash
+cd eval-pipeline
+python run_pipeline.py --config config.yaml
+```
+
+**📚 Complete Guide**: See [`eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md`](eval-pipeline/RAGAS_IMPLEMENTATION_GUIDE.md) for detailed setup and usage instructions.
+
+## �️ Object Storage Client (New)
+
+The microservice layer now ships with a reusable S3/MinIO client that adds exponential backoff, checksum validation, and consistent error envelopes. Configure it via environment variables (pydantic automatically maps snake_case fields to upper-case env vars):
+
+- `OBJECT_STORE_ENDPOINT` – Optional custom endpoint (e.g., MinIO).
+- `OBJECT_STORE_REGION` – Defaults to `us-east-1`.
+- `OBJECT_STORE_ACCESS_KEY` / `OBJECT_STORE_SECRET_KEY` – Credentials used when non-anonymous access is required.
+- `OBJECT_STORE_BUCKET` – Default bucket used by ingestion/processing services.
+- `OBJECT_STORE_USE_SSL` – Set to `false` for plain HTTP endpoints.
+- `OBJECT_STORE_MAX_ATTEMPTS` and `OBJECT_STORE_BACKOFF_SECONDS` – Tune retry behaviour.
+
+Usage highlights:
+
+```python
+from services.common.storage.object_store import ObjectStoreClient
+
+client = ObjectStoreClient()
+client.upload_bytes(bucket=None, key="documents/doc.json", payload=b"{}")
+data = client.download_bytes(bucket=None, key="documents/doc.json")
+```
+
+Checksum mismatches raise a `ChecksumMismatchError` with trace-aware error envelopes, ensuring downstream services fail fast when corrupted artifacts surface.
+
+To validate the integration, run the dedicated unit tests:
+
+```bash
+pytest tests/services/common/test_object_store.py
+```
+
+## �🚀 Core Capabilities
+
+This project addresses specific bottlenecks in domain-specific LLM evaluation:
+
+1. **LLM-based metrics neglect keyword correctness** - Even high scores may miss critical domain terms
+2. **Standard metrics lack dynamic adjustment** - No adaptation based on human feedback
+3. **Limited custom LLM integration** - Most frameworks require specific API providers
+
+**Our Solution:**
+- **RAGAS + Custom LLM**: Professional testset generation with your own models
+- **Dynamic Keyword Gates**: Context-aware keyword evaluation with semantic understanding
+- **Human-in-the-Loop**: Active learning for continuous improvement
+- **Privacy-Friendly**: Complete control over your data and models
 
 # Design
 
@@ -122,7 +412,10 @@ iteration line graph:
 | **G-Eval Score**   | Analyzes the response’s linguistic and logical quality using coherence, fluency, consistency, and relevance criteria. Provides an overall quality score independent of reference. | Directly measures Coherence, Consistency, Fluency, and Relevance.                                                                             |
 | **Human Feedback** | Aggregates human evaluative feedback, validating the response accuracy and quality. Initially binary (0 or 1) but adapted dynamically.                                            | Adds human verification of Coherence, Relevance, Fluency, and Consistency.                                                                    |
 
-# Limitations
+## Limitations
+
+Progress note:
+See [LIMITATIONS_PROGRESS_20260317.md](/data/yy/domain-specific-llm-eval/LIMITATIONS_PROGRESS_20260317.md) for the latest status of these limitations, the improvements now implemented in code, and the remaining gaps that still need engineering work.
 
 1. **Binary Keyword Presence Check**: Currently, keywords are only checked for presence, not relevance or contextual fit. Improvements could include:
     - **Keyword Context Matching:** Adding a semantic similarity check to ensure keywords fit contextually.

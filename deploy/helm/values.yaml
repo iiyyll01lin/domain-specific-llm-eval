@@ -1,0 +1,210 @@
+# ─── Global ────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: ""          # e.g. "ghcr.io/myorg/" — trailing slash required
+  imagePullSecrets: []
+  storageClass: ""
+
+# ─── Per-service overrides ─────────────────────────────────────────────────
+# Each service block follows the same schema; only non-default values need
+# to be set.  All services share the defaults defined below.
+
+defaults:
+  replicaCount: 1
+  image:
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  service:
+    type: ClusterIP
+    port: 80
+  readinessProbe:
+    path: /readyz
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  livenessProbe:
+    path: /healthz
+    initialDelaySeconds: 20
+    periodSeconds: 30
+  env: {}
+
+# ─── Ingestion service ─────────────────────────────────────────────────────
+ingestion:
+  replicaCount: 1
+  image:
+    repository: ingestion
+    tag: "latest"
+  containerPort: 8001
+  service:
+    port: 8001
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── Processing service ────────────────────────────────────────────────────
+processing:
+  replicaCount: 1
+  image:
+    repository: processing
+    tag: "latest"
+  containerPort: 8002
+  service:
+    port: 8002
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── Testset service ───────────────────────────────────────────────────────
+testset:
+  replicaCount: 1
+  image:
+    repository: testset
+    tag: "latest"
+  containerPort: 8003
+  service:
+    port: 8003
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── Eval service ─────────────────────────────────────────────────────────
+eval:
+  replicaCount: 1
+  image:
+    repository: eval
+    tag: "latest"
+  containerPort: 8005
+  service:
+    port: 8005
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── Reporting service ────────────────────────────────────────────────────
+reporting:
+  replicaCount: 1
+  image:
+    repository: reporting
+    tag: "latest"
+  containerPort: 8006
+  service:
+    port: 8006
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── Adapter service ──────────────────────────────────────────────────────
+adapter:
+  replicaCount: 1
+  image:
+    repository: adapter
+    tag: "latest"
+  containerPort: 8007
+  service:
+    port: 8007
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── KG service ───────────────────────────────────────────────────────────
+kg:
+  replicaCount: 1
+  image:
+    repository: kg
+    tag: "latest"
+  containerPort: 8008
+  service:
+    port: 8008
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  env:
+    PYTHONUNBUFFERED: "1"
+
+# ─── WebSocket gateway ────────────────────────────────────────────────────
+ws:
+  replicaCount: 1
+  image:
+    repository: ws
+    tag: "latest"
+  containerPort: 8009
+  service:
+    type: ClusterIP
+    port: 8009
+  env:
+    PYTHONUNBUFFERED: "1"
+    HEARTBEAT_INTERVAL_SEC: "15"
+    HEARTBEAT_MISS_THRESHOLD: "2"
+
+# ─── Insights Portal (frontend) ───────────────────────────────────────────
+insightsPortal:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: insights-portal
+    tag: "latest"
+  containerPort: 3000
+  service:
+    type: ClusterIP
+    port: 3000
+  readinessProbe:
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# ─── Shared config / secrets ─────────────────────────────────────────────
+config:
+  auth:
+    tokenSecretName: ""          # k8s Secret key: AUTH_TOKEN
+  rateLimitRpm: 60
+  rateLimitEnabled: true
+  wsSchemaValidation: true
+
+# ─── Object-store (MinIO / S3) ────────────────────────────────────────────
+objectStore:
+  enabled: false
+  bucketName: "llm-eval-artifacts"
+  secretName: "object-store-creds"  # keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+# ─── GPU build profile ────────────────────────────────────────────────────
+# Enable GPU support for the processing and kg services (embedding inference).
+# Requires nodes with NVIDIA drivers and device-plugin deployed.
+gpu:
+  enabled: false
+  # When enabled, the processing + kg Deployments get an nvidia.com/gpu resource request
+  # and the image is expected to be built with ENABLE_GPU=true.
+  processing:
+    enabled: false
+    resourceLimit: 1
+    imageTag: "gpu"    # Override image tag for GPU-enabled builds
+  kg:
+    enabled: false
+    resourceLimit: 1
+    imageTag: "gpu"

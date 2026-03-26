@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  reviewer-service-db:
+    image: postgres:16
+    container_name: reviewer-service-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${REVIEWER_DB_NAME:-reviewer_service}
+      POSTGRES_USER: ${REVIEWER_DB_USER:-reviewer}
+      POSTGRES_PASSWORD: ${REVIEWER_DB_PASSWORD:-reviewer-change-me}
+    volumes:
+      - reviewer-service-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${REVIEWER_DB_USER:-reviewer} -d ${REVIEWER_DB_NAME:-reviewer_service}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reviewer-service-network
+
+  reviewer-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.reviewer-service
+    container_name: reviewer-service
+    restart: unless-stopped
+    env_file:
+      - .env.reviewer-service.sample
+    environment:
+      REVIEWER_STATE_BACKEND: postgres
+      REVIEWER_DATABASE_DSN: postgresql://${REVIEWER_DB_USER:-reviewer}:${REVIEWER_DB_PASSWORD:-reviewer-change-me}@reviewer-service-db:5432/${REVIEWER_DB_NAME:-reviewer_service}
+      REVIEWER_AUTH_SOURCE_TYPE: ${REVIEWER_AUTH_SOURCE_TYPE:-internal-token}
+      REVIEWER_TOKEN_ISSUER: ${REVIEWER_TOKEN_ISSUER:-reviewer-service}
+      REVIEWER_TOKEN_SHARED_SECRET: ${REVIEWER_TOKEN_SHARED_SECRET:-change-me}
+      REVIEWER_PRINCIPAL_FILE: /app/config/reviewer_principals.json
+    depends_on:
+      reviewer-service-db:
+        condition: service_healthy
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./config:/app/config:ro
+      - ./outputs/human_feedback:/app/outputs/human_feedback:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json, urllib.request; json.loads(urllib.request.urlopen('http://127.0.0.1:8010/readyz', timeout=5).read().decode())"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reviewer-service-network
+
+  reviewer-service-proxy:
+    image: nginx:1.27-alpine
+    container_name: reviewer-service-proxy
+    depends_on:
+      reviewer-service:
+        condition: service_healthy
+    volumes:
+      - ./deploy/reviewer-service/nginx.reviewer-service.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8081:80"
+    networks:
+      - reviewer-service-network
+
+volumes:
+  reviewer-service-postgres:
+    driver: local
+
+networks:
+  reviewer-service-network:
+    driver: bridge

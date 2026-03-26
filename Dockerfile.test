@@ -1,0 +1,216 @@
+# syntax=docker/dockerfile:1.6
+# =============================================================================
+# Dockerfile.test  —  Clean-room isolated test image
+# Project: domain-specific-llm-eval
+#
+# Design goals
+# ─────────────────────────────────────────────────────────────────────────────
+#   • 100 % offline at RUNTIME (HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE)
+#   • Deterministic: no model downloads, no internet access during pytest
+#   • Compatible with pytest -n auto  (pytest-xdist)
+#   • Works both standalone (CI/CD) and with volume mounts (local iteration)
+#   • Proxy-aware BUILD: passes HTTP_PROXY/HTTPS_PROXY to apt and pip so the
+#     image can be constructed behind a corporate proxy (e.g. Squid @ 3128).
+#     Proxy env vars are CLEARED in the test stage so runtime is fully offline.
+#
+# Two-stage build for layer-cache efficiency
+# ─────────────────────────────────────────────────────────────────────────────
+#   deps  → installs all Python packages (rarely changes)
+#   test  → adds only the source files needed to run pytest (~instant rebuild)
+#
+# Build:  docker compose -f docker-compose.test.yml build
+# Run:    docker compose -f docker-compose.test.yml run --rm test
+# =============================================================================
+
+# =============================================================================
+# Stage 1 — deps: system packages + all Python dependencies
+# =============================================================================
+FROM python:3.10-slim-bullseye AS deps
+
+# ── Proxy build arguments ─────────────────────────────────────────────────
+# Passed from docker-compose.test.yml via build.args (which inherit the
+# host's HTTP_PROXY / HTTPS_PROXY env vars).  These are needed during BUILD
+# so that apt-get and pip can reach external package sources behind a
+# corporate proxy.  They are intentionally UNSET in the test stage so that
+# all test runs are completely offline.
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY=localhost,127.0.0.1
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    # Activate proxy for pip and other HTTP clients
+    http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    no_proxy=${NO_PROXY} \
+    NO_PROXY=${NO_PROXY}
+
+# ── apt proxy configuration ───────────────────────────────────────────────
+# apt does not read http_proxy / https_proxy env vars; it needs an explicit
+# Acquire entry.  This is written unconditionally — if HTTP_PROXY is empty
+# the file simply has no effect.
+RUN if [ -n "${HTTP_PROXY}" ]; then \
+        echo "Acquire::http::Proxy \"${HTTP_PROXY}\";" > /etc/apt/apt.conf.d/01proxy; \
+        echo "Acquire::https::Proxy \"${HTTPS_PROXY:-${HTTP_PROXY}}\";" >> /etc/apt/apt.conf.d/01proxy; \
+    fi
+
+# ── System packages (graceful — build proceeds even if apt is unavailable) ─
+#   build-essential / gcc / g++    C/C++ compilation (greenlet, pyzmq …)
+#   pkg-config                     cairocffi configure step
+#   libffi-dev / libssl-dev        cffi, cryptography, openssl bindings
+#   libcairo2 / libpango-1.0-0 /   weasyprint runtime shared libraries
+#   libgdk-pixbuf2.0-0             (report generation; not exercised in tests)
+#   libmagic1                      python-magic (Linux sys_platform guard)
+#   curl                           ad-hoc checks in container
+RUN set -eux; \
+    if apt-get update -qq 2>/dev/null; then \
+        apt-get install -y --no-install-recommends \
+            build-essential \
+            gcc \
+            g++ \
+            pkg-config \
+            libffi-dev \
+            libssl-dev \
+            libcairo2 \
+            libpango-1.0-0 \
+            libgdk-pixbuf2.0-0 \
+            libmagic1 \
+            curl \
+        || true; \
+        rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "⚠️  apt-get update failed; proceeding with pip wheels only"; \
+    fi
+
+WORKDIR /workspace
+
+# ── Dependency manifests (changes infrequently → own cache layer) ─────────
+COPY requirements.txt                  ./requirements.txt
+COPY eval-pipeline/requirements.txt   ./eval-pipeline/requirements.txt
+COPY eval-pipeline/setup.py           ./eval-pipeline/setup.py
+# RAGAS must be present before requirements.txt is processed because both
+# root/requirements.txt and eval-pipeline/requirements.txt declare it as
+# "-e ./ragas/ragas" / "-e ../ragas/ragas" (editable local install).
+COPY ragas/                            ./ragas/
+
+# ── Python packages ───────────────────────────────────────────────────────
+# BuildKit pip cache mount persists between builds (faster incremental).
+# --prefer-binary: always prefer pre-built wheels; avoids needing gcc when
+#   the apt step above was skipped.
+
+# 1. Bootstrap tooling
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefer-binary --upgrade pip setuptools wheel
+
+# 2. CPU-only PyTorch + torchvision
+#    The CPU-specific wheel index avoids pulling the ~2 GB CUDA bundle.
+#    torch>=1.12 / torchvision>=0.13 satisfy the version floor in requirements.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefer-binary \
+        torch \
+        torchvision \
+        --index-url https://download.pytorch.org/whl/cpu
+
+# 3. RAGAS editable install
+#    Must precede requirements.txt processing so the "-e ../ragas/ragas" and
+#    "-e ./ragas/ragas" entries are no-ops (requirement already satisfied).
+#    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS is set INLINE (not as a
+#    persistent ENV) so that setuptools-scm does not try to read .git (which
+#    is excluded from the build context by .dockerignore).
+RUN --mount=type=cache,target=/root/.cache/pip \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS=0.2.15 \
+    pip install --prefer-binary -e /workspace/ragas/ragas
+
+# 4. Root service requirements — strip editable entries (already installed)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    grep -v '^[[:space:]]*-e' ./requirements.txt > /tmp/root-reqs.txt && \
+    pip install --prefer-binary -r /tmp/root-reqs.txt
+
+# 5. eval-pipeline requirements — same editable-entry filter
+RUN --mount=type=cache,target=/root/.cache/pip \
+    grep -v '^[[:space:]]*-e' ./eval-pipeline/requirements.txt > /tmp/eval-reqs.txt && \
+    pip install --prefer-binary -r /tmp/eval-reqs.txt
+
+# 6. Pre-warm tiktoken encoding cache
+#    langchain_openai / openai imports trigger tiktoken to download o200k_base
+#    (GPT-4o tokenizer) and cl100k_base (GPT-4 tokenizer) from Azure CDN at
+#    runtime.  With no network in the test container this causes a ~137 s hang
+#    before a TCP timeout.  Downloading here — where the build-time proxy is
+#    active — bakes the files into /root/.tiktoken/ so runtime is fully offline.
+RUN python -c "\
+import tiktoken; \
+tiktoken.get_encoding('o200k_base'); \
+tiktoken.get_encoding('cl100k_base'); \
+print('tiktoken cache warmed: o200k_base + cl100k_base'); \
+" || echo "WARNING: tiktoken cache warm-up failed (proxy issue?) — tests may be slow"
+
+# =============================================================================
+# Stage 2 — test: add only the source files needed for pytest
+# =============================================================================
+FROM deps AS test
+
+WORKDIR /workspace
+
+# ── CLEAR build-time proxy ────────────────────────────────────────────────
+# Proxy vars were needed during deps install; they must NOT be present at
+# test-run time — we want a fully offline, deterministic test environment.
+ENV http_proxy="" \
+    https_proxy="" \
+    HTTP_PROXY="" \
+    HTTPS_PROXY=""
+
+# ── pytest entry-points and configuration ─────────────────────────────────
+COPY conftest.py        ./conftest.py
+COPY pytest.ini         ./pytest.ini
+
+# ── eval-pipeline source tree (testpath 1) ────────────────────────────────
+COPY eval-pipeline/src/                     ./eval-pipeline/src/
+COPY eval-pipeline/tests/                   ./eval-pipeline/tests/
+COPY eval-pipeline/config/                  ./eval-pipeline/config/
+COPY eval-pipeline/global_tiktoken_patch.py ./eval-pipeline/global_tiktoken_patch.py
+# Root-level Python scripts: document_loader, run_pipeline, webhook_daemon,
+# tiktoken_fallback, run_pure_ragas_pipeline, local_dataset_generator, etc.
+# These are imported directly (not via src/) by tests and source modules.
+COPY eval-pipeline/*.py                     ./eval-pipeline/
+# Prompt template YAML files (loaded at test time by python_prompts helpers)
+COPY eval-pipeline/prompts/                 ./eval-pipeline/prompts/
+# CSV test fixtures (used by smoke/regression tests that load real data)
+COPY eval-pipeline/data/                    ./eval-pipeline/data/
+# Service contracts referenced by reviewer-service tests
+COPY eval-pipeline/contracts/               ./eval-pipeline/contracts/
+# eval-pipeline/scripts used by test_legacy_runtime_smoke_regressions
+COPY eval-pipeline/scripts/                 ./eval-pipeline/scripts/
+
+# ── RAGAS source (PYTHONPATH entry; editable install already in site-packages)
+COPY ragas/ragas/src/   ./ragas/ragas/src/
+
+# ── services tests (testpath 2: services/tests/) ──────────────────────────
+COPY services/          ./services/
+# Root-level scripts/ (executed via subprocess by services/tests)
+COPY scripts/           ./scripts/
+# Event schema JSON files (accessed by services/tests/testset/test_engine)
+COPY events/            ./events/
+# Telemetry taxonomy (validate_telemetry_taxonomy.py looks for telemetry/ at repo root)
+COPY telemetry/         ./telemetry/
+
+# ── Runtime environment ───────────────────────────────────────────────────
+# PYTHONPATH mirrors the sys.path manipulation in conftest.py so imports
+# resolve identically whether running inside or outside the container.
+ENV PYTHONPATH=/workspace:/workspace/eval-pipeline:/workspace/eval-pipeline/src:/workspace/ragas/ragas/src
+
+# Offline enforcement — must be set at the process level too because
+# pytest-xdist worker processes can be spawned before conftest is imported.
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1
+
+# Prevent matplotlib from attempting to open a display in headless containers.
+ENV MPLBACKEND=Agg
+
+# ── Default command ───────────────────────────────────────────────────────
+CMD ["python", "-m", "pytest", "-n", "auto", "--tb=short", "-q"]

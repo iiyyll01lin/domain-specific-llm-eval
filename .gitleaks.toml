@@ -1,0 +1,35 @@
+# Gitleaks configuration for the domain-specific-llm-eval repo.
+# This file is automatically picked up by gitleaks scan.
+# Reference: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+
+title = "domain-specific-llm-eval gitleaks config"
+
+[extend]
+# Use the default gitleaks rule set as a base
+useDefault = true
+
+[allowlist]
+description = "Repo-level allowlist for known false positives"
+
+# Paths that will never contain real credentials
+paths = [
+    '''\.md$''',
+    '''docs/''',
+    '''eval-pipeline/docs/''',
+    '''tests/''',
+    '''\.json$''',
+    '''benchmarks/''',
+]
+
+# Specific commit SHAs to ignore (e.g. known example values in test fixtures)
+commits = []
+
+# Regex patterns for known false positives
+regexes = [
+    # Example / placeholder tokens in test fixtures
+    '''test[-_]token''',
+    '''fake[-_]key''',
+    '''dummy[-_]secret''',
+    # SHA-256 digests in schema registry are not secrets
+    '''sha256:[0-9a-f]{64}''',
+]
