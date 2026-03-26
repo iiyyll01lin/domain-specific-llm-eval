@@ -9,6 +9,10 @@ x-service-base: &service-base
       PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
       PIP_NETWORK_CHECK_URL: ${PIP_NETWORK_CHECK_URL:-https://pypi.org/simple/}
       PIP_NETWORK_TIMEOUT: ${PIP_NETWORK_TIMEOUT:-5}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+      SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS: "0.2.15"
       ENABLE_GPU: ${ENABLE_GPU:-false}
       MODELS_CACHE: ${MODELS_CACHE_PATH:-/var/cache/rag-models}
       EXTENSIONS_DIR: ${EXTENSIONS_DIR:-/extensions}

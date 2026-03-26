@@ -7,6 +7,11 @@ ARG PIP_EXTRA_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_NETWORK_CHECK_URL=https://pypi.org/simple/
 ARG PIP_NETWORK_TIMEOUT=5
+ARG HTTP_PROXY=
+ARG HTTPS_PROXY=
+ARG NO_PROXY=localhost,127.0.0.1
+# Allows editable install of ragas fork without a .git directory in build context
+ARG SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS=0.2.15
 # GPU build profile: set ENABLE_GPU=true to install torch with CUDA support
 ARG ENABLE_GPU=false
 
@@ -21,7 +26,14 @@ ENV PIP_INDEX_URL=$PIP_INDEX_URL \
     PIP_EXTRA_INDEX_URL=$PIP_EXTRA_INDEX_URL \
     PIP_TRUSTED_HOST=$PIP_TRUSTED_HOST \
     PIP_NETWORK_CHECK_URL=$PIP_NETWORK_CHECK_URL \
-    PIP_NETWORK_TIMEOUT=$PIP_NETWORK_TIMEOUT
+    PIP_NETWORK_TIMEOUT=$PIP_NETWORK_TIMEOUT \
+    HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    NO_PROXY=$NO_PROXY \
+    http_proxy=$HTTP_PROXY \
+    https_proxy=$HTTPS_PROXY \
+    no_proxy=$NO_PROXY \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_RAGAS=0.2.15
 
 WORKDIR /app
 
@@ -38,19 +50,17 @@ RUN set -eux; \
 ENV PATH="/opt/venv/bin:${PATH}"
 
 COPY pyproject.toml* poetry.lock* requirements.txt* ./
+# Copy the local RAGAS fork so the editable install (-e ./ragas/ragas) resolves
+COPY ragas/ ./ragas/
 
 RUN set -eux; \
     network_available=0; \
     if python -c "import os, urllib.request; urllib.request.urlopen(os.environ.get('PIP_NETWORK_CHECK_URL','https://pypi.org/simple/'), timeout=float(os.environ.get('PIP_NETWORK_TIMEOUT','5')))" >/dev/null 2>&1; then \
         network_available=1; \
     else \
-        echo "PyPI unreachable during image build" >&2; \
+        echo "PyPI unreachable — continuing with configured PIP_INDEX_URL (may be a local mirror)" >&2; \
     fi; \
-    if [ "${network_available}" -eq 1 ]; then \
-        python -m pip install --no-cache-dir --default-timeout=30 --retries=3 --upgrade pip setuptools wheel; \
-    else \
-        exit 1; \
-    fi; \
+    python -m pip install --no-cache-dir --default-timeout=30 --retries=3 --upgrade pip setuptools wheel; \
     if [ -f requirements.txt ]; then \
         pip install --no-cache-dir --default-timeout=90 --retries=5 -r requirements.txt; \
     fi; \
