@@ -64,6 +64,7 @@ weasyprint>=56.0          # HTML to PDF conversion
 requests>=2.28.0          # HTTP requests for RAG system APIs
 aiohttp>=3.8.0            # Async HTTP client
 httpx>=0.23.0             # Modern HTTP client
+apscheduler>=3.10,<4.0   # Background scheduler for drift detection
 
 # Configuration and environment
 PyYAML>=6.0               # YAML configuration files

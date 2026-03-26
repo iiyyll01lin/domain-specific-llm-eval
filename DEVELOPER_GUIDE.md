@@ -35,6 +35,15 @@
    - 9.3 [Model Selection & Custom Endpoints](#93-model-selection--custom-endpoints)
    - 9.4 [API Reference](#94-api-reference)
    - 9.5 [Architecture](#95-architecture)
+10. [MLOps Drift Alerting (AIOps)](#10-mlops-drift-alerting-aiops)
+    - 10.1 [Overview](#101-overview)
+    - 10.2 [Architecture](#102-architecture)
+    - 10.3 [Detection Algorithm](#103-detection-algorithm)
+    - 10.4 [Environment Variables](#104-environment-variables)
+    - 10.5 [REST Endpoint](#105-rest-endpoint)
+    - 10.6 [Frontend Drift Monitor Banner](#106-frontend-drift-monitor-banner)
+    - 10.7 [Slack Alert Format](#107-slack-alert-format)
+    - 10.8 [Tuning the Detector](#108-tuning-the-detector)
 
 ---
 
@@ -1051,3 +1060,220 @@ Insights Portal (React)
 | `insights-portal/src/components/AiInsightCard.tsx` | React card component |
 | `insights-portal/src/app/lifecycle/api.ts` | `generateAiInsights()` fetch helper |
 | `insights-portal/src/styles/theme.css` | Gradient border animation CSS |
+
+---
+
+## 10. MLOps Drift Alerting (AIOps)
+
+### 10.1 Overview
+
+Production RAG systems experience **Data Drift**: the distribution of real user
+queries shifts over time.  When new query batches fall outside the Knowledge
+Graph's domain, the topological GCR metrics degrade silently:
+
+| Symptom | Metric | Expected behaviour |
+|---------|--------|--------------------|
+| Queries use vocabulary absent from the KG | Sₑ ↓ | Entity Overlap drops |
+| Retrieved nodes become topologically isolated | Sᶜ ↓ | Structural Connectivity collapses |
+| Generic hub nodes dominate retrieval | Pₕ ↑ | Hub Noise Penalty spikes |
+
+The **Drift Alerting** feature monitors these trends automatically and notifies
+administrators — both in the React dashboard and via Slack — before user-facing
+quality degrades.
+
+---
+
+### 10.2 Architecture
+
+```
+outputs/run_*/kpis.json          ← per-run GCR metric averages
+        │
+        ▼
+services/eval/drift/store.py     ← DriftStore (file scanner)
+        │
+        ▼
+services/eval/drift/detector.py  ← DriftDetector (Welch Z-test)
+        │
+        ├──▶ drift/notifier.py   ← Slack webhook POST
+        │
+        └──▶ drift/scheduler.py  ← APScheduler BackgroundScheduler
+                │
+                ▼
+eval-pipeline/webhook_daemon.py  ← lifespan: start/stop scheduler
+                │                   GET /api/v1/drift-status
+                ▼
+insights-portal/src/components/DriftMonitorBanner.tsx
+                                 ← polls /api/v1/drift-status every 5 min
+```
+
+Key source files:
+
+| File | Purpose |
+|------|---------|
+| `services/eval/drift/store.py` | Scan `outputs/` and parse `kpis.json` averages |
+| `services/eval/drift/detector.py` | Welch Z-score drift detection, severity roll-up |
+| `services/eval/drift/notifier.py` | Slack incoming-webhook dispatcher |
+| `services/eval/drift/scheduler.py` | APScheduler wiring + module-level result cache |
+| `eval-pipeline/webhook_daemon.py` | FastAPI lifespan + `GET /api/v1/drift-status` |
+| `insights-portal/src/components/DriftMonitorBanner.tsx` | React banner component |
+
+---
+
+### 10.3 Detection Algorithm
+
+For each tracked metric $m \in \{S_e, S_c, P_h\}$, given:
+- **Baseline window** $\mathcal{B}$ = the oldest $N$ runs (default $N = 100$)
+- **Recent window** $\mathcal{R}$ = the latest $k$ runs (default $k = 50$)
+
+$$\mu_B = \frac{1}{N}\sum_{i=1}^{N} m(b_i), \qquad \sigma_B = \sqrt{\frac{1}{N{-}1}\sum_{i=1}^{N}(m(b_i)-\mu_B)^2}$$
+
+$$z_m = \frac{\bar{m}_R - \mu_B}{\sigma_B / \sqrt{k}}$$
+
+**Directional flags** (threshold $\theta = 2.0$):
+
+| Metric | Flag when |
+|--------|-----------|
+| $S_e$, $S_c$ (higher is better) | $z_m < -\theta$ |
+| $P_h$ (lower is better) | $z_m > +\theta$ |
+
+**Severity roll-up:**
+
+| Flags | Status |
+|-------|--------|
+| 0 | `HEALTHY` |
+| 1 | `WARNING` |
+| ≥ 2 | `DRIFTING` |
+
+When fewer than `min_baseline + 1` runs exist the status is `INSUFFICIENT_DATA`
+— no alert is ever fired from this state.
+
+---
+
+### 10.4 Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLACK_WEBHOOK_URL` | _(empty — disabled)_ | Slack incoming-webhook URL. When set, an alert is POSTed whenever drift status is `WARNING` or `DRIFTING`. |
+| `DRIFT_CHECK_INTERVAL_HOURS` | `6` | How often the background scheduler runs the drift check. Minimum value is 1 hour. |
+
+Set these in the `.env` file at the repository root (git-ignored):
+
+```dotenv
+# Send drift alerts to the #rag-ops Slack channel
+# Obtain the webhook URL from your Slack app settings: Apps > Incoming Webhooks
+SLACK_WEBHOOK_URL=<your-slack-incoming-webhook-url>
+
+# Check every 2 hours instead of 6
+DRIFT_CHECK_INTERVAL_HOURS=2
+```
+
+Or inject them directly into the `webhook` container:
+
+```yaml
+# docker-compose.dev.override.yml
+services:
+  webhook:
+    environment:
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
+      DRIFT_CHECK_INTERVAL_HOURS: "2"
+```
+
+---
+
+### 10.5 REST Endpoint
+
+**`GET http://localhost:8008/api/v1/drift-status`**
+
+Returns the cached result of the most recent drift check.
+
+```jsonc
+// Example — DRIFTING
+{
+  "status": "DRIFTING",
+  "checked_at": "2026-03-27T06:00:00+00:00",
+  "baseline_window_size": 80,
+  "recent_window_size": 50,
+  "message": "Data drift detected — Structural Connectivity (Sᶜ): -31.2% (z=-3.41).",
+  "metrics": {
+    "structural_connectivity": {
+      "metric": "structural_connectivity",
+      "baseline_mean": 0.712,
+      "recent_mean": 0.490,
+      "baseline_std": 0.065,
+      "z_score": -3.41,
+      "delta_pct": -31.2,
+      "flagged": true
+    },
+    "entity_overlap": {
+      "metric": "entity_overlap",
+      "baseline_mean": 0.381,
+      "recent_mean": 0.370,
+      "baseline_std": 0.048,
+      "z_score": -1.62,
+      "delta_pct": -2.9,
+      "flagged": false
+    }
+  }
+}
+
+// Cold start (no check yet)
+{ "status": "PENDING", "message": "Drift check not yet completed." }
+
+// Module not installed
+{ "status": "UNAVAILABLE", "message": "Drift monitoring module not installed." }
+```
+
+---
+
+### 10.6 Frontend Drift Monitor Banner
+
+The `DriftMonitorBanner` component renders immediately above the KPI cards in the
+**Executive Overview** tab.
+
+| Status | Appearance | Detail shown |
+|--------|-----------|--------------|
+| `HEALTHY` | Subtle green bar | Collapsed by default — click ▼ to expand |
+| `WARNING` | Amber bar | Auto-expanded, shows per-metric delta table |
+| `DRIFTING` | Red bar | Auto-expanded + **Action Required** CTA |
+| `INSUFFICIENT_DATA` | Grey bar | Collapsed — shows reason text |
+| `UNAVAILABLE` | Grey bar | Collapsed — webhook daemon unreachable |
+
+The banner polls the webhook daemon every **5 minutes** using a browser
+`fetch()` call.  The webhook URL defaults to `http://localhost:8008` and can be
+overridden with the Vite env variable `VITE_WEBHOOK_BASE`.
+
+---
+
+### 10.7 Slack Alert Format
+
+When status is `WARNING` or `DRIFTING` the notifier fires a Slack mrkdwn message:
+
+```
+🚨 *Data Drift Alert — `DRIFTING`*
+
+• *Structural Connectivity (Sᶜ)*: recent `0.490` vs baseline `0.712` (-31.2%, z=-3.41)
+
+⚠️ *Action Required:* Analyze failing queries and inject new domain documents into the Knowledge Graph.
+_Checked at: 2026-03-27T06:00:00+00:00_
+```
+
+The webhook URL is never logged, stored in code, or committed to the repository.
+
+---
+
+### 10.8 Tuning the Detector
+
+Override defaults via constructor arguments when calling `DriftDetector` directly:
+
+```python
+from services.eval.drift.detector import DriftDetector
+
+detector = DriftDetector(
+    baseline_n=50,        # use 50 runs for baseline (smaller corpus)
+    recent_k=20,          # compare against last 20 runs
+    z_threshold=2.5,      # tighten alert threshold (fewer false positives)
+    min_baseline=10,      # need at least 11 runs before alerting
+)
+```
+
+*Generated: 2026-03-27 | Branch: `feat/graph-context-relevance`*

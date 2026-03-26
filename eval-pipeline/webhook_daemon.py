@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 eval_pipeline_dir = Path(__file__).resolve().parent
 if str(eval_pipeline_dir) not in sys.path:
@@ -16,7 +21,56 @@ if str(eval_pipeline_dir) not in sys.path:
 from src.ui.dashboard_actions import build_pipeline_command
 from src.ui.reviewer_actions import _build_service
 
-app = FastAPI(title="RAGAS Evaluation Webhook Daemon")
+
+# ---------------------------------------------------------------------------
+# Drift scheduler — started lazily so the module can be imported in tests
+# without spawning background threads.
+# ---------------------------------------------------------------------------
+
+def _drift_outputs_root() -> str:
+    return str(eval_pipeline_dir / "outputs")
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):  # noqa: ARG001
+    """Start the drift-detection scheduler on startup; stop it on shutdown."""
+    outputs_root = _drift_outputs_root()
+    scheduler = None
+    try:
+        from services.eval.drift.scheduler import create_scheduler, run_check_now
+
+        # Run an immediate check so /drift-status can respond before the first
+        # scheduled tick.
+        run_check_now(outputs_root)
+
+        scheduler = create_scheduler(outputs_root)
+        scheduler.start()
+        logger.info("Drift scheduler started.")
+    except ImportError:
+        logger.warning(
+            "services.eval.drift not importable — drift monitoring disabled. "
+            "Ensure the repo root is on PYTHONPATH and apscheduler is installed."
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.error("Failed to start drift scheduler: %s", exc)
+
+    yield
+
+    if scheduler is not None:
+        try:
+            scheduler.shutdown(wait=False)
+            logger.info("Drift scheduler stopped.")
+        except Exception as exc:  # pragma: no cover
+            logger.error("Error stopping drift scheduler: %s", exc)
+
+
+app = FastAPI(title="RAGAS Evaluation Webhook Daemon", lifespan=_lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 class WebhookPayload(BaseModel):
@@ -168,6 +222,32 @@ async def submit_review(
 ) -> Dict[str, Any]:
     service, auth = _reviewer_auth_context(x_reviewer_token, x_reviewer_id, x_tenant_id)
     return service.submit_review(auth, payload.model_dump(exclude_none=True))
+
+
+# ---------------------------------------------------------------------------
+# Drift status endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/api/v1/drift-status")
+async def drift_status() -> Dict[str, Any]:
+    """Return the most recent GCR data-drift analysis result.
+
+    The result is produced by the background ``DriftDetector`` scheduler and
+    cached in-process.  A cold response (before the first check completes)
+    returns ``{"status": "PENDING"}``.
+    """
+    try:
+        from services.eval.drift.scheduler import get_last_result
+
+        result = get_last_result()
+        if result is None:
+            return {"status": "PENDING", "message": "Drift check not yet completed."}
+        return result.to_dict()
+    except ImportError:
+        return {
+            "status": "UNAVAILABLE",
+            "message": "Drift monitoring module not installed.",
+        }
 
 
 if __name__ == "__main__":
