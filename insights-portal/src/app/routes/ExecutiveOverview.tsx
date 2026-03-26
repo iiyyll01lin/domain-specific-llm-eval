@@ -5,7 +5,7 @@ import { usePortalStore } from '@/app/store/usePortalStore'
 import { evaluateVerdict } from '@/core/verdict'
 import { ThresholdEditor } from '@/components/ThresholdEditor'
 import { RunDirectoryPicker } from '@/components/RunDirectoryPicker'
-import { getMetricMeta } from '@/core/metrics/registry'
+import { getMetricMeta, metricDirection } from '@/core/metrics/registry'
 import { FiltersBar } from '@/components/FiltersBar';
 import type { FiltersState as UIFilters } from '@/components/filters/chips';
 import { usePortalStore as useStore } from '@/app/store/usePortalStore'
@@ -14,6 +14,11 @@ import DevTelemetryPanel from '@/components/DevTelemetryPanel'
 import type { Thresholds } from '@/core/types'
 import { generateInsights } from '@/core/insights/engine'
 import { sampleMemory } from '@/utils/memory'
+import { EmptyState } from '@/components/EmptyState'
+import { KpiSkeleton } from '@/components/KpiSkeleton'
+
+/** Keys belonging to the Graph Context Relevance suite */
+const GCR_KEYS = new Set(['gcr_score', 'entity_overlap', 'structural_connectivity', 'hub_noise_penalty'])
 
 function KpiInfoPopover(props: { metricKey: string; value: number | undefined; runId?: string; total?: number; latencies?: { p50?: number|null, p90?: number|null }; sources?: string[]; filters?: any; thresholds?: any; locale?: string }) {
   const { t } = useTranslation()
@@ -79,6 +84,13 @@ export default function ExecutiveOverview() {
 
   //Parsing error message status
   const [parseError, setParseError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Clear loading indicator when a run is successfully loaded
+  useEffect(() => {
+    if (run) setIsLoading(false)
+  }, [run])
+
   useEffect(() => {
     const isParseErrorDetail = (x: any): x is {
     code: 'JSON_PARSE' | 'CSV_PARSE' | 'WORKER_RUNTIME' | string
@@ -91,6 +103,7 @@ export default function ExecutiveOverview() {
   } => !!x && typeof x === 'object' && 'code' in x && typeof (x as any).code === 'string'
 
     const onErr = (e: Event) => {
+      setIsLoading(false)
       const detail = (e as CustomEvent<any>).detail
       if (typeof detail === 'string') {
         setParseError(detail)
@@ -117,7 +130,7 @@ export default function ExecutiveOverview() {
         setParseError(t('errors.unknown'))
       }
     }
-    const onStart = () => setParseError(null) 
+    const onStart = () => { setParseError(null); setIsLoading(true) }
     window.addEventListener('run-parse-error', onErr as EventListener)
     window.addEventListener('run-parse-start', onStart as EventListener)
     return () => {
@@ -159,6 +172,11 @@ export default function ExecutiveOverview() {
             setTimings((arr) => arr.concat([{ at: Date.now(), filterMs: msg.timings.filterMs, sampleMs: msg.timings.sampleMs, aggregateMs: msg.timings.aggregateMs, total: msg.total }]).slice(-200))
           }
           w.terminate()
+        } else if (msg.type === 'error' && !canceled) {
+          // Surface worker aggregation errors to the in-page error banner
+          const detail = msg.error || msg.message || t('errors.unknown')
+          window.dispatchEvent(new CustomEvent('run-parse-error', { detail }))
+          w.terminate()
         }
       }
   // For very large datasets, send a sampling hint; keep full-count in 'total'
@@ -166,7 +184,7 @@ export default function ExecutiveOverview() {
   w.postMessage({ type: 'aggregate', items: run.items, filters: debouncedFilters, sample: sampleHint })
     })()
     return () => { canceled = true }
-  }, [run?.items, debouncedFilters, coalesceMs])
+  }, [run?.items, debouncedFilters, coalesceMs, t])
 
   const runBenchmarks = React.useCallback(async () => {
     if (!run?.items?.length) return
@@ -362,7 +380,13 @@ export default function ExecutiveOverview() {
           </span>
         )}
       </div>
-    {!run && <p style={{ marginTop: 12 }}>{t('overview.pickHint')}</p>}
+    {!run && !isLoading && (
+      <EmptyState
+        onLoadFile={() => window.dispatchEvent(new CustomEvent('portal:pick-file'))}
+        onLoadCsv={() => window.dispatchEvent(new CustomEvent('portal:pick-csv'))}
+      />
+    )}
+    {isLoading && <KpiSkeleton count={8} />}
   {run && (
         <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <details open={(panelMap?.[runId]?.['verdict'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'verdict', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>
@@ -417,14 +441,16 @@ export default function ExecutiveOverview() {
               ))}
             </div>
           </details>
-          {/* Use derived kpis when filtered */}
-          {kpiEntries.map((pair) => {
+
+          {/* ── Standard RAGAS metrics ── */}
+          {kpiEntries.filter(([k]) => !GCR_KEYS.has(k)).map((pair) => {
             const k = pair[0]
             const v = pair[1]
             return (
-              <div key={k} style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>
-                <div style={{ fontWeight: 600 }} title={getMetricMeta(k).helpKey ? t(getMetricMeta(k).helpKey as any) : ''}>
-                  {t(getMetricMeta(k).labelKey as any)} {getMetricMeta(k).key !== k ? <span className="small-muted">({k})</span> : null}
+              <div key={k} className="kpi-card">
+                <div className="kpi-label" title={getMetricMeta(k).helpKey ? t(getMetricMeta(k).helpKey as any) : ''}>
+                  {t(getMetricMeta(k).labelKey as any)}
+                  {getMetricMeta(k).key !== k ? <span className="small-muted">({k})</span> : null}
                   <KpiInfoPopover
                     metricKey={k}
                     value={v}
@@ -437,7 +463,48 @@ export default function ExecutiveOverview() {
                     locale={locale}
                   />
                 </div>
-                <div style={{ fontSize: 24 }}>{getMetricMeta(k).format?.(v, locale)}</div>
+                <div className="kpi-value">{getMetricMeta(k).format?.(v, locale)}</div>
+                {renderGap(k, v ?? NaN, thresholds)}
+              </div>
+            )
+          })}
+
+          {/* ── Graph Context Relevance suite ── */}
+          {kpiEntries.some(([k]) => GCR_KEYS.has(k)) && (
+            <div className="section-header">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="3"  r="2.2" fill="var(--gcr-accent)" />
+                <circle cx="3" cy="13" r="2.2" fill="var(--gcr-accent)" opacity="0.7" />
+                <circle cx="13" cy="13" r="2.2" fill="var(--gcr-accent)" opacity="0.7" />
+                <line x1="8" y1="5.2" x2="3.8" y2="11.2" stroke="var(--gcr-accent)" strokeWidth="1.2" />
+                <line x1="8" y1="5.2" x2="12.2" y2="11.2" stroke="var(--gcr-accent)" strokeWidth="1.2" />
+                <line x1="5.2" y1="13" x2="10.8" y2="13" stroke="var(--gcr-accent)" strokeWidth="1.2" />
+              </svg>
+              Graph Context Relevance
+              <span className="badge badge--graph" style={{ marginLeft: 4 }}>GCR</span>
+            </div>
+          )}
+          {kpiEntries.filter(([k]) => GCR_KEYS.has(k)).map((pair) => {
+            const k = pair[0]
+            const v = pair[1]
+            return (
+              <div key={k} className="kpi-card kpi-card--graph">
+                <div className="kpi-label" title={getMetricMeta(k).helpKey ? t(getMetricMeta(k).helpKey as any) : ''}>
+                  {t(getMetricMeta(k).labelKey as any)}
+                  {getMetricMeta(k).key !== k ? <span className="small-muted">({k})</span> : null}
+                  <KpiInfoPopover
+                    metricKey={k}
+                    value={v}
+                    runId={run.id}
+                    total={derived?.total ?? run.counts.total}
+                    latencies={derived?.latencies ?? run.latencies}
+                    sources={[run.artifacts?.summaryJson?.name || 'summary.json', run.artifacts?.configYaml?.name || 'config.yaml'].filter(Boolean) as string[]}
+                    filters={filters}
+                    thresholds={thresholds}
+                    locale={locale}
+                  />
+                </div>
+                <div className="kpi-value">{getMetricMeta(k).format?.(v, locale)}</div>
                 {renderGap(k, v ?? NaN, thresholds)}
               </div>
             )
@@ -459,9 +526,17 @@ function formatNum(v?: number) {
 function renderGap(key: string, v: number, thresholds: any) {
   const th = thresholds[key as keyof typeof thresholds]
   if (!th || Number.isNaN(v)) return null
-  if (v < th.critical) return <div style={{ color: 'var(--status-error)' }}>低於 critical {diffPct(v, th.critical)}</div>
-  if (v < th.warning) return <div style={{ color: 'var(--status-warn)' }}>低於 warning {diffPct(v, th.warning)}</div>
-  return <div style={{ color: 'var(--status-ready)' }}>達標</div>
+  const dir = metricDirection(key as any)   // 'higher' | 'lower'
+  if (dir === 'lower') {
+    // For penalty-style metrics: high value = bad
+    if (v > th.critical) return <div className="kpi-status kpi-status--crit">高於 critical {diffPct(th.critical, v)}</div>
+    if (v > th.warning)  return <div className="kpi-status kpi-status--warn">高於 warning {diffPct(th.warning, v)}</div>
+    return <div className="kpi-status kpi-status--ok">Low — {v.toFixed(3)}</div>
+  }
+  // Default: higher is better
+  if (v < th.critical) return <div className="kpi-status kpi-status--crit">低於 critical {diffPct(v, th.critical)}</div>
+  if (v < th.warning)  return <div className="kpi-status kpi-status--warn">低於 warning {diffPct(v, th.warning)}</div>
+  return <div className="kpi-status kpi-status--ok">達標</div>
 }
 
 function diffPct(v: number, t: number) {

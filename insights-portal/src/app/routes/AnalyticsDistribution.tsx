@@ -15,6 +15,8 @@ export const AnalyticsDistribution: React.FC = () => {
   const [showLegend, setShowLegend] = React.useState(false)
   const setFilters = usePortalStore((s) => s.setFilters)
   const ref = React.useRef<HTMLDivElement | null>(null)
+  // Persistent chart instance — avoids dispose/recreate on every filter change
+  const chartRef = React.useRef<echarts.ECharts | null>(null)
   const [metric, setMetric] = React.useState('Faithfulness')
   const [mode, setMode] = React.useState<'hist'|'box'|'scatter'>('hist')
   const [scatterY, setScatterY] = React.useState('AnswerRelevancy')
@@ -33,29 +35,72 @@ export const AnalyticsDistribution: React.FC = () => {
     return () => window.removeEventListener('portal:set-analytics-metric', handler as any)
   }, [])
 
+  // ── Chart mount / unmount lifecycle ──────────────────────────────────────
   React.useEffect(() => {
     if (!ref.current) return
-    const chart = echarts.init(ref.current)
-    // Determine datasets: multi-run if two or more selected, else use current run
+    const chart = echarts.init(ref.current, undefined, { renderer: 'canvas' })
+    chartRef.current = chart
+    // ResizeObserver is container-aware; handles panel resizes & sidebar toggles
+    const ro = new ResizeObserver(() => chart.resize())
+    ro.observe(ref.current)
+    return () => {
+      ro.disconnect()
+      chart.off('brushselected')
+      chart.dispose()
+      chartRef.current = null
+    }
+  }, []) // mount/unmount only
+
+  // ── Chart option update — reruns whenever data or display settings change ──
+  React.useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) return
+
+    // Color-blind-safe Okabe-Ito palette
+    const palette = ['#56b4e9', '#e69f00', '#009e73', '#cc79a7', '#0072b2', '#d55e00', '#f0e442']
+
     const datasetEntries: Array<{ id: string; label: string; items: any[]; color?: string }> = []
-    const palette = ['#61a0a8', '#d48265', '#91c7ae', '#c23531', '#749f83', '#ca8622', '#bda29a']
     if (selectedRuns.length >= 2) {
       selectedRuns.forEach((rid) => {
         const r = runs[rid]
         if (!r) return
-        // Color assignment based on index of rid in selectedRuns for stability
         const colorIdx = Math.max(0, selectedRuns.indexOf(rid)) % palette.length
         datasetEntries.push({ id: rid, label: rid.split('/').slice(-1)[0], items: applyFilters(r.items || [], stableFilters), color: palette[colorIdx] })
       })
     } else {
       datasetEntries.push({ id: 'current', label: 'current', items: applyFilters(run?.items || [], stableFilters), color: palette[0] })
     }
-    const xValsSingle = datasetEntries[0]?.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
-  if (mode === 'hist') {
+
+    const xValsSingle = datasetEntries[0]?.items
+      .map((it) => (it.metrics as any)?.[metric])
+      .filter((v) => typeof v === 'number') as number[]
+
+    // Empty state: overlay text graphic when no data points exist
+    if (!xValsSingle.length && datasetEntries.every((d) => !d.items.length)) {
+      chart.setOption({
+        series: [],
+        graphic: [{
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          style: {
+            text: 'No data — load a run from the Executive Overview',
+            fill: 'var(--text-muted, #8b949e)',
+            font: '14px Inter, system-ui, sans-serif',
+          },
+        }],
+      }, { notMerge: true })
+      return
+    }
+
+    const th = (thresholds as any)[metric]
+
+    // ── Histogram ──
+    if (mode === 'hist') {
       const bins = 20
       const xCats = Array.from({ length: bins }, (_, i) => (i / bins).toFixed(2))
       const series: any[] = []
-  datasetEntries.forEach((ds) => {
+      datasetEntries.forEach((ds) => {
         if (hidden[ds.id]) return
         const hist = new Array(bins).fill(0)
         const vals = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
@@ -65,17 +110,34 @@ export const AnalyticsDistribution: React.FC = () => {
         }
         series.push({ name: ds.label, type: 'bar', data: hist, itemStyle: { color: ds.color } })
       })
-  chart.setOption({
+      chart.setOption({
+        graphic: [],
         grid: { left: 40, right: 20, top: 30, bottom: 30 },
         xAxis: { type: 'category', data: xCats },
         yAxis: { type: 'value' },
         series,
         legend: showLegend ? {} : undefined,
-        tooltip: { trigger: 'axis' },
-      })
-  setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params: any) => {
+            if (!Array.isArray(params)) params = [params]
+            const idx: number = params[0]?.dataIndex ?? 0
+            const binStart = (idx / bins).toFixed(2)
+            const binEnd   = ((idx + 1) / bins).toFixed(2)
+            const thInfo = th
+              ? `<div style="opacity:.7;font-size:11px;margin-top:4px">warn ≥ ${th.warning.toFixed(2)} &middot; crit ≥ ${th.critical.toFixed(2)}</div>`
+              : ''
+            const rows = params
+              .map((p: any) => `<div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px"></span><b>${p.seriesName}</b>: <b>${p.value}</b> items</div>`)
+              .join('')
+            return `<div style="font-size:12px;line-height:1.7"><div style="margin-bottom:2px;opacity:.8">Range [${binStart},&nbsp;${binEnd})</div>${rows}${thInfo}</div>`
+          },
+        },
+      }, { notMerge: true })
+      setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
+
+    // ── Box plot ──
     } else if (mode === 'box') {
-      // If multiple runs are selected, render one box per run (overlay by category position).
       if (datasetEntries.length >= 2) {
         const xs = datasetEntries.filter((ds) => !hidden[ds.id]).map((ds) => ds.label)
         const boxData: Array<[number | null, number | null, number | null, number | null, number | null]> = []
@@ -95,19 +157,19 @@ export const AnalyticsDistribution: React.FC = () => {
             }
           }
         })
-  chart.setOption({
+        chart.setOption({
+          graphic: [],
           xAxis: { type: 'category', data: xs },
           yAxis: { type: 'value', min: 0, max: 1 },
           legend: showLegend ? {} : undefined,
           series: [
             { type: 'boxplot', data: boxData },
-            { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
+            { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
           ],
           tooltip: { trigger: 'item' },
-        })
-  setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
+        }, { notMerge: true })
+        setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
       } else {
-        // Single-run: group by selected cohort (language/success/failingMetric)
         const items = datasetEntries[0]?.items || []
         const groups: Record<string, number[]> = {}
         if (items.length) {
@@ -118,15 +180,15 @@ export const AnalyticsDistribution: React.FC = () => {
             if (cohort === 'language') key = (it.language || 'N/A') as string
             else if (cohort === 'success') {
               const ok = Object.entries((it.metrics as any) || {}).every(([k, vv]) => {
-                const th = (thresholds as any)?.[k]
-                return th ? (typeof vv === 'number' ? vv >= th.warning : false) : true
+                const t2 = (thresholds as any)?.[k]
+                return t2 ? (typeof vv === 'number' ? vv >= t2.warning : false) : true
               })
               key = ok ? 'success' : 'failure'
             } else if (cohort === 'failingMetric') {
               let placed = false
               for (const [mk, vv] of Object.entries((it.metrics as any) || {})) {
-                const th = (thresholds as any)?.[mk]
-                if (th && typeof vv === 'number' && vv < th.warning) {
+                const t2 = (thresholds as any)?.[mk]
+                if (t2 && typeof vv === 'number' && vv < t2.warning) {
                   (groups[mk] = groups[mk] || []).push(v)
                   placed = true
                 }
@@ -144,18 +206,19 @@ export const AnalyticsDistribution: React.FC = () => {
         if (!isGrouped) {
           const min = vals[0] ?? null, q1 = q(0.25), med = q(0.5), q3 = q(0.75), max = vals[vals.length - 1] ?? null
           const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
-          const lowerFence = iqr != null ? (q1 as number) - 1.5 * iqr : null
-          const upperFence = iqr != null ? (q3 as number) + 1.5 * iqr : null
-          const outliers = (iqr != null) ? (vals as number[]).filter((v) => v < (lowerFence as number) || v > (upperFence as number)).map((v) => [0, v]) : []
+          const lf = iqr != null ? (q1 as number) - 1.5 * iqr : null
+          const uf = iqr != null ? (q3 as number) + 1.5 * iqr : null
+          const outliers = (iqr != null) ? (vals as number[]).filter((v) => v < (lf as number) || v > (uf as number)).map((v) => [0, v]) : []
           chart.setOption({
+            graphic: [],
             xAxis: { type: 'category', data: [metric] },
             yAxis: { type: 'value', min: 0, max: 1 },
             series: [
               { type: 'boxplot', data: [[min, q1, med, q3, max]] },
-              { type: 'scatter', data: outliers, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
+              { type: 'scatter', data: outliers, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
             ],
             tooltip: { trigger: 'item' },
-          })
+          }, { notMerge: true })
           setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outliers.length > 0 })
         } else {
           const xs = groupKeys
@@ -167,77 +230,81 @@ export const AnalyticsDistribution: React.FC = () => {
             const min = arr[0] ?? null, q1 = pick(0.25), med = pick(0.5), q3 = pick(0.75), max = arr[arr.length - 1] ?? null
             boxData.push([min, q1, med, q3, max])
             const iqr = (q3 != null && q1 != null) ? (q3 - q1) : null
-            const lowerFence = iqr != null ? (q1 as number) - 1.5 * iqr : null
-            const upperFence = iqr != null ? (q3 as number) + 1.5 * iqr : null
+            const lf = iqr != null ? (q1 as number) - 1.5 * iqr : null
+            const uf = iqr != null ? (q3 as number) + 1.5 * iqr : null
             if (iqr != null) {
               for (const v of arr) {
-                if (v < (lowerFence as number) || v > (upperFence as number)) outlierData.push([i, v])
+                if (v < (lf as number) || v > (uf as number)) outlierData.push([i, v])
               }
             }
           })
           chart.setOption({
+            graphic: [],
             xAxis: { type: 'category', data: xs },
             yAxis: { type: 'value', min: 0, max: 1 },
             series: [
               { type: 'boxplot', data: boxData },
-              { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: '#e57373' } }
+              { type: 'scatter', data: outlierData, name: 'outliers', symbolSize: 6, itemStyle: { color: palette[3] } }
             ],
             tooltip: { trigger: 'item' },
-          })
+          }, { notMerge: true })
           setSeriesInfo({ names: ['boxplot', 'outliers'], count: 2, outliers: outlierData.length > 0 })
         }
       }
+
+    // ── Scatter ──
     } else if (mode === 'scatter') {
-      // Multi-run overlay: one series per run; otherwise single series.
       const mr = (stableFilters as any)?.metricRanges || {}
       const xr = (mr as any)[metric] as [number|null, number|null] | undefined
       const yr = (mr as any)[scatterY] as [number|null, number|null] | undefined
       const series: any[] = []
       datasetEntries.forEach((ds) => {
         if (hidden[ds.id]) return
-        const xs = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
-        const ys = ds.items.map((it) => (it.metrics as any)?.[scatterY]).filter((v) => typeof v === 'number') as number[]
-        const data = xs.map((x, i) => [x, ys[i] ?? null]).filter((p) => typeof p[1] === 'number')
-        series.push({ type: 'scatter', name: ds.label, data, itemStyle: { color: ds.color } })
+        const xs2 = ds.items.map((it) => (it.metrics as any)?.[metric]).filter((v) => typeof v === 'number') as number[]
+        const ys2 = ds.items.map((it) => (it.metrics as any)?.[scatterY]).filter((v) => typeof v === 'number') as number[]
+        const data = xs2.map((x, i) => [x, ys2[i] ?? null]).filter((p) => typeof p[1] === 'number')
+        series.push({ type: 'scatter', name: ds.label, data, itemStyle: { color: ds.color }, symbolSize: 6, opacity: 0.75 })
       })
-  chart.setOption({
-        xAxis: { type: 'value', min: (xr?.[0] ?? 0), max: (xr?.[1] ?? 1) },
-        yAxis: { type: 'value', min: (yr?.[0] ?? 0), max: (yr?.[1] ?? 1) },
-        series,
-        legend: showLegend ? {} : undefined,
-        tooltip: { trigger: 'item' },
-        brush: { toolbox: ['rect', 'polygon', 'clear'], xAxisIndex: 'all', yAxisIndex: 'all' },
-        toolbox: { feature: { brush: {} } },
-      })
-  setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
       chart.off('brushselected')
       chart.on('brushselected', (params: any) => {
         const batch = params.batch?.[0]
         if (!batch) return
         const areas = Array.isArray(batch.areas) ? batch.areas : []
-        // Merge multiple brushed areas into a single min/max per axis
         let xMin: number | null = null, xMax: number | null = null
         let yMin: number | null = null, yMax: number | null = null
         for (const a of areas) {
-          const rx = a?.range?.[0]
-          const ry = a?.range?.[1]
-          if (rx) {
-            xMin = xMin == null ? rx[0] : Math.min(xMin, rx[0])
-            xMax = xMax == null ? rx[1] : Math.max(xMax, rx[1])
-          }
-          if (ry) {
-            yMin = yMin == null ? ry[0] : Math.min(yMin, ry[0])
-            yMax = yMax == null ? ry[1] : Math.max(yMax, ry[1])
-          }
+          const rx = a?.range?.[0]; const ry = a?.range?.[1]
+          if (rx) { xMin = xMin == null ? rx[0] : Math.min(xMin, rx[0]); xMax = xMax == null ? rx[1] : Math.max(xMax, rx[1]) }
+          if (ry) { yMin = yMin == null ? ry[0] : Math.min(yMin, ry[0]); yMax = yMax == null ? ry[1] : Math.max(yMax, ry[1]) }
         }
         if (xMin == null || xMax == null || yMin == null || yMax == null) return
-        // Write back to global filters (metric ranges)
         setFilters({ metricRanges: { [metric]: [xMin, xMax], [scatterY]: [yMin, yMax] } })
       })
+      chart.setOption({
+        graphic: [],
+        xAxis: { type: 'value', min: (xr?.[0] ?? 0), max: (xr?.[1] ?? 1), name: metric, nameLocation: 'middle', nameGap: 26 },
+        yAxis: { type: 'value', min: (yr?.[0] ?? 0), max: (yr?.[1] ?? 1), name: scatterY, nameLocation: 'middle', nameGap: 40 },
+        series,
+        legend: showLegend ? {} : undefined,
+        tooltip: {
+          trigger: 'item',
+          formatter: (p: any) => {
+            const [xv, yv] = Array.isArray(p?.value) ? p.value : [null, null]
+            const fmtBand = (v: number | null, key: string) => {
+              const t2 = (thresholds as any)[key]
+              if (!t2 || v == null) return ''
+              if (v >= t2.warning) return ' <span style="color:#3fb950">✓ Pass</span>'
+              if (v >= t2.critical) return ' <span style="color:#d29922">⚠ Warn</span>'
+              return ' <span style="color:#f85149">✗ Crit</span>'
+            }
+            return `<div style="font-size:12px;line-height:1.7"><b>${p.seriesName}</b><br/>${metric}: <b>${typeof xv === 'number' ? xv.toFixed(3) : '—'}</b>${fmtBand(xv, metric)}<br/>${scatterY}: <b>${typeof yv === 'number' ? yv.toFixed(3) : '—'}</b>${fmtBand(yv, scatterY)}</div>`
+          },
+        },
+        brush: { toolbox: ['rect', 'polygon', 'clear'], xAxisIndex: 'all', yAxisIndex: 'all' },
+        toolbox: { feature: { brush: {} } },
+      }, { notMerge: true })
+      setSeriesInfo({ names: series.map((s) => s.name), count: series.length, outliers: false })
     }
-    const onResize = () => chart.resize()
-    window.addEventListener('resize', onResize)
-    return () => { window.removeEventListener('resize', onResize); chart.dispose() }
   }, [run, runs, selectedRuns, hidden, metric, scatterY, mode, stableFilters, setFilters, cohort, thresholds, showLegend])
 
   React.useEffect(() => {

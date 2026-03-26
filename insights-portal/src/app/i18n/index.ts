@@ -6,7 +6,7 @@ const resources = {
     translation: {
       appTitle: 'Insights Portal',
     nav: { executive: '總覽', qa: 'QA', analytics: '分析', compare: '比較' },
-  overview: { sortByGap: '依與門檻差距排序', pickHint: '請選擇 JSON/CSV 檔以載入 run。' },
+  overview: { sortByGap: '依與門檻差距排序', pickHint: '請選擇 JSON/CSV 檔以載入 run。', emptyTitle: '尚未載入任何評估報告', emptySubtitle: '請使用上方按鈕選擇 JSON 或 CSV 評估報告，系統將自動解析並呈現圖表與指標。', emptyCtaJson: '載入 JSON 報告', emptyCtaCsv: '載入 CSV 報告' },
   analytics: { title: '分析分佈', mode: '模式', cohort: '分組', metric: '指標', exportCsv: '匯出 CSV', exportXlsx: '匯出 XLSX', exportPng: '匯出 PNG', legend: '圖例', compareTable: '比較 (指標: {{metric}})' },
   compare: { title: '比較多個執行', baseline: '基準', exportCsv: '匯出 CSV', exportXlsx: '匯出 XLSX', cohortBtn: '群組比較', cohortMetric: '指標', cohortGroup: '群組', cohortDelta: 'Δ 相對基準', cohortExpand: '展開/收合' },
   lifecycle: {
@@ -177,7 +177,7 @@ const resources = {
     translation: {
       appTitle: 'Insights Portal',
     nav: { executive: 'Executive', qa: 'QA', analytics: 'Analytics', compare: 'Compare' },
-  overview: { sortByGap: 'Sort by gap to thresholds', pickHint: 'Pick a JSON/CSV file to load a run.' },
+  overview: { sortByGap: 'Sort by gap to thresholds', pickHint: 'Pick a JSON/CSV file to load a run.', emptyTitle: 'No evaluation run loaded', emptySubtitle: 'Select a JSON or CSV evaluation report using the loader above. The pipeline will parse it and render all metrics and charts instantly.', emptyCtaJson: 'Load JSON Report', emptyCtaCsv: 'Load CSV Report' },
   analytics: { title: 'Analytics Distribution', mode: 'Mode', cohort: 'Cohort', metric: 'Metric', exportCsv: 'Export CSV', exportXlsx: 'Export XLSX', exportPng: 'Export PNG', legend: 'Legend', compareTable: 'Compare (metric: {{metric}})' },
   compare: { title: 'Compare Runs', baseline: 'Baseline', exportCsv: 'Export CSV', exportXlsx: 'Export XLSX', cohortBtn: 'Cohort Compare', cohortMetric: 'Metric', cohortGroup: 'Group', cohortDelta: 'Δ vs base', cohortExpand: 'Toggle' },
   lifecycle: {

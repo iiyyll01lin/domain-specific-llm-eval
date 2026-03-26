@@ -58,6 +58,20 @@ export const RunLoader: React.FC = () => {
     defaultParseSummary(file, setRunData, (m) => setError(String(m)), (p) => setProgress(p))
   }
 
+  // Allow other components (e.g. EmptyState) to trigger the file pickers via
+  // custom DOM events — keeps components decoupled.
+  React.useEffect(() => {
+    const handlePickFile = () => onPickFile()
+    const handlePickCsv  = () => onPickCsv()
+    window.addEventListener('portal:pick-file', handlePickFile)
+    window.addEventListener('portal:pick-csv',  handlePickCsv)
+    return () => {
+      window.removeEventListener('portal:pick-file', handlePickFile)
+      window.removeEventListener('portal:pick-csv',  handlePickCsv)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const onPickCsv = async () => {
     try {
       setError('')

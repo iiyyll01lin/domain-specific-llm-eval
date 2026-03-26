@@ -18,6 +18,7 @@ export const App: React.FC = () => {
   const setThresholds = usePortalStore((s) => s.setThresholds)
   const setDefaultThresholds = usePortalStore((s) => s.setDefaultThresholds)
   const setRunData = usePortalStore((s) => s.setRunData)
+  const run = usePortalStore((s) => s.run)
 
   React.useEffect(() => {
     // Load bundled thresholds profile once on app start
@@ -115,24 +116,62 @@ export const App: React.FC = () => {
   }, [setRunData])
   return (
     <FeatureFlagsProvider>
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
-      <header style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <h1 style={{ marginRight: 'auto' }}>{t('appTitle')}</h1>
-  <button data-testid={TID.nav.executive} onClick={() => setRoute('executive')}>{t('nav.executive')}</button>
-  <button data-testid={TID.nav.qa} onClick={() => setRoute('qa')}>{t('nav.qa')}</button>
-  <button data-testid={TID.nav.analytics} onClick={() => setRoute('analytics')}>{t('nav.analytics')}</button>
-  <button data-testid="nav-compare" onClick={() => setRoute('compare')}>{t('nav.compare')}</button>
+    <div className="app-root">
+      <header className="app-header">
+        {/* Logo / wordmark */}
+        <span className="app-logo">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <circle cx="9"   cy="4"  r="2.5" fill="var(--accent)"/>
+            <circle cx="3.5" cy="14" r="2.5" fill="var(--gcr-accent)"/>
+            <circle cx="14.5" cy="14" r="2.5" fill="var(--gcr-accent)"/>
+            <line x1="9" y1="6.5" x2="3.5"  y2="11.5" stroke="var(--border)" strokeWidth="1.2"/>
+            <line x1="9" y1="6.5" x2="14.5" y2="11.5" stroke="var(--border)" strokeWidth="1.2"/>
+            <line x1="6"  y1="14" x2="12"   y2="14"   stroke="var(--border)" strokeWidth="1.2"/>
+          </svg>
+          {t('appTitle')}
+          {run && (
+            <span className="badge badge--ok" style={{ fontWeight: 500 }}>
+              {run.counts?.total?.toLocaleString()} items
+            </span>
+          )}
+        </span>
+
+        {/* Primary navigation */}
+        <nav className="app-nav" aria-label={t('nav.ariaLabel') as string}>
+          <button
+            className={`nav-btn${route === 'executive' ? ' nav-btn--active' : ''}`}
+            data-testid={TID.nav.executive}
+            onClick={() => setRoute('executive')}
+          >{t('nav.executive')}</button>
+          <button
+            className={`nav-btn${route === 'qa' ? ' nav-btn--active' : ''}`}
+            data-testid={TID.nav.qa}
+            onClick={() => setRoute('qa')}
+          >{t('nav.qa')}</button>
+          <button
+            className={`nav-btn${route === 'analytics' ? ' nav-btn--active' : ''}`}
+            data-testid={TID.nav.analytics}
+            onClick={() => setRoute('analytics')}
+          >{t('nav.analytics')}</button>
+          <button
+            className={`nav-btn${route === 'compare' ? ' nav-btn--active' : ''}`}
+            data-testid="nav-compare"
+            onClick={() => setRoute('compare')}
+          >{t('nav.compare')}</button>
+        </nav>
+
         <ThemeSwitcher />
-  <PersonaManager />
+        <PersonaManager />
         <LangSwitcher />
       </header>
-      <main style={{ marginTop: 16 }}>
+
+      <main className="app-main">
         {route === 'executive' && <ExecutiveOverview />}
         {route === 'qa' && <QAFailureExplorer />}
-  {route === 'analytics' && <AnalyticsDistribution />}
-  {route === 'compare' && <CompareView />}
-  {/* Lifecycle console placeholder (feature flag gated inside component) */}
-  <LifecycleRoutes />
+        {route === 'analytics' && <AnalyticsDistribution />}
+        {route === 'compare' && <CompareView />}
+        {/* Lifecycle console (feature-flag gated inside component) */}
+        <LifecycleRoutes />
       </main>
     </div>
     </FeatureFlagsProvider>
