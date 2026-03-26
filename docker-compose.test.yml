@@ -77,6 +77,8 @@ services:
       - ./eval-pipeline/src:/workspace/eval-pipeline/src:ro
       - ./eval-pipeline/tests:/workspace/eval-pipeline/tests:ro
       - ./eval-pipeline/config:/workspace/eval-pipeline/config:ro
+      # Runner scripts (golden_path_runner.py + legacy scripts)
+      - ./eval-pipeline/scripts:/workspace/eval-pipeline/scripts:ro
       # Root-level conftest + pytest config
       - ./conftest.py:/workspace/conftest.py:ro
       - ./pytest.ini:/workspace/pytest.ini:ro
@@ -105,7 +107,70 @@ services:
     stdin_open: true
     tty: true
 
+  # ---------------------------------------------------------------------------
+  # e2e-smoke-test: isolated service that runs ONLY the golden-path E2E suite.
+  #
+  # Usage:
+  #   docker compose -f docker-compose.test.yml run --rm e2e-smoke-test
+  #
+  # After the run, inspect artifacts on the host:
+  #   docker volume inspect domain-specific-llm-eval_e2e-outputs
+  #   docker run --rm -v domain-specific-llm-eval_e2e-outputs:/data alpine ls /data
+  # ---------------------------------------------------------------------------
+  e2e-smoke-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test
+      network: host
+      args:
+        HTTP_PROXY: "${HTTP_PROXY:-}"
+        HTTPS_PROXY: "${HTTPS_PROXY:-}"
+        NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1}"
+
+    image: domain-specific-llm-eval-test:latest
+
+    environment:
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
+      - MPLBACKEND=Agg
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/workspace:/workspace/eval-pipeline:/workspace/eval-pipeline/src:/workspace/ragas/ragas/src
+      - OBJECT_STORE_ENDPOINT=http://localhost:9000
+      - OBJECT_STORE_REGION=us-east-1
+      - OBJECT_STORE_ACCESS_KEY=test-access-key
+      - OBJECT_STORE_SECRET_KEY=test-secret-key
+      - OBJECT_STORE_BUCKET=test-bucket
+      - OBJECT_STORE_USE_SSL=false
+      - TIKTOKEN_CACHE_ONLY=1
+      - TIKTOKEN_DISABLE_DOWNLOAD=1
+
+    volumes:
+      # Live-edit bind-mounts (identical to the "test" service)
+      - ./eval-pipeline/src:/workspace/eval-pipeline/src:ro
+      - ./eval-pipeline/tests:/workspace/eval-pipeline/tests:ro
+      - ./eval-pipeline/scripts:/workspace/eval-pipeline/scripts:ro
+      - ./eval-pipeline/config:/workspace/eval-pipeline/config:ro
+      - ./conftest.py:/workspace/conftest.py:ro
+      - ./pytest.ini:/workspace/pytest.ini:ro
+      - ./eval-pipeline/global_tiktoken_patch.py:/workspace/eval-pipeline/global_tiktoken_patch.py:ro
+      - ./ragas/ragas/src:/workspace/ragas/ragas/src:ro
+      # Named volume: outputs are written here and remain on the host after
+      # the container exits so artifacts can be inspected without docker exec.
+      - e2e-outputs:/workspace/outputs
+
+    working_dir: /workspace
+
+    # Run only the golden-path E2E tests (verbose, no parallelism needed).
+    command: ["python", "-m", "pytest", "eval-pipeline/tests/e2e_golden_path.py", "-v", "--tb=short"]
+
+    stdin_open: true
+    tty: true
+
 # Named volumes for test run artefacts — isolated from the host filesystem.
 volumes:
   test-outputs:
   test-logs:
+  # Holds golden-path E2E artifacts; persists after container exit for inspection.
+  e2e-outputs:

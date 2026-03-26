@@ -77,6 +77,9 @@ temp/
 !*example*.json
 !benchmarks/*.json
 !services/*/openapi.json
+# Test fixtures are intentional, checked-in data files — not output artifacts.
+!eval-pipeline/tests/fixtures/
+!eval-pipeline/tests/fixtures/**
 
 # ============================================================================
 # Development and Testing Files
