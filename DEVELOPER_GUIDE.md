@@ -29,6 +29,12 @@
    - 8.3 [Ad-hoc CLI Tools (docker-compose.tools.yml)](#83-ad-hoc-cli-tools-docker-composetoolsyml)
    - 8.4 [Webhook Daemon (always-on)](#84-webhook-daemon-always-on)
    - 8.5 [Makefile Shortcuts](#85-makefile-shortcuts)
+9. [Auto-Insights: AI-Powered Executive Summary](#9-auto-insights-ai-powered-executive-summary)
+   - 9.1 [Overview](#91-overview)
+   - 9.2 [Enabling the Feature](#92-enabling-the-feature)
+   - 9.3 [Model Selection & Custom Endpoints](#93-model-selection--custom-endpoints)
+   - 9.4 [API Reference](#94-api-reference)
+   - 9.5 [Architecture](#95-architecture)
 
 ---
 
@@ -875,3 +881,173 @@ gen-dashboard: task-timeline
 ---
 
 *Generated: 2026-03-26 | Branch: `feat/graph-context-relevance`*
+
+---
+
+## 9. Auto-Insights: AI-Powered Executive Summary
+
+### 9.1 Overview
+
+The **Auto-Insights** feature sends aggregated evaluation KPIs to an LLM (OpenAI
+GPT-4o-mini by default, configurable) and renders a human-readable **System Health
+Report** at the top of the Executive Overview dashboard.
+
+The report interprets every metric — including the domain-specific Graph Context
+Relevance suite (Sₑ, Sᶜ, Pₕ) — and produces:
+
+- A single-sentence **overall health verdict** (🟢 Healthy / 🟡 At Risk / 🔴 Critical)
+- **Key Findings** — 3–5 bullet points citing specific metric values
+- **Recommended Actions** — prioritised engineering steps ordered by impact
+
+The feature is **opt-in**. If no API key is configured the UI displays a friendly
+setup prompt instead of crashing.
+
+---
+
+### 9.2 Enabling the Feature
+
+**1. Set your API key.**
+
+Create or edit the `.env` file at the repository root (it is git-ignored):
+
+```dotenv
+# Required — OpenAI key (or any compatible provider key)
+OPENAI_API_KEY=sk-...your-key-here...
+```
+
+Alternatively you can use the alias `INSIGHTS_API_KEY` if you want to keep your
+primary `OPENAI_API_KEY` separate from the insights feature:
+
+```dotenv
+INSIGHTS_API_KEY=sk-...your-key-here...
+```
+
+**2. Rebuild the reporting service container.**
+
+```bash
+docker compose -f docker-compose.services.yml -f docker-compose.dev.override.yml \
+  up -d --build reporting
+```
+
+**3. Reload the dashboard.**
+
+Load an evaluation run in the **Executive Overview** tab.  A `✨ Generate Executive
+Summary` button will appear at the top of the page. Click it — results appear in
+~5–20 seconds depending on model latency.
+
+---
+
+### 9.3 Model Selection & Custom Endpoints
+
+The following env vars (set in `.env` or injected into the container) control LLM
+behaviour:
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | — | Primary OpenAI (or compatible) API key |
+| `INSIGHTS_API_KEY` | — | Alias; used if `OPENAI_API_KEY` is not set |
+| `INSIGHTS_LLM_MODEL` | `gpt-4o-mini` | Model name passed to the API |
+| `INSIGHTS_API_BASE_URL` | *(OpenAI default)* | Override base URL — use for Azure OpenAI, local `vllm`, or Ollama proxies |
+
+**Example: Claude 3.5 Sonnet via a compatible proxy**
+
+```dotenv
+OPENAI_API_KEY=your-anthropic-key
+INSIGHTS_API_BASE_URL=https://api.anthropic.com/v1
+INSIGHTS_LLM_MODEL=claude-3-5-sonnet-20241022
+```
+
+**Example: Local Ollama**
+
+```dotenv
+INSIGHTS_API_KEY=ollama
+INSIGHTS_API_BASE_URL=http://host.docker.internal:11434/v1
+INSIGHTS_LLM_MODEL=qwen2.5:72b
+```
+
+> **Cost note:** `gpt-4o-mini` costs roughly $0.0001–$0.0003 per summary call
+> (< 800 input tokens + < 600 output tokens). `gpt-4o` produces richer prose at
+> ~10× the cost. For high-volume CI pipelines, `gpt-4o-mini` is recommended.
+
+---
+
+### 9.4 API Reference
+
+**Endpoint:** `POST http://localhost:8005/api/v1/insights/generate`
+
+**Request body (JSON):**
+
+```jsonc
+{
+  "run_id": "run_20260327_143200",       // optional
+  "kpis": {
+    "gcr_score": 0.612,
+    "entity_overlap": 0.38,
+    "structural_connectivity": 0.71,
+    "hub_noise_penalty": 0.41,
+    "Faithfulness": 0.65,
+    "AnswerRelevancy": 0.82
+  },
+  "verdict": "At Risk",                  // optional
+  "failing_metrics": ["Faithfulness"],   // optional
+  "thresholds": {                        // optional — enriches LLM context
+    "Faithfulness": { "warning": 0.7, "critical": 0.5 }
+  },
+  "model": "gpt-4o"                      // optional — per-request model override
+}
+```
+
+**Success response (200):**
+
+```json
+{
+  "run_id": "run_20260327_143200",
+  "summary": "🟡 **At Risk**: ...",
+  "model_used": "gpt-4o-mini",
+  "prompt_tokens": 512,
+  "completion_tokens": 310
+}
+```
+
+**Error responses:**
+
+| HTTP | Condition |
+|---|---|
+| `503` | No API key configured; body contains setup instructions |
+| `502` | Upstream LLM returned an error |
+| `422` | Malformed request body |
+
+---
+
+### 9.5 Architecture
+
+```
+Insights Portal (React)
+  └─ AiInsightCard component
+       │  (click "Generate Executive Summary")
+       ▼
+  POST /api/v1/insights/generate
+       │  (reporting service — port 8005)
+       ▼
+  _build_user_message()  ← formats KPIs + thresholds as structured Markdown
+       │
+       ▼
+  OpenAI-compatible LLM
+  (system prompt teaches metric semantics including Sₑ, Sᶜ, Pₕ direction)
+       │
+       ▼
+  InsightsResponse { summary: Markdown string }
+       │
+       ▼
+  AiInsightCard renders Markdown inline (no external deps)
+  with animated gradient border while generating
+```
+
+**Key source files:**
+
+| File | Purpose |
+|---|---|
+| `services/reporting/main.py` | FastAPI endpoint + LLM System Prompt |
+| `insights-portal/src/components/AiInsightCard.tsx` | React card component |
+| `insights-portal/src/app/lifecycle/api.ts` | `generateAiInsights()` fetch helper |
+| `insights-portal/src/styles/theme.css` | Gradient border animation CSS |

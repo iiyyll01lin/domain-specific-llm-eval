@@ -13,6 +13,7 @@ import { exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import DevTelemetryPanel from '@/components/DevTelemetryPanel'
 import type { Thresholds } from '@/core/types'
 import { generateInsights } from '@/core/insights/engine'
+import { AiInsightCard } from '@/components/AiInsightCard'
 import { sampleMemory } from '@/utils/memory'
 import { EmptyState } from '@/components/EmptyState'
 import { KpiSkeleton } from '@/components/KpiSkeleton'
@@ -388,7 +389,14 @@ export default function ExecutiveOverview() {
     )}
     {isLoading && <KpiSkeleton count={8} />}
   {run && (
-        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        <>
+        <AiInsightCard
+          run={run}
+          thresholds={thresholds}
+          verdict={verdict?.verdict}
+          failingMetrics={verdict?.failingMetrics as string[] | undefined}
+        />
+        <div style={{ marginTop: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
           <details open={(panelMap?.[runId]?.['verdict'] ?? true)} onToggle={(e) => setPanelExpanded(runId, 'verdict', (e.target as HTMLDetailsElement).open)} style={{ gridColumn: '1 / -1' }}>
             <summary style={{ cursor: 'pointer', userSelect: 'none', padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-muted)', color: 'var(--text)' }}>Verdict</summary>
             <div style={{ padding: 12, border: '1px solid var(--border)', borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTop: 'none', background: 'var(--bg-muted)', color: 'var(--text)', fontSize: 14 }}>
@@ -510,6 +518,7 @@ export default function ExecutiveOverview() {
             )
           })}
         </div>
+        </>
       )}
   <ThresholdEditor />
     </section>

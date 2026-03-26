@@ -17,6 +17,7 @@ dependencies = [
     "prometheus-client>=0.17,<0.20",
     "datasets>=2.19,<3.0",
     "appdirs>=1.4,<2.0",
+    "openai>=1.35,<2.0",
 ]
 license = {text = "Apache-2.0"}
 

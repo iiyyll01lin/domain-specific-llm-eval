@@ -323,3 +323,86 @@ export async function fetchSubgraph(options: FetchSubgraphOptions): Promise<Subg
     ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
   }
 }
+
+// ---------------------------------------------------------------------------
+// Auto-Insights: LLM-powered executive summary
+// ---------------------------------------------------------------------------
+
+export interface AiInsightsPayload {
+  run_id?: string
+  kpis: Record<string, number>
+  counts?: Record<string, unknown>
+  verdict?: string
+  failing_metrics?: string[]
+  thresholds?: Record<string, { warning: number; critical: number }>
+  model?: string
+}
+
+export interface AiInsightsResult {
+  run_id?: string
+  summary: string
+  model_used: string
+  prompt_tokens?: number
+  completion_tokens?: number
+}
+
+/** Error code surfaced when the backend has no LLM API key configured. */
+export const AI_INSIGHTS_NO_KEY_CODE = 'NO_API_KEY' as const
+
+export class AiInsightsError extends Error {
+  constructor(
+    message: string,
+    public readonly code: typeof AI_INSIGHTS_NO_KEY_CODE | 'API_ERROR' | 'NETWORK_ERROR',
+    public readonly statusCode?: number,
+  ) {
+    super(message)
+    this.name = 'AiInsightsError'
+  }
+}
+
+export async function generateAiInsights(
+  payload: AiInsightsPayload,
+  options: { signal: AbortSignal },
+): Promise<AiInsightsResult> {
+  const { reportingBaseUrl } = getLifecycleConfig()
+  // LLM calls can take 20–60 s; use a generous timeout
+  const LLM_TIMEOUT_MS = 90_000
+  const controller = new AbortController()
+  const timer = (typeof window === 'undefined' ? setTimeout : window.setTimeout)(
+    () => controller.abort(),
+    LLM_TIMEOUT_MS,
+  )
+  try {
+    const res = await fetch(`${reportingBaseUrl}/api/v1/insights/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+      signal: mergeSignals(options.signal, controller.signal),
+    })
+    if (res.status === 503) {
+      const body = await res.json().catch(() => ({}))
+      throw new AiInsightsError(
+        (body as any).detail || 'LLM API key not configured.',
+        AI_INSIGHTS_NO_KEY_CODE,
+        503,
+      )
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new AiInsightsError(
+        (body as any).detail || `Insights request failed: ${res.status}`,
+        'API_ERROR',
+        res.status,
+      )
+    }
+    return (await res.json()) as AiInsightsResult
+  } catch (err) {
+    if (err instanceof AiInsightsError) throw err
+    throw new AiInsightsError(
+      err instanceof Error ? err.message : 'Network error calling insights service.',
+      'NETWORK_ERROR',
+    )
+  } finally {
+    ;(typeof window === 'undefined' ? clearTimeout : window.clearTimeout)(timer)
+  }
+}
