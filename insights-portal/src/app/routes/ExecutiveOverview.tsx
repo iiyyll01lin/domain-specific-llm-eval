@@ -21,6 +21,38 @@ import { KpiSkeleton } from '@/components/KpiSkeleton'
 /** Keys belonging to the Graph Context Relevance suite */
 const GCR_KEYS = new Set(['gcr_score', 'entity_overlap', 'structural_connectivity', 'hub_noise_penalty'])
 
+/** Small pill button on each KPI card to deep-link into QA Debugger sorted worst-first. */
+function InspectWorst({ metricKey }: { metricKey: string }) {
+  const dir: 'asc' | 'desc' = metricDirection(metricKey as any) === 'lower' ? 'desc' : 'asc'
+  const handleClick = React.useCallback(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      params.set('debugSort', metricKey)
+      params.set('debugDir', dir)
+      params.delete('debugId')
+      const search = params.toString()
+      window.history.replaceState(
+        null,
+        '',
+        search ? `${window.location.pathname}?${search}` : window.location.pathname,
+      )
+    } catch { /* ignore */ }
+    // Navigate to QA route then signal the debugger to apply the sort
+    window.dispatchEvent(new CustomEvent('portal:navigate', { detail: { route: 'qa' } }))
+    window.dispatchEvent(new CustomEvent('portal:debugger:sort', { detail: { metric: metricKey, dir } }))
+  }, [metricKey, dir])
+  return (
+    <button
+      onClick={handleClick}
+      className="kpi-inspect-btn"
+      title={`View worst ${metricKey} in QA Debugger`}
+      aria-label={`inspect-worst-${metricKey}`}
+    >
+      Inspect worst ↗
+    </button>
+  )
+}
+
 function KpiInfoPopover(props: { metricKey: string; value: number | undefined; runId?: string; total?: number; latencies?: { p50?: number|null, p90?: number|null }; sources?: string[]; filters?: any; thresholds?: any; locale?: string }) {
   const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
@@ -473,6 +505,7 @@ export default function ExecutiveOverview() {
                 </div>
                 <div className="kpi-value">{getMetricMeta(k).format?.(v, locale)}</div>
                 {renderGap(k, v ?? NaN, thresholds)}
+                <InspectWorst metricKey={k} />
               </div>
             )
           })}
@@ -514,6 +547,7 @@ export default function ExecutiveOverview() {
                 </div>
                 <div className="kpi-value">{getMetricMeta(k).format?.(v, locale)}</div>
                 {renderGap(k, v ?? NaN, thresholds)}
+                <InspectWorst metricKey={k} />
               </div>
             )
           })}

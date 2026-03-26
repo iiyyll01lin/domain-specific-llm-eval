@@ -1,233 +1,706 @@
 import React from 'react'
 import { usePortalStore } from '@/app/store/usePortalStore'
 import { applyFilters } from '@/core/analysis/filters'
-import { getMetricMeta } from '@/core/metrics/registry'
+import { getMetricMeta, metricDirection } from '@/core/metrics/registry'
 import { buildRowsWithBookmarks, exportTableToCSV, exportTableToXLSX } from '@/core/exporter'
 import { buildFilterChips } from '@/components/filters/chips'
-import { loadBookmarks, saveBookmarks, loadVisibleCols, saveVisibleCols, loadVisibleMetrics, saveVisibleMetrics } from '@/core/qa/prefs'
+import { loadBookmarks, saveBookmarks, loadVisibleMetrics, saveVisibleMetrics } from '@/core/qa/prefs'
 import { TID } from '@/testing/testids'
+import { extractEntities, extractAnswerTokens, buildHighlightedContext } from '@/utils/textHighlighter'
+
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const CARD_HEIGHT = 80
+const VIEWPORT_HEIGHT = 700 // conservative; overscan handles larger screens
+
+interface SortOption {
+  label: string
+  key: string
+  dir: 'asc' | 'desc'
+}
+
+const SORT_OPTIONS: SortOption[] = [
+  { label: 'Lowest Sc  (structural_connectivity)', key: 'structural_connectivity', dir: 'asc' },
+  { label: 'Lowest Se  (entity_overlap)', key: 'entity_overlap', dir: 'asc' },
+  { label: 'Highest Ph (hub_noise_penalty)', key: 'hub_noise_penalty', dir: 'desc' },
+  { label: 'Lowest Faithfulness', key: 'Faithfulness', dir: 'asc' },
+  { label: 'Lowest AnswerRelevancy', key: 'AnswerRelevancy', dir: 'asc' },
+  { label: 'Lowest ContextPrecision', key: 'ContextPrecision', dir: 'asc' },
+  { label: 'Lowest ContextRecall', key: 'ContextRecall', dir: 'asc' },
+  { label: 'Bookmarked first', key: '__bookmarked', dir: 'desc' },
+]
+
+// ── URL param helpers ─────────────────────────────────────────────────────────
+
+function readUrlParam(key: string): string | null {
+  try {
+    return new URLSearchParams(window.location.search).get(key)
+  } catch {
+    return null
+  }
+}
+
+function setUrlParam(key: string, value: string | null): void {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    if (value !== null) params.set(key, value)
+    else params.delete(key)
+    const search = params.toString()
+    const newUrl = search
+      ? `${window.location.pathname}?${search}`
+      : window.location.pathname
+    window.history.replaceState(null, '', newUrl)
+  } catch {
+    // ignore — history API not available (e.g., in tests)
+  }
+}
+
+// ── Score badge ───────────────────────────────────────────────────────────────
+
+function ScoreBadge({
+  metricKey,
+  value,
+  thresholds,
+}: {
+  metricKey: string
+  value: number | null | undefined
+  thresholds: Record<string, { warning: number; critical: number }>
+}) {
+  if (value == null) return null
+  if (isNaN(value)) return null
+  const th = thresholds[metricKey]
+  const dir = metricDirection(metricKey as any)
+  let cls = 'badge badge--ok'
+  if (th) {
+    const isCrit =
+      dir === 'lower' ? value > th.critical : value < th.critical
+    const isWarn =
+      !isCrit && (dir === 'lower' ? value > th.warning : value < th.warning)
+    if (isCrit) cls = 'badge badge--error'
+    else if (isWarn) cls = 'badge badge--warn'
+  }
+  const label = metricKey
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return (
+    <span className={cls} title={`${metricKey}: ${value.toFixed(3)}`}>
+      {label} {value.toFixed(2)}
+    </span>
+  )
+}
+
+// ── Context accordion item ────────────────────────────────────────────────────
+
+const ContextItem = React.memo(function ContextItem({
+  idx,
+  text,
+  entities,
+  answerTokens,
+  defaultOpen,
+}: {
+  idx: number
+  text: string
+  entities: string[]
+  answerTokens: string[]
+  defaultOpen?: boolean
+}) {
+  const { html, tier, matchCount } = React.useMemo(
+    () => buildHighlightedContext(text, entities, answerTokens),
+    [text, entities, answerTokens],
+  )
+
+  return (
+    <details className="qa-ctx-item" open={defaultOpen}>
+      <summary className="qa-ctx-summary">
+        <span>Context {idx + 1}</span>
+        {matchCount > 0 && (
+          <span
+            className={`badge ${tier === 'entity' ? 'badge--graph' : 'badge--ok'}`}
+            style={{ marginLeft: 8 }}
+          >
+            {matchCount} {tier === 'entity' ? 'entities' : 'overlaps'}
+          </span>
+        )}
+      </summary>
+      {/* dangerouslySetInnerHTML is intentional: text/entities are from the user's own
+          locally-loaded evaluation files; the injected markup is a fixed <mark class="..."> pattern. */}
+      <div className="qa-ctx-body" dangerouslySetInnerHTML={{ __html: html }} />
+    </details>
+  )
+})
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function QAFailureExplorer() {
-  const { run, filters, thresholds } = usePortalStore((s) => ({ run: s.run, filters: s.filters, thresholds: s.thresholds }))
+  const { run, filters, thresholds } = usePortalStore((s) => ({
+    run: s.run,
+    filters: s.filters,
+    thresholds: s.thresholds,
+  }))
   const items = React.useMemo(() => run?.items ?? [], [run?.items])
-  const [query, setQuery] = React.useState('')
-  const [detailsId, setDetailsId] = React.useState<string | null>(null)
-  // image preview map within details
-  const [imgPreview, setImgPreview] = React.useState<Record<string, string>>({})
 
-  // Derive metric keys and selected metric
-  const metricKeys = React.useMemo(() => (Array.isArray(items) && items.length > 0 ? Object.keys(items[0].metrics || {}) : []), [items])
-  const [selectedMetric, setSelectedMetric] = React.useState<string>('')
+  // ── Sort state (URL-persisted) ──────────────────────────────────────────────
+  const [sortOptionIdx, setSortOptionIdx] = React.useState<number>(() => {
+    const sk = readUrlParam('debugSort')
+    const sd = readUrlParam('debugDir')
+    if (sk) {
+      const exactIdx = SORT_OPTIONS.findIndex((o) => o.key === sk && o.dir === sd)
+      if (exactIdx >= 0) return exactIdx
+      const keyIdx = SORT_OPTIONS.findIndex((o) => o.key === sk)
+      if (keyIdx >= 0) return keyIdx
+    }
+    return 0
+  })
+
+  const sortOption = SORT_OPTIONS[sortOptionIdx] ?? SORT_OPTIONS[0]
+
   React.useEffect(() => {
-    if (!selectedMetric && metricKeys.length > 0) setSelectedMetric(metricKeys[0])
-    else if (selectedMetric && !metricKeys.includes(selectedMetric)) setSelectedMetric(metricKeys[0] || '')
-  }, [metricKeys, selectedMetric])
+    setUrlParam('debugSort', sortOption.key)
+    setUrlParam('debugDir', sortOption.dir)
+  }, [sortOption.key, sortOption.dir])
 
-  // Filters and search
-  const filteredItems = React.useMemo(() => {
-    const base = applyFilters(items, filters)
-    if (!query.trim()) return base
-    const q = query.toLowerCase()
-    return base.filter((it) => (it.user_input || '').toLowerCase().includes(q))
-  }, [items, filters, query])
+  // Listen for "Inspect worst ↗" deep-links dispatched by ExecutiveOverview
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ metric: string; dir: 'asc' | 'desc' }>).detail
+      const idx = SORT_OPTIONS.findIndex(
+        (o) => o.key === detail.metric && o.dir === detail.dir,
+      )
+      if (idx >= 0) setSortOptionIdx(idx)
+    }
+    window.addEventListener('portal:debugger:sort', handler)
+    return () => window.removeEventListener('portal:debugger:sort', handler)
+  }, [])
 
-  // Virtualization
-  const rowHeight = 44
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const [scrollTop, setScrollTop] = React.useState(0)
-  const onScroll = () => setScrollTop(containerRef.current?.scrollTop || 0)
-  const viewportHeight = 440
-  const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 5)
-  const end = Math.min(filteredItems.length, start + Math.ceil(viewportHeight / rowHeight) + 10)
+  // ── Selected item (URL-persisted) ──────────────────────────────────────────
+  const [selectedId, setSelectedId] = React.useState<string | null>(() =>
+    readUrlParam('debugId'),
+  )
 
-  // Bookmarks
+  const selectItem = React.useCallback((id: string | null) => {
+    setSelectedId(id)
+    setUrlParam('debugId', id)
+  }, [])
+
+  // ── Bookmarks ──────────────────────────────────────────────────────────────
   const [bookmarks, setBookmarks] = React.useState<Set<string>>(() => loadBookmarks())
   React.useEffect(() => { saveBookmarks(bookmarks) }, [bookmarks])
-  const toggleBookmark = (id: string) => setBookmarks((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
 
-  // Visible columns
-  const baseCols = ['question', 'answer', 'reference'] as const
-  const [visibleCols, setVisibleCols] = React.useState<Record<string, boolean>>(() => loadVisibleCols())
-  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>(() => loadVisibleMetrics())
-  React.useEffect(() => { saveVisibleCols(visibleCols) }, [visibleCols])
+  const toggleBookmark = React.useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setBookmarks((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }, [])
+
+  // ── Search ─────────────────────────────────────────────────────────────────
+  const [query, setQuery] = React.useState('')
+
+  // ── Metric keys ────────────────────────────────────────────────────────────
+  const metricKeys = React.useMemo(
+    () => (items.length > 0 ? Object.keys(items[0].metrics ?? {}) : []),
+    [items],
+  )
+
+  const GCR_PILLS = React.useMemo(
+    () =>
+      ['entity_overlap', 'structural_connectivity', 'hub_noise_penalty'].filter((k) =>
+        metricKeys.includes(k),
+      ),
+    [metricKeys],
+  )
+
+  // ── Visible metrics prefs ──────────────────────────────────────────────────
+  const [visibleMetrics, setVisibleMetrics] = React.useState<Record<string, boolean>>(
+    () => loadVisibleMetrics(),
+  )
   React.useEffect(() => { saveVisibleMetrics(visibleMetrics) }, [visibleMetrics])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
-    const next: Record<string, boolean> = {}
-    metricKeys.forEach((k) => { next[k] = !!visibleMetrics[k] })
-    setVisibleMetrics((prev) => ({ ...next, ...prev }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metricKeys.join(',')])
+    setVisibleMetrics((prev) => {
+      const next: Record<string, boolean> = {}
+      metricKeys.forEach((k) => { next[k] = prev[k] ?? false })
+      return { ...next, ...prev }
+    })
+  }, [metricKeys.join(',')])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const exportVisible = () => {
-    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
-    exportTableToCSV('qa_view.csv', rows, { runId: 'local-run', filters: filters as any, thresholds: thresholds as any, timestamp: new Date().toISOString(), branding: { brand: 'Insights Portal', title: 'QA Failure Explorer', footer: 'Generated locally — offline mode' } })
-  }
-  const exportVisibleXlsx = async () => {
-    const rows = buildRowsWithBookmarks(filteredItems, metricKeys, bookmarks)
-    await exportTableToXLSX('qa_view.xlsx', rows, { runId: 'local-run', filters: filters as any, thresholds: thresholds as any, timestamp: new Date().toISOString(), branding: { brand: 'Insights Portal', title: 'QA Failure Explorer', footer: 'Generated locally — offline mode' } })
+  // ── Filter + sort pipeline ─────────────────────────────────────────────────
+  const sortedItems = React.useMemo(() => {
+    const base = applyFilters(items, filters)
+    const filtered = query.trim()
+      ? base.filter((it) =>
+          (it.user_input ?? '').toLowerCase().includes(query.toLowerCase()),
+        )
+      : base
+
+    const { key, dir } = sortOption
+    if (key === '__bookmarked') {
+      return filtered.slice().sort((a, b) => {
+        const aB = bookmarks.has(a.id) ? 1 : 0
+        const bB = bookmarks.has(b.id) ? 1 : 0
+        return bB - aB
+      })
+    }
+    return filtered.slice().sort((a, b) => {
+      const aV = (a.metrics as Record<string, number | null>)[key] ?? null
+      const bV = (b.metrics as Record<string, number | null>)[key] ?? null
+      // push nulls to end regardless of direction
+      if (aV === null && bV === null) return 0
+      if (aV === null) return 1
+      if (bV === null) return -1
+      return dir === 'asc' ? aV - bV : bV - aV
+    })
+  }, [items, filters, query, sortOption, bookmarks])
+
+  // ── Virtualization (master list) ───────────────────────────────────────────
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const [scrollTop, setScrollTop] = React.useState(0)
+  const onScroll = React.useCallback(() => {
+    setScrollTop(containerRef.current?.scrollTop ?? 0)
+  }, [])
+  const OVERSCAN = 4
+  const vStart = Math.max(0, Math.floor(scrollTop / CARD_HEIGHT) - OVERSCAN)
+  const vEnd = Math.min(
+    sortedItems.length,
+    vStart + Math.ceil(VIEWPORT_HEIGHT / CARD_HEIGHT) + OVERSCAN * 2,
+  )
+
+  // Primary pill key = active sort metric (skip pseudo-keys)
+  const primaryPill = sortOption.key !== '__bookmarked' ? sortOption.key : null
+
+  // ── Effective selection (auto-select first item when nothing chosen) ────────
+  const effectiveId = selectedId ?? sortedItems[0]?.id ?? null
+
+  const selectedItem = React.useMemo(
+    () => (effectiveId ? (sortedItems.find((x) => x.id === effectiveId) ?? null) : null),
+    [sortedItems, effectiveId],
+  )
+
+  const contexts = React.useMemo(
+    () =>
+      (selectedItem?.rag_contexts?.length
+        ? selectedItem.rag_contexts
+        : selectedItem?.reference_contexts) ?? [],
+    [selectedItem],
+  )
+
+  const entities = React.useMemo(
+    () => (selectedItem ? extractEntities(selectedItem.extra) : []),
+    [selectedItem],
+  )
+
+  const answerTokens = React.useMemo(
+    () => (selectedItem ? extractAnswerTokens(selectedItem.rag_answer) : []),
+    [selectedItem],
+  )
+
+  // ── Image preview (preserved for backward compat) ──────────────────────────
+  const [imgPreview, setImgPreview] = React.useState<Record<string, string>>({})
+
+  // ── Export helpers ─────────────────────────────────────────────────────────
+  const exportCsv = React.useCallback(() => {
+    const rows = buildRowsWithBookmarks(sortedItems, metricKeys, bookmarks)
+    exportTableToCSV('qa_debugger.csv', rows, {
+      runId: run?.id ?? 'local-run',
+      filters: filters as any,
+      thresholds: thresholds as any,
+      timestamp: new Date().toISOString(),
+      branding: {
+        brand: 'Insights Portal',
+        title: 'QA Debugger',
+        footer: 'Generated locally — offline mode',
+      },
+    })
+  }, [sortedItems, metricKeys, bookmarks, run?.id, filters, thresholds])
+
+  const exportXlsx = React.useCallback(async () => {
+    const rows = buildRowsWithBookmarks(sortedItems, metricKeys, bookmarks)
+    await exportTableToXLSX('qa_debugger.xlsx', rows, {
+      runId: run?.id ?? 'local-run',
+      filters: filters as any,
+      thresholds: thresholds as any,
+      timestamp: new Date().toISOString(),
+      branding: {
+        brand: 'Insights Portal',
+        title: 'QA Debugger',
+        footer: 'Generated locally — offline mode',
+      },
+    })
+  }, [sortedItems, metricKeys, bookmarks, run?.id, filters, thresholds])
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (!run) {
+    return (
+      <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>
+        No evaluation run loaded. Return to Executive Overview and load a JSON or CSV file.
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-        <label>Metric</label>
-        <select value={selectedMetric} onChange={(e) => setSelectedMetric(e.target.value)} aria-label="metric-selector">
-          {metricKeys.map((k) => (
-            <option value={k} key={k}>{getMetricMeta(k as any).key}</option>
+      {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
+      <div className="qa-debugger-toolbar">
+        <span className="qa-debugger-title">QA Debugger</span>
+        <select
+          value={sortOptionIdx}
+          onChange={(e) => setSortOptionIdx(Number(e.target.value))}
+          aria-label="sort-selector"
+          style={{ minWidth: 290 }}
+        >
+          {SORT_OPTIONS.map((opt, i) => (
+            <option key={`${opt.key}-${opt.dir}`} value={i}>
+              {opt.label}
+            </option>
           ))}
         </select>
-        <input placeholder="Search question" value={query} onChange={(e) => setQuery(e.target.value)} style={{ minWidth: 240 }} aria-label="qa-search-input" data-testid={TID.qa.search} />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {baseCols.map((c) => (
-            <label key={c} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-              <input type="checkbox" checked={!!visibleCols[c]} onChange={(e) => setVisibleCols((v) => ({ ...v, [c]: e.target.checked }))} />{c}
-            </label>
-          ))}
-          <details>
-            <summary>Metrics</summary>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', maxWidth: 560 }}>
-              {metricKeys.map((m) => (
-                <label key={m} style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-                  <input type="checkbox" checked={!!visibleMetrics[m]} onChange={(e) => setVisibleMetrics((v) => ({ ...v, [m]: e.target.checked }))} />{m}
-                </label>
-              ))}
-            </div>
-          </details>
+        <input
+          placeholder="Search question…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ minWidth: 220 }}
+          aria-label="qa-search-input"
+          data-testid={TID.qa.search}
+        />
+        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>
+          {sortedItems.length} items
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button onClick={exportCsv} data-testid="qa-export-csv">
+            Export CSV
+          </button>
+          <button onClick={exportXlsx} data-testid="qa-export-xlsx">
+            Export XLSX
+          </button>
         </div>
-        <button onClick={exportVisible} data-testid="qa-export-csv">Export CSV</button>
-        <button onClick={exportVisibleXlsx} data-testid="qa-export-xlsx">Export XLSX</button>
       </div>
 
       {/* Active filter chips */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, marginBottom: 10 }}>
         {buildFilterChips(usePortalStore.getState().filters).map((c) => (
-          <span key={c.key} style={{ padding: '2px 8px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-muted)' }}>
-            {c.label} <button onClick={c.onClear} aria-label={`clear ${c.key}`} style={{ marginLeft: 6 }}>×</button>
+          <span key={c.key} className="qa-filter-chip">
+            {c.label}
+            <button
+              onClick={c.onClear}
+              aria-label={`clear ${c.key}`}
+              style={{ marginLeft: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit' }}
+            >
+              ×
+            </button>
           </span>
         ))}
       </div>
 
-      <div ref={containerRef} onScroll={onScroll} style={{ position: 'relative', height: viewportHeight, overflow: 'auto', border: '1px solid var(--border-color, #333)' }} data-testid={TID.qa.table}>
-        <div style={{ height: filteredItems.length * rowHeight, position: 'relative' }}>
-          {filteredItems.slice(start, end).map((it, i) => {
-            const top = (start + i) * rowHeight
-            const isMarked = bookmarks.has(it.id)
-            return (
-              <div key={it.id} style={{ position: 'absolute', top, left: 0, right: 0, height: rowHeight, display: 'flex', alignItems: 'center', padding: '0 8px', gap: 8 }} data-testid={TID.qa.row(start + i)}>
-                <button onClick={() => toggleBookmark(it.id)} aria-label="toggle-bookmark" title={isMarked ? 'Unbookmark' : 'Bookmark'}>{isMarked ? '★' : '☆'}</button>
-                <button onClick={() => setDetailsId(it.id)} aria-label="open-details" data-testid={TID.qa.detailsBtn(it.id)}>Details</button>
-                {visibleCols.question && (<div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.user_input || it.id}</div>)}
-                {visibleCols.answer && (<div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.rag_answer || ''}</div>)}
-                {visibleCols.reference && (<div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.reference || ''}</div>)}
-                <div style={{ width: 120, textAlign: 'right' }}>{selectedMetric ? (it.metrics?.[selectedMetric] ?? '').toString() : ''}</div>
-                {metricKeys.filter((m) => visibleMetrics[m]).map((m) => (<div key={m} style={{ width: 120, textAlign: 'right' }}>{(it.metrics?.[m] ?? '').toString()}</div>))}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {/* ── Master-Detail Layout ─────────────────────────────────────────────── */}
+      <div className="qa-debugger-layout">
 
-      {/* Row details drawer */}
-      {detailsId && (
-        <div role="dialog" aria-label="row-details" data-testid={TID.qa.detailsDrawer} style={{ position: 'fixed', top: 0, right: 0, width: '40%', minWidth: 360, bottom: 0, background: 'var(--bg, #111)', color: 'var(--fg, #ddd)', borderLeft: '1px solid var(--border, #333)', padding: 12, overflow: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>Row details</strong>
-            <button onClick={() => { setDetailsId(null); setImgPreview({}) }} aria-label="close-details" data-testid={TID.qa.detailsClose}>×</button>
-          </div>
-          {(() => {
-            const it = filteredItems.find((x) => x.id === detailsId)
-            if (!it) return null
-            const contexts = (it.rag_contexts && it.rag_contexts.length ? it.rag_contexts : it.reference_contexts) || []
-            const keyText = (it.user_input || '') + ' ' + (it.reference || '')
-            const highlight = (txt: string) => {
-              const words = keyText.split(/[\s,.;:!?]+/).filter((w) => w.length > 3).slice(0, 10)
-              let out = txt
-              for (const w of words) {
-                try {
-                  const re = new RegExp(`(${w.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\\\$&')})`, 'ig')
-                  out = out.replace(re, '<mark>$1</mark>')
-                } catch { /* ignore */ }
-              }
-              return out
-            }
-            return (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ marginBottom: 8 }}>
-                  <div><strong>ID:</strong> {it.id}</div>
-                  <div><strong>Question:</strong> {it.user_input || ''}</div>
-                  <div><strong>Answer:</strong> {it.rag_answer || ''}</div>
-                  <div><strong>Reference:</strong> {it.reference || ''}</div>
-                </div>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Contexts</div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {contexts.map((c, idx) => (
-                      <div key={idx} style={{ padding: 8, border: '1px solid var(--border, #333)', borderRadius: 6, background: 'var(--bg-muted, #1a1a1a)' }}>
-                        <div dangerouslySetInnerHTML={{ __html: highlight(c) }} />
+        {/* ── MASTER LIST ─────────────────────────────────────────────────── */}
+        <div className="qa-master-pane">
+          {sortedItems.length === 0 ? (
+            <div
+              style={{
+                display: 'grid',
+                placeItems: 'center',
+                height: '100%',
+                color: 'var(--text-muted)',
+                fontSize: 'var(--text-sm)',
+              }}
+            >
+              No items match the current filter or search.
+            </div>
+          ) : (
+            <div
+              ref={containerRef}
+              onScroll={onScroll}
+              className="qa-master-scroll"
+              data-testid={TID.qa.table}
+            >
+              <div style={{ height: sortedItems.length * CARD_HEIGHT, position: 'relative' }}>
+                {sortedItems.slice(vStart, vEnd).map((it, i) => {
+                  const cardIdx = vStart + i
+                  const isSelected = it.id === effectiveId
+                  const isBookmarked = bookmarks.has(it.id)
+
+                  // Pills: primary sort metric + up to 2 GCR sub-metrics (deduped)
+                  const pillKeys = Array.from(
+                    new Set([
+                      ...(primaryPill && (it.metrics as Record<string, unknown>)[primaryPill] != null
+                        ? [primaryPill]
+                        : []),
+                      ...GCR_PILLS.filter(
+                        (k) => (it.metrics as Record<string, unknown>)[k] != null,
+                      ),
+                    ]),
+                  ).slice(0, 3)
+
+                  return (
+                    <div
+                      key={it.id}
+                      className={`qa-master-card${isSelected ? ' qa-master-card--selected' : ''}`}
+                      style={{
+                        position: 'absolute',
+                        top: cardIdx * CARD_HEIGHT,
+                        left: 0,
+                        right: 0,
+                        height: CARD_HEIGHT,
+                      }}
+                      onClick={() => selectItem(it.id)}
+                      data-testid={TID.qa.row(cardIdx)}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={isSelected}
+                      onKeyDown={(e) => e.key === 'Enter' && selectItem(it.id)}
+                    >
+                      <div className="qa-master-card-header">
+                        <span className="qa-master-card-index">#{cardIdx + 1}</span>
+                        <span className="qa-master-card-question">
+                          {it.user_input || it.id}
+                        </span>
+                        <button
+                          onClick={(e) => toggleBookmark(it.id, e)}
+                          aria-label="toggle-bookmark"
+                          title={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+                          className="qa-bookmark-btn"
+                          data-testid={TID.qa.detailsBtn(it.id)}
+                        >
+                          {isBookmarked ? '★' : '☆'}
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                {!!it.extra && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>References</div>
-                    {Object.entries(it.extra).map(([k, v]) => {
-                      if (typeof v !== 'string') return null
-                      const isUrl = /^https?:\/\//i.test(v)
-                      const isImg = /\.(png|jpg|jpeg|gif|webp)$/i.test(v)
-                      if (!isUrl || isImg) return null
-                      const onOpen = () => {
-                        const ok = window.confirm(`即將開啟外部連結:\n${v}\n是否繼續？`)
-                        if (!ok) return
-                        window.open(v, '_blank', 'noopener,noreferrer')
-                      }
-                      return (
-                        <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <button onClick={onOpen} aria-label={`open-link-${k}`}>Open</button>
-                          <code style={{ fontSize: 12, opacity: 0.9 }}>{v}</code>
-                        </div>
-                      )
-                    })}
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                      {Object.entries(it.extra).map(([k, v]) => {
-                        if (typeof v !== 'string') return null
-                        const isImg = /\.(png|jpg|jpeg|gif|webp)$/i.test(v)
-                        if (!isImg) return null
-                        const loaded = imgPreview[k]
-                        const onPreview = () => {
-                          const ok = window.confirm(`即將載入外部圖片:\n${v}\n是否繼續？`)
-                          if (!ok) return
-                          setImgPreview((m) => ({ ...m, [k]: v }))
-                        }
-                        return (
-                          <div key={k} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-                            {!loaded && (
-                              <>
-                                <div style={{ width: 160, height: 120, display: 'grid', placeItems: 'center', border: '1px solid #333', borderRadius: 4, background: '#1b1b1b', color: '#aaa', fontSize: 12 }}>No preview</div>
-                                <button onClick={onPreview} aria-label={`preview-image-${k}`}>Preview</button>
-                                <code style={{ fontSize: 11, opacity: 0.8 }}>{v}</code>
-                              </>
-                            )}
-                            {!!loaded && (
-                              <img src={loaded} alt={`image-${k}`} style={{ maxWidth: 160, maxHeight: 120, objectFit: 'cover', background: '#222' }}
-                                onError={(e) => {
-                                  const el = e.currentTarget as HTMLImageElement
-                                  el.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="100%" height="100%" fill="#222"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#aaa" font-size="12">No preview</text></svg>`)
-                                }} />
-                            )}
-                          </div>
-                        )
-                      })}
+                      <div className="qa-master-card-pills">
+                        {pillKeys.map((k) => (
+                          <ScoreBadge
+                            key={k}
+                            metricKey={k}
+                            value={(it.metrics as Record<string, number | null>)[k]}
+                            thresholds={thresholds as any}
+                          />
+                        ))}
+                      </div>
                     </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── DETAIL PANEL ────────────────────────────────────────────────── */}
+        <div
+          className="qa-detail-pane"
+          role="region"
+          aria-label="row-details"
+          data-testid={TID.qa.detailsDrawer}
+        >
+          {!selectedItem ? (
+            <div
+              style={{
+                display: 'grid',
+                placeItems: 'center',
+                height: '100%',
+                color: 'var(--text-muted)',
+                fontSize: 'var(--text-sm)',
+              }}
+            >
+              Select a question from the list to inspect it.
+            </div>
+          ) : (
+            <div className="qa-detail-inner">
+
+              {/* ── Zone 1: Question ──────────────────────────────────────── */}
+              <div className="qa-detail-zone qa-detail-zone--question">
+                <div className="qa-detail-zone-label">
+                  Question
+                  <span style={{ marginLeft: 'auto', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--text-subtle)' }}>
+                    id: {selectedItem.id}
+                  </span>
+                </div>
+                <p className="qa-detail-question-text">
+                  {selectedItem.user_input || selectedItem.id}
+                </p>
+                {selectedItem.reference && (
+                  <div className="qa-detail-reference">
+                    <strong>Reference answer: </strong>
+                    {selectedItem.reference}
                   </div>
                 )}
               </div>
-            )
-          })()}
+
+              {/* ── Zone 2: LLM Answer ───────────────────────────────────── */}
+              <div className="qa-detail-zone qa-detail-zone--answer">
+                <div className="qa-detail-zone-label">LLM Answer</div>
+                <p className="qa-detail-answer-text">
+                  {selectedItem.rag_answer || '—'}
+                </p>
+              </div>
+
+              {/* ── Metrics pills row ─────────────────────────────────────── */}
+              <div className="qa-detail-metrics">
+                {metricKeys.map((k) => {
+                  const v = (selectedItem.metrics as Record<string, number | null>)[k]
+                  return (
+                    <ScoreBadge
+                      key={k}
+                      metricKey={k}
+                      value={v}
+                      thresholds={thresholds as any}
+                    />
+                  )
+                })}
+              </div>
+
+              {/* ── Zone 3: Retrieved Contexts ───────────────────────────── */}
+              <div className="qa-detail-zone qa-detail-zone--contexts">
+                <div className="qa-detail-zone-label">
+                  Retrieved Contexts
+                  {entities.length > 0 && (
+                    <span className="badge badge--graph" style={{ marginLeft: 8 }}>
+                      Tier 1 · {entities.length} entities
+                    </span>
+                  )}
+                  {entities.length === 0 && answerTokens.length > 0 && (
+                    <span className="badge badge--ok" style={{ marginLeft: 8 }}>
+                      Tier 2 · word overlap
+                    </span>
+                  )}
+                </div>
+                {contexts.length === 0 ? (
+                  <div
+                    style={{
+                      color: 'var(--text-muted)',
+                      fontSize: 'var(--text-sm)',
+                      padding: '8px 0',
+                    }}
+                  >
+                    No contexts available for this item.
+                  </div>
+                ) : (
+                  <div className="qa-ctx-list">
+                    {contexts.map((ctx, idx) => (
+                      <ContextItem
+                        key={idx}
+                        idx={idx}
+                        text={ctx}
+                        entities={entities}
+                        answerTokens={answerTokens}
+                        defaultOpen={idx === 0}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── External references / image previews (preserved) ─────── */}
+              {!!selectedItem.extra && (
+                <div className="qa-detail-zone">
+                  <div className="qa-detail-zone-label">References</div>
+                  {Object.entries(selectedItem.extra).map(([k, v]) => {
+                    if (typeof v !== 'string') return null
+                    const isUrl = /^https?:\/\//i.test(v)
+                    const isImg = /\.(png|jpg|jpeg|gif|webp)$/i.test(v)
+                    if (!isUrl || isImg) return null
+                    const onOpen = () => {
+                      const ok = window.confirm(`即將開啟外部連結:\n${v}\n是否繼續？`)
+                      if (!ok) return
+                      window.open(v, '_blank', 'noopener,noreferrer')
+                    }
+                    return (
+                      <div
+                        key={k}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}
+                      >
+                        <button onClick={onOpen} aria-label={`open-link-${k}`}>
+                          Open
+                        </button>
+                        <code style={{ fontSize: 12, opacity: 0.9 }}>{v}</code>
+                      </div>
+                    )
+                  })}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                    {Object.entries(selectedItem.extra).map(([k, v]) => {
+                      if (typeof v !== 'string') return null
+                      if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(v)) return null
+                      const loaded = imgPreview[k]
+                      const onPreview = () => {
+                        const ok = window.confirm(`即將載入外部圖片:\n${v}\n是否繼續？`)
+                        if (!ok) return
+                        setImgPreview((m) => ({ ...m, [k]: v }))
+                      }
+                      return (
+                        <div
+                          key={k}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: 6,
+                          }}
+                        >
+                          {!loaded ? (
+                            <>
+                              <div
+                                style={{
+                                  width: 160,
+                                  height: 120,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: 4,
+                                  background: 'var(--bg-muted)',
+                                  color: 'var(--text-muted)',
+                                  fontSize: 12,
+                                }}
+                              >
+                                No preview
+                              </div>
+                              <button onClick={onPreview} aria-label={`preview-image-${k}`}>
+                                Preview
+                              </button>
+                              <code style={{ fontSize: 11, opacity: 0.8 }}>{v}</code>
+                            </>
+                          ) : (
+                            <img
+                              src={loaded}
+                              alt={`image-${k}`}
+                              style={{
+                                maxWidth: 160,
+                                maxHeight: 120,
+                                objectFit: 'cover',
+                                background: 'var(--bg-muted)',
+                              }}
+                              onError={(e) => {
+                                const el = e.currentTarget as HTMLImageElement
+                                el.src =
+                                  'data:image/svg+xml;utf8,' +
+                                  encodeURIComponent(
+                                    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="100%" height="100%" fill="#222"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#aaa" font-size="12">No preview</text></svg>`,
+                                  )
+                              }}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Deselect */}
+              <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => selectItem(null)}
+                  aria-label="close-details"
+                  data-testid={TID.qa.detailsClose}
+                >
+                  Deselect
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
-
-// No extra helpers needed here; keep component lean.
