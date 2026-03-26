@@ -10,6 +10,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,   // expose to all network interfaces so the browser outside the container can reach it
+    port: 5173,
     fs: {
       // Allow serving files from the workspace root so we can fetch eval artifacts via /@fs/absolute/path in dev
       allow: [fileURLToPath(new URL('..', import.meta.url))],

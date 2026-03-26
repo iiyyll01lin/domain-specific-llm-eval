@@ -141,6 +141,10 @@ const resources = {
   AnswerRelevancy: { label: 'Answer Relevancy', help: '答案與問題的相關性' },
   AnswerSimilarity: { label: 'Answer Similarity', help: '答案與參考答案相似度' },
   ContextualKeywordMean: { label: 'Contextual Keyword Mean', help: '上下文關鍵字平均分' },
+  gcr_score: { label: 'GCR 分數 (圖譜情境相關性)', help: '圖譜情境相關性綜合分數 (Se·Sc·Ph 加權)' },
+  entity_overlap: { label: '實體重疊 (Sₑ)', help: '檢索節點與答案實體集合的 Jaccard 重疊比例' },
+  structural_connectivity: { label: '結構連通性 (Sc)', help: '知識圖譜中答案節點可達性的平均最短路徑分數' },
+  hub_noise_penalty: { label: 'Hub 雜訊懲罰 (Ph)', help: '超高度節點帶來的雜訊比例懲罰 (越低越好)' },
       },
 
       errors: {
@@ -308,6 +312,10 @@ const resources = {
   AnswerRelevancy: { label: 'Answer Relevancy', help: 'Answer relevance to the question' },
   AnswerSimilarity: { label: 'Answer Similarity', help: 'Similarity against reference answer' },
   ContextualKeywordMean: { label: 'Contextual Keyword Mean', help: 'Contextual keyword average score' },
+  gcr_score: { label: 'GCR Score (Graph Context Relevance)', help: 'Composite graph-based context relevance score (Se · Sc · Ph weighted)' },
+  entity_overlap: { label: 'Entity Overlap (Sₑ)', help: 'Jaccard overlap of retrieved KG nodes vs answer entities' },
+  structural_connectivity: { label: 'Structural Connectivity (Sc)', help: 'Shortest-path reachability score for answer nodes in the Knowledge Graph' },
+  hub_noise_penalty: { label: 'Hub Noise Penalty (Ph)', help: 'Fraction of high-degree hub noise — lower is better' },
       },
       errors: {
         jsonParse: 'JSON parse failed: {{file}} (offset {{offset}}, line {{line}}, column {{column}}).',

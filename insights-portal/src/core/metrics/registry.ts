@@ -27,6 +27,11 @@ const known: Record<string, MetricMeta> = {
   AnswerRelevancy: { key: 'AnswerRelevancy', labelKey: 'metrics.AnswerRelevancy.label', helpKey: 'metrics.AnswerRelevancy.help', format: defaultFormat, direction: 'higher' },
   AnswerSimilarity: { key: 'AnswerSimilarity', labelKey: 'metrics.AnswerSimilarity.label', helpKey: 'metrics.AnswerSimilarity.help', format: defaultFormat, direction: 'higher' },
   ContextualKeywordMean: { key: 'ContextualKeywordMean', labelKey: 'metrics.ContextualKeywordMean.label', helpKey: 'metrics.ContextualKeywordMean.help', format: defaultFormat, direction: 'higher' },
+  // Graph Context Relevance metrics (Se / Sc / Ph)
+  gcr_score: { key: 'gcr_score', labelKey: 'metrics.gcr_score.label', helpKey: 'metrics.gcr_score.help', format: defaultFormat, direction: 'higher' },
+  entity_overlap: { key: 'entity_overlap', labelKey: 'metrics.entity_overlap.label', helpKey: 'metrics.entity_overlap.help', format: defaultFormat, direction: 'higher' },
+  structural_connectivity: { key: 'structural_connectivity', labelKey: 'metrics.structural_connectivity.label', helpKey: 'metrics.structural_connectivity.help', format: defaultFormat, direction: 'higher' },
+  hub_noise_penalty: { key: 'hub_noise_penalty', labelKey: 'metrics.hub_noise_penalty.label', helpKey: 'metrics.hub_noise_penalty.help', format: defaultFormat, direction: 'lower' },
 }
 
 export function getMetricMeta(key: MetricKey): MetricMeta {
