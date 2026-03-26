@@ -4,6 +4,18 @@
 # =============================================================================
 FROM node:20-alpine AS builder
 
+# Accept corporate proxy at build time (passed via docker-compose build.args)
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY=localhost,127.0.0.1
+# npm respects both upper- and lower-case proxy vars
+ENV HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY} \
+    http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    no_proxy=${NO_PROXY}
+
 WORKDIR /app
 
 # Copy manifests first for layer-cache efficiency

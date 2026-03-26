@@ -171,6 +171,10 @@ services:
     build:
       context: ./insights-portal
       dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
     container_name: rag-eval-insights-portal
     ports:
       - "5173:80"
