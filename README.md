@@ -1,6 +1,61 @@
-** This is the v1.1.0 Enterprise MLOps release. To know more about my projects: **[Jason YY Lin Website](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** **
+<div align="center">
 
-# Domain-Specific LLM Agents Evaluation with RAGAS Integration & Custom LLM
+# Domain-Specific RAG Evaluation & MLOps Platform
+
+### v1.1.0 — *Beyond Cosine Similarity*
+
+> **Standard RAG evaluation stops at text similarity. This platform measures the topology of knowledge itself.**
+
+[![Tests](https://img.shields.io/badge/tests-733%20passing-brightgreen)](#testing)
+[![Services](https://img.shields.io/badge/microservices-11-blue)](#backend-services)
+[![Coverage](https://img.shields.io/badge/containerized-100%25-informational)](#devops)
+[![Python](https://img.shields.io/badge/python-3.11-blue)](#quickstart)
+[![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
+
+*Built by **[Jason YY Lin](https://a-one-and-a-two.notion.site/Jason-YY-Lin-9c867799194b4c0abf124d55209a5f1e?pvs=4)** as part of the Romantic-Rush auto-eval framework.*
+
+</div>
+
+---
+
+## The Problem with Standard Evaluation
+
+Tools like vanilla RAGAS measure **cosine similarity between embeddings**. That tells you how similar *words look* — not whether the *retrieved context is structurally coherent* for answering a domain-specific question.
+
+In manufacturing, medical, legal, or financial domains, a fragmented retrieval of loosely-connected facts can score high on cosine similarity yet still produce hallucinated answers. **The shape of the retrieved knowledge graph matters as much as its content.**
+
+---
+
+## Our Solution: Graph Context Relevance (GCR)
+
+The headline innovation of this platform is the **GCR evaluator** — a 100% offline, deterministic metric that measures the *topology* of retrieved context, not just its surface-level similarity:
+
+$$\mathrm{GCR} = \mathrm{clip}\!\left(\;0.4 \cdot S_e \;+\; 0.4 \cdot S_c \;-\; 0.2 \cdot P_h,\; 0,\; 1\right)$$
+
+| Symbol | Component | Definition | Why It Matters |
+|--------|-----------|------------|----------------|
+| $S_e$ | **Entity Overlap** | Jaccard similarity between Q&A token sets and KG keyphrases | Measures semantic relevance of retrieved nodes |
+| $S_c$ | **Structural Connectivity** | Largest-connected-component ratio: $\|V_{LCC}\| / \|V_R\|$ | Penalises fragmented, incoherent retrieval sets |
+| $P_h$ | **Hub Noise Penalty** | Fraction of retrieved nodes with degree $> \mu + 2\sigma$ | Discourages over-general "hub" nodes that dilute context |
+
+**O(N + E) complexity · Zero model calls · Zero network I/O · Fully configurable weights**
+
+---
+
+## Key Innovations
+
+|   | Innovation | Impact |
+|---|-----------|--------|
+| 🧠 | **Graph-Topological GCR Metric** — novel $S_c / S_e / P_h$ composite score | First offline, graph-theory RAG metric; catches fragmentation that cosine similarity misses |
+| 🏗️ | **11-Service Docker Compose Stack** — end-to-end MLOps platform | One command from raw CSV to evaluated KPIs, HTML/PDF reports, and drift alerts |
+| 📊 | **Statistical Drift Detection** — Welch Z-test per metric with Slack alerting | Production-grade SRE-style monitoring applied to AI evaluation quality |
+| 🤖 | **LLM Auto-Insights Engine** — structured-prompt narrative health reports | Zero-config AI analysis; pluggable with GPT-4o-mini, Ollama, vLLM, or Azure OpenAI |
+| 🔍 | **Interactive QA Debugger** — inline entity-highlighted failure analysis | Instantly see *why* a retrieval failed — not just *that* it did |
+| 📈 | **Cytoscape KG Visualiser** — force-directed graph explorer in the Insights Portal | Interactively inspect knowledge graph structure and edge weights in-browser |
+| 🧪 | **733-Test Parallel Suite** — `pytest-xdist` with deterministic offline fallbacks | AI evaluation proven with the same rigour as traditional software engineering |
+| 🔒 | **Zero Host Dependency DevOps** — Docker-native toolchain + OWASP hardening | Run every developer operation — tests, tools, CI — without installing Python locally |
+
+---
 
 ![base-metric](base-metric.png)
 
@@ -8,13 +63,13 @@
 
 ![dynamic-metric](dynamic-metric.png)
 
-# Intro
+---
 
-This metric is part of my auto-eval framework Romantic-Rush:
+## Auto-Eval Framework Context
+
+This platform is the core evaluation engine of the **Romantic-Rush** auto-eval framework:
 
 ![auto-eval-framework](auto-eval-framework.png)
-
-This project provides a comprehensive solution for domain-specific LLM agents' response evaluation that cannot be solely solved by standard LLM-based metrics. **NEW: Complete RAGAS Integration with Custom LLM API** provides professional-grade testset generation and evaluation using your own LLM endpoints.
 
 ## System Architecture & MLOps Feedback Loop
 
