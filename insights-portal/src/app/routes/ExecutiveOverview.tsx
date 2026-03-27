@@ -18,6 +18,7 @@ import { sampleMemory } from '@/utils/memory'
 import { EmptyState } from '@/components/EmptyState'
 import { KpiSkeleton } from '@/components/KpiSkeleton'
 import { DriftMonitorBanner } from '@/components/DriftMonitorBanner'
+import { AgenticRepairPanel } from '@/components/AgenticRepairPanel'
 
 /** Keys belonging to the Graph Context Relevance suite */
 const GCR_KEYS = new Set(['gcr_score', 'entity_overlap', 'structural_connectivity', 'hub_noise_penalty'])
@@ -361,6 +362,7 @@ export default function ExecutiveOverview() {
     <section>
     <h2>{t('nav.executive')}</h2>
       <DriftMonitorBanner />
+      <AgenticRepairPanel />
       <RunLoader />
   <RunDirectoryPicker />
   {/* Error messages are displayed on the next line of the detection block. */}
